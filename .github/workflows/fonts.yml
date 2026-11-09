@@ -54,12 +54,12 @@ jobs:
           echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)" >> "$GITHUB_ENV"
       - run: silk use
       - run: silk check --workspace
-      - run: silk test --manifest-path fonts/types/silk.toml --root src/tests.silk
-      - run: silk test --manifest-path fonts/parse/silk.toml --root src/tests.silk
-      - run: silk test --manifest-path fonts/shape/silk.toml --root src/tests.silk
-      - run: silk test --manifest-path fonts/outline/silk.toml --root src/tests.silk
-      - run: silk test --manifest-path fonts/raster/silk.toml --root src/tests.silk
-      - run: silk test --manifest-path fonts/faces/silk.toml --root src/tests.silk
+      - run: silk test --manifest-path modules/types/silk.toml --root src/tests.silk
+      - run: silk test --manifest-path modules/parse/silk.toml --root src/tests.silk
+      - run: silk test --manifest-path modules/shape/silk.toml --root src/tests.silk
+      - run: silk test --manifest-path modules/outline/silk.toml --root src/tests.silk
+      - run: silk test --manifest-path modules/raster/silk.toml --root src/tests.silk
+      - run: silk test --manifest-path modules/faces/silk.toml --root src/tests.silk
       - run: silk build --package font-parse-test-harness
       - run: silk build --package font-shape-test-harness
       - run: silk build --package font-parse-bench
@@ -68,5 +68,5 @@ jobs:
         run: |
           export PATH="$(dirname "$SILK_CLANG"):$PATH"
           command -v wasm-ld || { sudo apt-get update && sudo apt-get install -y lld; }
-          silk check --manifest-path fonts/shape/tools/wasm/silk.toml --target wasm32-unknown-unknown
-          silk build --release --manifest-path fonts/shape/tools/wasm/silk.toml --target wasm32-unknown-unknown
+          silk check --manifest-path modules/shape/tools/wasm/silk.toml --target wasm32-unknown-unknown
+          silk build --release --manifest-path modules/shape/tools/wasm/silk.toml --target wasm32-unknown-unknown

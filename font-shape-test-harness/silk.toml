@@ -4,6 +4,6 @@ version = "0.1.0"
 silk-version = "0.1.0-dev.63+657e3c900f65"
 
 [dependencies]
-harfrust = { path = "../fonts/shape", package = "font-shape" }
-font_types = { path = "../fonts/types", package = "font-types" }
-read_fonts = { path = "../fonts/parse", package = "font-parse" }
+harfrust = { path = "../modules/shape", package = "font-shape" }
+font_types = { path = "../modules/types", package = "font-types" }
+read_fonts = { path = "../modules/parse", package = "font-parse" }

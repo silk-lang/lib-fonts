@@ -1,14 +1,14 @@
 [workspace]
 members = [
-  "fonts/types",
-  "fonts/parse",
-  "fonts/shape",
-  "fonts/outline",
-  "fonts/raster",
-  "fonts/faces",
-  "fonts/collection",
-  "fonts/parse/bench",
-  "fonts/shape/tools/wasm",
+  "modules/types",
+  "modules/parse",
+  "modules/shape",
+  "modules/outline",
+  "modules/raster",
+  "modules/faces",
+  "modules/collection",
+  "modules/parse/bench",
+  "modules/shape/tools/wasm",
   "font-parse-test-harness",
   "font-shape-test-harness",
 ]

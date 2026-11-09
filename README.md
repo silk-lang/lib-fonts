@@ -6,13 +6,13 @@ Font parsing, shaping, outlines, rasterization, face matching and fallback for S
 
 | Package | Source | Purpose |
 | --- | --- | --- |
-| `font-types` | [fonts/types](fonts/types) | OpenType scalars, big-endian codecs, fixed point, tags and glyph IDs |
-| `font-parse` | [fonts/parse](fonts/parse) | sfnt/TTC parsing, tables, metrics, character maps and font models |
-| `font-shape` | [fonts/shape](fonts/shape) | OpenType, AAT and complex-script text shaping |
-| `font-outline` | [fonts/outline](fonts/outline) | `glyf`/`gvar`, CFF and CFF2 glyph outlines and vector paths |
-| `font-raster` | [fonts/raster](fonts/raster) | Glyph atlas and shaped-line caches, rasterization and text gamma correction |
-| `font-faces` | [fonts/faces](fonts/faces) | Host-filled face database and CSS Fonts 4 matching |
-| `font-collection` | [fonts/collection](fonts/collection) | Application font collections and per-character fallback |
+| `font-types` | [modules/types](modules/types) | OpenType scalars, big-endian codecs, fixed point, tags and glyph IDs |
+| `font-parse` | [modules/parse](modules/parse) | sfnt/TTC parsing, tables, metrics, character maps and font models |
+| `font-shape` | [modules/shape](modules/shape) | OpenType, AAT and complex-script text shaping |
+| `font-outline` | [modules/outline](modules/outline) | `glyf`/`gvar`, CFF and CFF2 glyph outlines and vector paths |
+| `font-raster` | [modules/raster](modules/raster) | Glyph atlas and shaped-line caches, rasterization and text gamma correction |
+| `font-faces` | [modules/faces](modules/faces) | Host-filled face database and CSS Fonts 4 matching |
+| `font-collection` | [modules/collection](modules/collection) | Application font collections and per-character fallback |
 
 The workspace uses Silk `0.1.0-dev.63+657e3c900f65`. Graphics dependencies are
 pinned Git dependencies on [silk-lang/lib-graphics](https://github.com/silk-lang/lib-graphics),
@@ -58,7 +58,7 @@ The native checks do not require Python or Rust:
 ```sh
 silk check --workspace
 for package in types parse shape outline raster faces; do
-  silk test --manifest-path "fonts/$package/silk.toml" --root src/tests.silk
+  silk test --manifest-path "modules/$package/silk.toml" --root src/tests.silk
 done
 silk build --package font-parse-test-harness
 silk build --package font-shape-test-harness
@@ -67,9 +67,9 @@ silk build --package font-parse-bench
 
 `font-collection` is covered by workspace checking; it has no `src/tests.silk`
 test root. Shaping runtime tests use the recursively checked-out upstream corpus.
-Keep the `fonts/` fixture layout intact. The retained `svg/tests/fonts/` files and
-licenses support font tests, while `svg/casefold.lock.json` and
-`svg/scripts/generate-casefold` support maintenance of `font-faces` generated data;
+Keep the `modules/` fixture layout intact. The retained `test-support/fonts/` files and
+licenses support font tests, while `scripts/casefold.lock.json` and
+`scripts/generate-casefold` support maintenance of `font-faces` generated data;
 these are supporting assets, not an extracted SVG library.
 
 ### Internal executables and WebAssembly
@@ -80,19 +80,19 @@ These tools are separate from the seven consumer libraries:
   package and binary name `font-parse-test-harness`.
 - [font-shape-test-harness](font-shape-test-harness): internal shaping CLI;
   package and binary name `font-shape-test-harness`.
-- [fonts/parse/bench](fonts/parse/bench): benchmark-only `font-parse-bench`.
-- [fonts/shape/tools/wasm](fonts/shape/tools/wasm): retained consumer WebAssembly
+- [modules/parse/bench](modules/parse/bench): benchmark-only `font-parse-bench`.
+- [modules/shape/tools/wasm](modules/shape/tools/wasm): retained consumer WebAssembly
   wrapper, `font-shape-wasm`, with its JavaScript wrapper under `js/`.
 
 With LLVM's `wasm-ld` on `PATH`, check and build the WebAssembly wrapper directly:
 
 ```sh
 export PATH="$(dirname "$SILK_CLANG"):$PATH"
-silk check --manifest-path fonts/shape/tools/wasm/silk.toml --target wasm32-unknown-unknown
-silk build --release --manifest-path fonts/shape/tools/wasm/silk.toml --target wasm32-unknown-unknown
+silk check --manifest-path modules/shape/tools/wasm/silk.toml --target wasm32-unknown-unknown
+silk build --release --manifest-path modules/shape/tools/wasm/silk.toml --target wasm32-unknown-unknown
 ```
 
-The retained shell helper `fonts/scripts/build-wasm` additionally copies the
+The retained shell helper `modules/scripts/build-wasm` additionally copies the
 artifact into the JavaScript wrapper's `dist/harfrust.wasm`.
 
 ### CI and optional maintainer tooling
@@ -103,13 +103,13 @@ builds the two internal harnesses and parser benchmark. Its Linux job also check
 and builds the WebAssembly wrapper. CI uses direct Silk commands, not Python;
 WebAssembly compilation is not a JavaScript wrapper runtime test.
 
-[fonts/scripts](fonts/scripts) retains optional Python generation, corpus,
+[modules/scripts](modules/scripts) retains optional Python generation, corpus,
 robustness and benchmark tooling, plus Rust reference programs
 (`rust-font-dump` and `rust-hr-shape`). Those tools have their own Python/Rust and
 upstream-data requirements and run from the repository root. They are not part of
 the native CI path, and this repository does not claim the original nonstd weekly
 baseline or generated-code campaigns run here. Existing porting notes and
-historical results remain under [fonts/docs](fonts/docs); they are not fresh
+historical results remain under [modules/docs](modules/docs); they are not fresh
 verification of this extraction.
 
 ## Provenance and licensing
@@ -123,7 +123,7 @@ the other libraries.
 The parsing and shaping work began as ports of Google's
 [fontations](https://github.com/googlefonts/fontations) and
 [harfrust](https://github.com/harfbuzz/harfrust). `font-types` and `font-parse` retain
-their [MIT](fonts/LICENSE-MIT) or [Apache-2.0](fonts/LICENSE-APACHE) licensing;
-`font-shape` retains its [MIT license](fonts/shape/LICENSE). Consult the retained
+their [MIT](modules/LICENSE-MIT) or [Apache-2.0](modules/LICENSE-APACHE) licensing;
+`font-shape` retains its [MIT license](modules/shape/LICENSE). Consult the retained
 notices for individual source files, upstream data and font fixtures; this overview
 does not replace their licenses.
