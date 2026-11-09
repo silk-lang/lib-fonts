@@ -1,0 +1,15 @@
+[workspace]
+members = [
+  "fonts/types",
+  "fonts/parse",
+  "fonts/shape",
+  "fonts/outline",
+  "fonts/raster",
+  "fonts/faces",
+  "fonts/collection",
+  "fonts/parse/bench",
+  "fonts/shape/tools/wasm",
+  "font-parse-test-harness",
+  "font-shape-test-harness",
+]
+silk-version = "0.1.0-dev.61+91f335268900"
