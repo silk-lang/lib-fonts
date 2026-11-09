@@ -15,9 +15,10 @@ Font parsing, shaping, outlines, rasterization, face matching and fallback for S
 | `font-collection` | [fonts/collection](fonts/collection) | Application font collections and per-character fallback |
 
 The workspace uses Silk `0.1.0-dev.61+91f335268900`. Graphics dependencies are
-pinned Git dependencies on [silk-lang/nonstd](https://github.com/silk-lang/nonstd),
-not copied graphics libraries or sibling-checkout dependencies. Unicode properties
-and segmentation come from Silk's standard library.
+pinned Git dependencies on [silk-lang/lib-graphics](https://github.com/silk-lang/lib-graphics),
+not copied graphics libraries or sibling-checkout dependencies. Keep that revision aligned
+with `lib-css` and other consumers: Silk rejects duplicate physical copies of a named package.
+Unicode properties and segmentation come from Silk's standard library.
 
 ## Development
 
@@ -115,9 +116,9 @@ verification of this extraction.
 
 Extracted from `fonts/` in
 [silk-lang/nonstd at 7d6c3693a9ad1fec24127985626ab4224f9f1995](https://github.com/silk-lang/nonstd/tree/7d6c3693a9ad1fec24127985626ab4224f9f1995/fonts).
-The originals remain in nonstd. The extraction retains implementations, fixtures,
-upstream gitlinks and existing license notices; it does not vendor the other
-nonstd libraries.
+Earlier implementation history remains in that source snapshot. The extraction retains
+implementations, fixtures, upstream gitlinks and existing license notices; it does not vendor
+the other libraries.
 
 The parsing and shaping work began as ports of Google's
 [fontations](https://github.com/googlefonts/fontations) and
