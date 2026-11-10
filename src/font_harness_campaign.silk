@@ -1,0 +1,256 @@
+import silk.cli.task { Task, TaskError }
+import silk.collections.bytes { Bytes }
+import silk.collections.list { List }
+import silk.concurrency.thread_native { NativeThread, JoinHandle, SpawnError }
+import silk.core.effect { Effect }
+import silk.core.option { Option }
+import silk.core.order { Order, Ordering }
+import silk.core.result { Result }
+import silk.io.writer { WriterError }
+import silk.json.value { Json, Value }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.platform.native.host_input { NativeHostInput }
+import silk.system.host_input_native { OsHostInput }
+import silk.system.filesystem { FileSystem, Path }
+import silk.system.filesystem_machine { MachineFileSystem }
+import silk.system.host_input { HostInput }
+import silk.text.string { String }
+import font_harness as Harness
+import font_harness_corpus as Corpus
+import font_harness_dump as Dump
+import font_harness_json as Receipt
+import font_harness_malformed as Malformed { Errors }
+import font_harness_process as Process
+import font_benchmark as Benchmark
+import font_benchmark_shaping as Tools
+
+pub struct Record { pub name: String, pub json: Bytes, pub expected: usize, pub completed: usize, pub matched: usize, pub differences: usize, pub failures: usize, pub failure: Bytes }
+impl Order for Record { fn compare(left: &Self, right: &Self) -> Ordering { return Order.compare(&String.view(&left.name), &String.view(&right.name)) } }
+
+effect fn cached(previous: &Value, recipe: &Value, digest: string) -> Bytes ! TaskError | WriterError | OutOfMemoryError ? &mut Allocator {
+  if let Option<&Value>.Some { value: results } = Json.field(previous, "results") {
+    let mut at: usize = 0
+    while let Option<&Value>.Some { value } = Json.item(results, at) {
+      if Receipt.text(value, "status") == "match" && Receipt.text(value, "input_sha256") == digest && Receipt.equalField(value, "mutation", recipe) { return run Receipt.write(value) }
+      at = at + 1
+    }
+  }
+  return Bytes.make()
+}
+
+pub effect fn checkFont(font: string, configuration: &[u8], reference: string, silk: string, seed: i64, timeout: f64, cache: string, failures: string) -> Record
+  ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  let root = run Task.root()
+  let fontPath = run Corpus.resolve(font)
+  let name = run Corpus.pathText(&fontPath)
+  let display = Corpus.display(&root, &name)
+  let data = run FileSystem.readFile(&fontPath)
+  let inputHash = run Dump.sha(data.asSlice())
+  let mut source = run Bytes.copy(b"{\"font\":")
+  run Corpus.quote(&mut source, display)
+  run source.append(b",\"input_sha256\":")
+  run Corpus.quote(&mut source, String.view(&inputHash))
+  run source.append(b"}")
+  let sourceValue = run Receipt.parse(source.asSlice())
+  let configValue = run Receipt.parse(configuration)
+  let cachePath = run Corpus.resolve(cache)
+  let failurePath = run Corpus.resolve(failures)
+  let hash = run Dump.sha(String.utf8Bytes(display))
+  let mut filename = run String.copy(String.view(&hash))
+  run String.append(&mut filename, ".json")
+  let receipt = run Path.join(&cachePath, String.view(&filename))
+  let receiptName = run Corpus.pathText(&receipt)
+  let mut previous = Value.Null
+  if run FileSystem.exists(&receipt) {
+    let saved = run FileSystem.readFile(&receipt)
+    let parsed = run Receipt.parse(saved.asSlice())
+    if Receipt.equalField(&parsed, "configuration", &configValue) && Receipt.equalField(&parsed, "source", &sourceValue) { previous = move parsed }
+  }
+  let recipes = run Malformed.mutations(data.asSlice(), seed)
+  let mutations = recipes.asSlice()
+  let mut results = Bytes.make()
+  let mut completed: usize = 0
+  let mut matched: usize = 0
+  let mut differences: usize = 0
+  let mut failures: usize = 0
+  let mut failure = Bytes.make()
+  let mut at: usize = 0
+  while at < mutations.length {
+    let recipe = run Malformed.recipeJson(&mutations[at])
+    let recipeValue = run Receipt.parse(recipe.asSlice())
+    let changed = run Malformed.changed(data.asSlice(), &mutations[at])
+    let digest = run Dump.sha(changed.asSlice())
+    let mut result = run cached(&previous, &recipeValue, String.view(&digest))
+    let mut status: i32 = 0
+    if result.length() == 0 {
+      let observed = run Malformed.checkCase(changed.asSlice(), recipe.asSlice(), reference, silk, timeout, &failurePath)
+      status = observed.status
+      result = move observed.json
+    }
+    if at > 0 { run results.append(b",") }
+    run results.append(result.asSlice())
+    completed = completed + 1
+    if status == 0 { matched = matched + 1 }
+    else if status == 1 { differences = differences + 1 }
+    else { failures = failures + 1 }
+    let mut saved = run Bytes.copy(b"{\"configuration\":")
+    run saved.append(configuration)
+    run saved.append(b",\"source\":")
+    run saved.append(source.asSlice())
+    run saved.append(b",\"results\":[")
+    run saved.append(results.asSlice())
+    run saved.append(b"]}\n")
+    run Benchmark.atomicSave(String.view(&receiptName), saved.asSlice())
+    if status != 0 { failure = move result  break }
+    at = at + 1
+  }
+  let mut json = run Bytes.copy(b"{\"source\":")
+  run json.append(source.asSlice())
+  run json.append(b",\"results\":[")
+  run json.append(results.asSlice())
+  run json.append(b"],\"expected_cases\":")
+  run Corpus.appendNumber(&mut json, mutations.length)
+  run json.append(b"}")
+  return Record { name: run String.copy(display), json: move json, expected: mutations.length, completed: completed, matched: matched, differences: differences, failures: failures, failure: move failure }
+}
+
+effect fn worker(font: string, configuration: &[u8], reference: string, silk: string, seed: i64, timeout: f64, cache: string, failures: string) -> Record ! Errors ? &mut Allocator {
+  let snapshot = run unsafe NativeHostInput.environmentSnapshot()
+  let mut inputs = OsHostInput.make(move snapshot)
+  let mut files = run MachineFileSystem.make()
+  return run checkFont(font, configuration, reference, silk, seed, timeout, cache, failures) |> Effect.provideMut<HostInput>(&mut inputs) |> Effect.provideMut<FileSystem>(&mut files)
+}
+
+pub effect fn checkMalformed(fonts: string, reference: string, silk: string, seed: i64, jobs: usize, timeout: f64, cache: string, failures: string, report: string) -> ()
+  ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  if timeout <= 0.0 { run Task.abort("jobs and timeout must be positive") }
+  if report == "" { run Task.abort("--report is required") }
+  let workers = run Harness.jobs(jobs)
+  let corpus = run Corpus.load(fonts)
+  let reference = run Harness.referenceBinary(reference)
+  let silk = run Harness.silkBinary(silk)
+  let cachePath = run Corpus.resolve(cache)
+  run FileSystem.createDirectoriesRecursively(&cachePath)
+  let binaries = run Path.join(&cachePath, "binaries")
+  let reference2 = run Malformed.freeze(String.view(&reference), &binaries)
+  let silk3 = run Malformed.freeze(String.view(&silk), &binaries)
+  let mut configuration = run Bytes.copy(b"{\"campaign_version\":1,\"seed\":")
+  let seedText = run Malformed.signed(seed)
+  run configuration.append(String.utf8Bytes(String.view(&seedText)))
+  run configuration.append(b",\"timeout\":")
+  run Benchmark.float(&mut configuration, timeout)
+  run configuration.append(b",\"dump_header\":")
+  run Corpus.quote(&mut configuration, Dump.header)
+  run configuration.append(b",\"reference\":")
+  let referenceJson = run Malformed.frozenJson(&reference2)
+  run configuration.append(referenceJson.asSlice())
+  run configuration.append(b",\"silk\":")
+  let silkJson = run Malformed.frozenJson(&silk3)
+  run configuration.append(silkJson.asSlice())
+  run configuration.append(b"}")
+  let paths = corpus.fonts.asSlice()
+  let mut records = List<Record>.make()
+  let mut at: usize = 0
+  while at < paths.length {
+    let mut handles = List<JoinHandle<Result<Record, Errors>>>.make()
+    let mut started: usize = 0
+    while started < workers && at < paths.length {
+      let font = run String.copy(String.view(&paths[at]))
+      let reference2 = run String.copy(String.view(&reference2.runPath))
+      let silk3 = run String.copy(String.view(&silk3.runPath))
+      let config = run Bytes.copy(configuration.asSlice())
+      let cache = run String.copy(cache)
+      let failures = run String.copy(failures)
+      let handle = match move run Effect.result(NativeThread.spawn(fn() -> Result<Record, Errors> {
+        let ownedFont = move font
+        let ownedConfig = move config
+        let ownedReference2 = move reference2
+        let ownedSilk3 = move silk3
+        let ownedCache = move cache
+        let ownedFailures = move failures
+        let mut allocator = Allocator.systemAllocatorProvider()
+        return run Effect.result(worker(String.view(&ownedFont), ownedConfig.asSlice(), String.view(&ownedReference2), String.view(&ownedSilk3), seed, timeout, String.view(&ownedCache), String.view(&ownedFailures))) |> Effect.provideMut<Allocator>(&mut allocator)
+      })) {
+        Result<JoinHandle<Result<Record, Errors>>, SpawnError | OutOfMemoryError>.Success { value } => move value
+        Result<JoinHandle<Result<Record, Errors>>, SpawnError | OutOfMemoryError>.Failure { .. } => run Task.abort("cannot start malformed campaign worker")
+      }
+      run handles.append(move handle)
+      started = started + 1
+      at = at + 1
+    }
+    while handles.length() > 0 {
+      let handle = handles.remove(0)
+      let record = match move handle.join() { Result<Record, Errors>.Success { value } => move value Result<Record, Errors>.Failure { error } => { fail move error } }
+      if record.failure.length() > 0 {
+        run Process.print(b"FAIL ")
+        run Process.print(String.utf8Bytes(String.view(&record.name)))
+        run Process.print(b" ")
+        run Process.print(record.failure.asSlice())
+        run Process.print(b"\n")
+      } else if (records.length() + 1) % 10 == 0 || records.length() + 1 == paths.length {
+        let mut message = run Bytes.copy(b"Checked ")
+        run Corpus.appendNumber(&mut message, records.length() + 1)
+        run message.append(b"/")
+        run Corpus.appendNumber(&mut message, paths.length)
+        run message.append(b" fonts\n")
+        run Process.print(message.asSlice())
+      }
+      run records.append(move record)
+    }
+  }
+  run records.sort()
+  let rows = records.asSlice()
+  let mut expected: usize = 0
+  let mut completed: usize = 0
+  let mut matched: usize = 0
+  let mut differences: usize = 0
+  let mut failures: usize = 0
+  let mut results = run Bytes.copy(b"[")
+  at = 0
+  while at < rows.length {
+    expected = expected + rows[at].expected
+    completed = completed + rows[at].completed
+    matched = matched + rows[at].matched
+    differences = differences + rows[at].differences
+    failures = failures + rows[at].failures
+    if at > 0 { run results.append(b",") }
+    run results.append(rows[at].json.asSlice())
+    at = at + 1
+  }
+  run results.append(b"]")
+  let mut summary = run Bytes.copy(b"{\"fonts\":")
+  run Corpus.appendNumber(&mut summary, paths.length)
+  run summary.append(b",\"expected_cases\":")
+  run Corpus.appendNumber(&mut summary, expected)
+  run summary.append(b",\"completed\":")
+  run Corpus.appendNumber(&mut summary, completed)
+  run summary.append(b",\"matched\":")
+  run Corpus.appendNumber(&mut summary, matched)
+  run summary.append(b",\"differences\":")
+  run Corpus.appendNumber(&mut summary, differences)
+  run summary.append(b",\"process_or_harness_failures\":")
+  run Corpus.appendNumber(&mut summary, failures)
+  run summary.append(b"}")
+  let mut document = run Bytes.copy(b"{\"summary\":")
+  run document.append(summary.asSlice())
+  run document.append(b",\"configuration\":")
+  run document.append(configuration.asSlice())
+  run document.append(b",\"fonts\":")
+  run document.append(results.asSlice())
+  run document.append(b"}\n")
+  if String.endsWith(report, ".gz") {
+    let mut temporary = run String.copy(report)
+    run String.append(&mut temporary, ".json.tmp")
+    run Corpus.save(String.view(&temporary), document.asSlice())
+    let gzip = run Tools.findProgram("gzip")
+    let mut result = run Process.execute(String.view(&gzip), &["-c", String.view(&temporary)], 600.0, false)
+    run Process.requireSuccess(&result)
+    let destination = run Corpus.resolve(report)
+    run result.output.save(&destination)
+    let temporaryPath = run Corpus.resolve(String.view(&temporary))
+    run FileSystem.removeFile(&temporaryPath)
+  } else { run Corpus.save(report, document.asSlice()) }
+  run summary.append(b"\n")
+  run Process.print(summary.asSlice())
+  if matched != expected { run Task.abort("malformed campaign did not match every expected case") }
+}

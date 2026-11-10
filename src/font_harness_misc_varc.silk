@@ -1,0 +1,147 @@
+import silk.collections.bytes { Bytes }
+import silk.collections.list { List }
+import silk.collections.slice { Slice }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.system.filesystem { FileSystem }
+import silk.text.string { String }
+import silk.num.usize
+import silk.num.i64
+import font_generate_support as G
+import font_generate_binary as B
+import font_harness_malformed as Malformed
+import font_harness_fixtures as F { Fixtures, Errors, Table }
+
+effect fn varuint(out: &mut Bytes, value: usize) -> () ! OutOfMemoryError ? &mut Allocator {
+  if value < 128 { run G.be(&mut out, value, 1) }
+  else if value < 16384 { run G.be(&mut out, 128 | (usize.shiftRight(value, 8)), 1)  run G.be(&mut out, value & 255, 1) }
+  else if value < 2097152 { run G.be(&mut out, 192 | (usize.shiftRight(value, 16)), 1)  run G.be(&mut out, value & 65535, 2) }
+  else if value < 268435456 { run G.be(&mut out, 224 | (usize.shiftRight(value, 24)), 1)  run G.be(&mut out, value & 16777215, 3) }
+  else { run G.be(&mut out, 240, 1)  run G.be(&mut out, value, 4) }
+}
+effect fn font(payload: &[u8]) -> Bytes ! Errors ? &mut Allocator {
+  let axes = b"\x00\x00\x00\x02\x01\x01\x01\x07\x04\x02\x03\x04\x05\x06"
+  let mut data = Bytes.make()
+  run B.words(&mut data, &[1, 0])
+  run G.be(&mut data, 24, 4)
+  run G.zeros(&mut data, 8)
+  run G.be(&mut data, 30, 4)
+  run G.be(&mut data, 30 + axes.length, 4)
+  run B.words(&mut data, &[1, 1, 1])
+  run data.append(axes)
+  run G.be(&mut data, 1, 4)
+  run G.be(&mut data, 2, 1)
+  run G.be(&mut data, 1, 2)
+  run G.be(&mut data, payload.length + 1, 2)
+  run data.append(payload)
+  let mut tables = List<Table>.make()
+  run F.set(&mut tables, "VARC", data.asSlice())
+  return run F.sfnt(&mut tables, 65536, true)
+}
+effect fn case(fixtures: &mut Fixtures, name: string, data: &[u8]) -> () ! Errors ? &mut Allocator | &mut FileSystem {
+  let mut cut: usize = 0
+  while cut <= data.length {
+    let n = run F.number(cut)
+    let label = run F.label(&["varc-", name, "-prefix-", String.view(&n)])
+    let bytes = run font(Slice.view<u8>(data, 0, cut))
+    run fixtures.add(String.view(&label), bytes.asSlice())
+    cut = cut + 1
+  }
+  let mut followed = run Bytes.copy(data)
+  run followed.append(b"\x00\x00\x02")
+  let bytes = run font(followed.asSlice())
+  let label = run F.label(&["varc-", name, "-followed"])
+  run fixtures.add(String.view(&label), bytes.asSlice())
+}
+pub effect fn generate(fixtures: &mut Fixtures) -> () ! Errors ? &mut Allocator | &mut FileSystem {
+  let mut flags = List<usize>.make()
+  run flags.append(0)
+  let mut bit: usize = 0
+  while bit < 32 { run flags.append(usize.shiftLeft(1, bit))  bit = bit + 1 }
+  run flags.append(32767)
+  run flags.append(4294967295)
+  let values = flags.asSlice()
+  let signedFlags: [usize; 9] = [16, 32, 64, 256, 512, 8192, 16384, 1024, 2048]
+  let signedValues: [i64; 9] = [7, -8, 1024, 2048, 3072, 512, -1024, 17, -19]
+  let mut at: usize = 0
+  while at < values.length {
+    let flag = values[at]
+    let mut data = Bytes.make()
+    run varuint(&mut data, flag)
+    run G.be(&mut data, if (flag & 4096) != 0 { 1193046 } else { 1 }, if (flag & 4096) != 0 { 3 } else { 2 })
+    if (flag & 128) != 0 { run varuint(&mut data, 4275878552) }
+    if (flag & 2) != 0 { run data.append(b"\x01\x04\x01\xfe\x03\xfc\x05") }
+    if (flag & 4) != 0 { run varuint(&mut data, 74565) }
+    if (flag & 8) != 0 { run varuint(&mut data, 2311527) }
+    let mut i: usize = 0
+    while i < signedFlags.length { if (flag & signedFlags[i]) != 0 { run B.signed(&mut data, signedValues[i], 2) }  i = i + 1 }
+    bit = 15
+    while bit < 32 { if (flag & (usize.shiftLeft(1, bit))) != 0 { run varuint(&mut data, 4294967295 - bit) }  bit = bit + 1 }
+    let name = run F.numbered("flags-", flag)
+    run case(&mut fixtures, String.view(&name), data.asSlice())
+    at = at + 1
+  }
+  let controls: [usize; 4] = [4, 68, 196, 132]
+  let axisValues: [i64; 5] = [1, -2, 3, -4, 5]
+  at = 0
+  while at < controls.length {
+    let control = controls[at]
+    let mut data = run Bytes.copy(b"\x12\x00\x01\x01")
+    run G.be(&mut data, control, 1)
+    let mut i: usize = 0
+    while i < 5 {
+      if control == 4 { run G.be(&mut data, i + 1, 1) }
+      else if control == 68 { run B.signed(&mut data, axisValues[i], 2) }
+      else if control == 196 { run B.signed(&mut data, axisValues[i] * 100000, 4) }
+      i = i + 1
+    }
+    run data.append(b"\x00\x07")
+    let name = run F.numbered("axes-", control)
+    run case(&mut fixtures, String.view(&name), data.asSlice())
+    at = at + 1
+  }
+  run case(&mut fixtures, "empty-axes", b"\x16\x00\x01\x00\x81\x23\x00\x06")
+  run case(&mut fixtures, "bad-axis-index", b"\x02\x00\x01\x7f")
+  let conditions: [usize; 9] = [127, 128, 16383, 16384, 2097151, 2097152, 268435455, 268435456, 4294967295]
+  at = 0
+  while at < conditions.length {
+    let mut data = Bytes.make()
+    run varuint(&mut data, 128)
+    run data.append(b"\x00\x01")
+    run varuint(&mut data, conditions[at])
+    let name = run F.numbered("condition-", conditions[at])
+    run case(&mut fixtures, String.view(&name), data.asSlice())
+    at = at + 1
+  }
+  let indices: [usize; 4] = [0, 7, 8, 65535]
+  let regions: [[i64; 3]; 8] = [[0, 16384, 16384], [-16384, -16384, 0], [-16384, 0, 16384], [8192, 0, -8192], [8192, 16384, 0], [-16384, 8192, 16384], [-32768, -32768, -32768], [32767, 32767, 32767]]
+  at = 0
+  while at < indices.length {
+    let mut i: usize = 0
+    while i < regions.length {
+      let mut data = Bytes.make()
+      run B.words(&mut data, &[1, 0])
+      run G.be(&mut data, 0, 4)
+      run G.be(&mut data, 24, 4)
+      run G.zeros(&mut data, 12)
+      run G.be(&mut data, 1, 2)
+      run G.be(&mut data, 8, 4)
+      run G.be(&mut data, 0, 2)
+      run G.be(&mut data, 1, 4)
+      run G.be(&mut data, 8, 4)
+      run G.be(&mut data, 1, 2)
+      run G.be(&mut data, 6, 4)
+      run G.be(&mut data, indices[at], 2)
+      run B.words(&mut data, &regions[i])
+      let index = run F.number(indices[at])
+      let start = run Malformed.signed(regions[i][0])
+      let peak = run Malformed.signed(regions[i][1])
+      let end = run Malformed.signed(regions[i][2])
+      let name = run F.label(&["varc-region-", String.view(&index), "-", String.view(&start), "-", String.view(&peak), "-", String.view(&end)])
+      let mut tables = List<Table>.make()
+      run F.set(&mut tables, "VARC", data.asSlice())
+      run F.emit(&mut fixtures, String.view(&name), &mut tables)
+      i = i + 1
+    }
+    at = at + 1
+  }
+}

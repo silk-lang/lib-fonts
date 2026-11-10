@@ -1,0 +1,194 @@
+import font_generate_process as Process
+import font_generate_data as Data
+import font_generate_fixtures as Fixtures
+import font_generate_tables as Tables
+import font_generate_model as Model
+import font_generate_misc as Misc
+import font_shape_generate_unicode { generateShapingUnicode }
+import font_shape_generate_machines { generateShapingMachines }
+import font_shape_generate_languages { generateShapingLanguages }
+import font_shape_generate_fixtures { generateShapingFixtures }
+import font_shape_generate_tests { generateShapingTests }
+import font_generate_support as G
+import silk.cli.task { Task, TaskError }
+import silk.collections.bytes { Bytes }
+import silk.collections.list { List }
+import silk.core.effect { Effect }
+import silk.core.option { Option }
+import silk.io.writer { Writer, WriterError }
+import silk.io.writer_native { StdoutWriter }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.system.child_process { ChildProcess, ProcessError }
+import silk.system.filesystem { FileSystem, FileError, Path }
+import silk.system.host_input { HostInput, HostInputError }
+import silk.text.regex { Match }
+import silk.text.string { String }
+import silk.toml.scanner { TomlError }
+import silk.toml.value { Toml, Value }
+
+struct Identity { number: String, module: String, owner: String }
+
+pub effect fn environment(name: string, fallback: string) -> Bytes ! HostInputError | OutOfMemoryError ? &mut HostInput | &mut Allocator {
+  return match move run HostInput.variableNamed(name) { Option<Bytes>.Some { value } => move value _ => run Bytes.copy(String.utf8Bytes(fallback)) }
+}
+effect fn tomlFailure(error: TomlError) -> never ! TaskError | OutOfMemoryError ? &mut Allocator {
+  let mut message = Bytes.make() run G.add(&mut message, "Invalid codegen plan TOML at byte ") run G.decimal(&mut message, error.offset)
+  run Task.abort(run G.text(Bytes.asSlice(&message)))
+}
+effect fn required<'a>(value: &'a Value, key: string) -> string<'a> ! TaskError | OutOfMemoryError ? &mut Allocator {
+  return match move Toml.field(value, key) |> Toml.asString { Option<string<'a>>.Some { value: found } => found _ => run Task.abort("Codegen operation is missing a string field") }
+}
+fn stem(path: string) -> string {
+  let start = match move String.findLast(path, "/") { Option<usize>.Some { value } => value + 1 _ => 0 }
+  let name = String.slice(path, start, String.byteLength(path) - start)
+  let end = match move String.findLast(name, ".") { Option<usize>.Some { value: found } => found _ => String.byteLength(name) }
+  return String.slice(name, 0, end)
+}
+
+// Run before fixture generation and the separately wired shaping generators.
+pub effect fn accessors(root: &Path) -> () ! TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError ? &mut HostInput | &mut Allocator | &mut ChildProcess | &mut FileSystem {
+  let cargo = run environment("CARGO", "cargo")
+  run Task.exec(run G.text(Bytes.asSlice(&cargo)), &["build", "--locked", "--manifest-path", "modules/parse/tools/font-codegen-silk/Cargo.toml", "--target-dir", "build/codegen", "--bin", "codegen"])
+  let planBytes = run G.read(root, "modules/parse/tools/codegen-plan.toml")
+  let plan = run Effect.catch<TomlError>(Toml.parse(Bytes.asSlice(&planBytes)), tomlFailure)
+  let operations = match move Toml.field(&plan, "generate") { Option<&Value>.Some { value: found } => found _ => run Task.abort("Codegen plan has no generate array") }
+  let mut imports = Bytes.make() let mut implementations = Bytes.make() let mut identities = List<Identity>.make()
+  let mut count: usize = 0
+  while true {
+    let operation = match move Toml.item(operations, count) { Option<&Value>.Some { value: found } => found _ => { break } }
+    count = count + 1
+    let mode = run required(operation, "mode") let source = run required(operation, "source") let target = run required(operation, "target")
+    let mut generated = run Process.capture(root, "build/codegen/debug/codegen", &["file", mode, source])
+    if let Option<&Value>.Some { value } = move Toml.field(operation, "extensions") {
+      let mut i: usize = 0
+      while true {
+        let extension = match move Toml.item(value, i) |> Toml.asString { Option<string>.Some { value: found } => found _ => { break } }
+        i = i + 1 run G.add(&mut generated, "\n// Handwritten extension from ") run G.add(&mut generated, extension) run G.add(&mut generated, "\n")
+        let data = run G.read(root, extension) run Bytes.append(&mut generated, Bytes.asSlice(&data))
+      }
+    }
+    if mode == "silk-dump" {
+      let module = stem(source)
+      let visits = run G.matches("DumpPath.visit\\(&mut path, ([0-9]+), FontData.len\\(&([A-Za-z0-9_]+)", run G.text(Bytes.asSlice(&generated)))
+      let visitsSlice = List<Match>.asSlice(&visits)
+      let mut visitIndex: usize = 0
+      while visitIndex < visitsSlice.length {
+        let visit = &visitsSlice[visitIndex] visitIndex = visitIndex + 1
+        let number = G.group(visit, 1) let owner = G.group(visit, 2)
+        let identitySlice = List<Identity>.asSlice(&identities)
+        let mut identityIndex: usize = 0
+        while identityIndex < identitySlice.length {
+          let identity = &identitySlice[identityIndex] identityIndex = identityIndex + 1
+          if String.view(&identity.number) == number && (String.view(&identity.module) != module || String.view(&identity.owner) != owner) {
+            let mut message = Bytes.make() run G.add(&mut message, "Traversal type ID collision: ('") run G.add(&mut message, module) run G.add(&mut message, "', '") run G.add(&mut message, owner) run G.add(&mut message, "') and ('") run G.add(&mut message, String.view(&identity.module)) run G.add(&mut message, "', '") run G.add(&mut message, String.view(&identity.owner)) run G.add(&mut message, "')")
+            run Task.abort(run G.text(Bytes.asSlice(&message)))
+          }
+        }
+        run List<Identity>.append(&mut identities, Identity { number: run String.copy(number), module: run String.copy(module), owner: run String.copy(owner) })
+      }
+      let mut alias = run G.title(module) run G.add(&mut alias, "Tables")
+      run G.add(&mut imports, "import read_fonts.")
+      if module == "cff" { run G.add(&mut imports, "ps.cff.v1") } else if module == "cff2" { run G.add(&mut imports, "ps.cff.v2") } else { run G.add(&mut imports, "tables.") run G.add(&mut imports, module) }
+      run G.add(&mut imports, " as ") run Bytes.append(&mut imports, Bytes.asSlice(&alias)) run G.add(&mut imports, "\nimport generated_dump_") run G.add(&mut imports, module) run G.add(&mut imports, "\n")
+      let lines = run G.matches("(?m:^// DUMP_IMPL (.+)$)", run G.text(Bytes.asSlice(&generated)))
+      let linesSlice = List<Match>.asSlice(&lines)
+      let mut lineIndex: usize = 0
+      while lineIndex < linesSlice.length {
+        let line = &linesSlice[lineIndex] lineIndex = lineIndex + 1
+        let raw = G.group(line, 1) let providers = run G.matches(" for (\\w+)<", raw)
+        run G.require(List<Match>.length(&providers) > 0, "Malformed DUMP_IMPL provider")
+        let provider = G.group(&List<Match>.asSlice(&providers)[0], 1)
+        let mut old = Bytes.make() run G.add(&mut old, "for ") run G.add(&mut old, provider) run G.add(&mut old, "<")
+        let mut new = Bytes.make() run G.add(&mut new, "for ") run Bytes.append(&mut new, Bytes.asSlice(&alias)) run G.add(&mut new, ".") run G.add(&mut new, provider) run G.add(&mut new, "<")
+        let first = run G.replace(raw, run G.text(Bytes.asSlice(&old)), run G.text(Bytes.asSlice(&new)))
+        let mut oldCall = Bytes.make() run G.add(&mut oldCall, "run dump") run G.add(&mut oldCall, provider) run G.add(&mut oldCall, "(")
+        let mut newCall = Bytes.make() run G.add(&mut newCall, "run generated_dump_") run G.add(&mut newCall, module) run G.add(&mut newCall, ".dump") run G.add(&mut newCall, provider) run G.add(&mut newCall, "(")
+        let finalLine = run G.replace(run G.text(Bytes.asSlice(&first)), run G.text(Bytes.asSlice(&oldCall)), run G.text(Bytes.asSlice(&newCall)))
+        run Bytes.append(&mut implementations, Bytes.asSlice(&finalLine)) run G.add(&mut implementations, "\n")
+      }
+      let removals = run G.matches("(?m:^// DUMP_IMPL .+\\n)", run G.text(Bytes.asSlice(&generated)))
+      let mut stripped = Bytes.make() let mut rest = run G.text(Bytes.asSlice(&generated))
+      let removalSlice = List<Match>.asSlice(&removals)
+      let mut removalIndex: usize = 0
+      while removalIndex < removalSlice.length {
+        let removal = &removalSlice[removalIndex] removalIndex = removalIndex + 1
+        run G.add(&mut stripped, String.slice(rest, 0, Match.start(removal)))
+        let end = Match.end(removal) rest = String.slice(rest, end, String.byteLength(rest) - end)
+      }
+      run G.add(&mut stripped, rest)
+      drop visitsSlice
+      drop visits
+      drop linesSlice
+      drop lines
+      drop removalSlice
+      drop removals
+      drop rest
+      generated = move stripped
+    }
+    if let Option<string>.Some { value } = move Toml.field(operation, "facade") |> Toml.asString {
+      let source = run G.text(Bytes.asSlice(&generated))
+      let types = run G.matches("(?m:^pub (?:struct|union|interface|enum(?:\\([^)]*\\))?|type) (\\w+))", source)
+      let functions = run G.matches("(?m:^pub (?:(?:effect )?fn|const) (\\w+))", source)
+      let exportedImports = run G.matches("(?m:^pub import .+$)", source)
+      let mut facade = Bytes.make() run G.add(&mut facade, G.HEADER) run G.add(&mut facade, "pub import ") run G.add(&mut facade, stem(target)) run G.add(&mut facade, " { ")
+      let mut first = true
+      let typesSlice = List<Match>.asSlice(&types) let mut typeIndex: usize = 0
+      while typeIndex < typesSlice.length { let item = &typesSlice[typeIndex] typeIndex = typeIndex + 1 if !first { run G.add(&mut facade, ", ") } first = false run G.add(&mut facade, G.group(item, 1)) }
+      let functionsSlice = List<Match>.asSlice(&functions) let mut functionIndex: usize = 0
+      while functionIndex < functionsSlice.length { let item = &functionsSlice[functionIndex] functionIndex = functionIndex + 1 if !first { run G.add(&mut facade, ", ") } first = false run G.add(&mut facade, G.group(item, 1)) }
+      run G.add(&mut facade, " }\n")
+      first = true
+      let importsSlice = List<Match>.asSlice(&exportedImports) let mut importIndex: usize = 0
+      while importIndex < importsSlice.length { let item = &importsSlice[importIndex] importIndex = importIndex + 1 if !first { run G.add(&mut facade, "\n") } first = false run G.add(&mut facade, G.group(item, 0)) }
+      run G.add(&mut facade, "\n") run G.save(root, value, &facade, false)
+    }
+    run G.save(root, target, &generated, false)
+  }
+  let mut traits = Bytes.make() run G.add(&mut traits, G.HEADER)
+  run G.add(&mut traits, "import read_fonts.lib { FontRead }\nimport dump_support { DumpPath }\nimport silk.io.writer { Writer, WriterError }\npub interface DumpTable<'a> { effect fn dump(self: &Self, path: &mut DumpPath) -> () ! WriterError ? &mut Writer }\n")
+  run Bytes.append(&mut traits, Bytes.asSlice(&imports)) run Bytes.append(&mut traits, Bytes.asSlice(&implementations))
+  run G.save(root, "font-parse-test-harness/src/generated_dump_traits.silk", &traits, false)
+  let mut message = Bytes.make() run G.add(&mut message, "Generated ") run G.decimal(&mut message, count) run G.add(&mut message, " files\n")
+  let mut stdout = StdoutWriter.make() run Writer.writeAll(Bytes.asSlice(&message)) |> Effect.provideMut<Writer>(&mut stdout)
+}
+
+// Run only after every fixture and shaping generator. --check deliberately checks git
+// after generation and formatting, unlike the individual generators' no-write check.
+pub effect fn finish(root: &Path, check: bool) -> () ! TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError ? &mut HostInput | &mut Allocator | &mut ChildProcess | &mut FileSystem {
+  let packages = ["modules/types", "modules/parse", "font-parse-test-harness", "modules/parse/bench", "modules/shape", "font-shape-test-harness", "modules/shape/tools/wasm", "modules/outline", "modules/raster", "modules/faces", "modules/collection"]
+  let silk = run environment("SILK", "silk")
+  let mut packageIndex: usize = 0
+  while packageIndex < packages.length {
+    let package = packages[packageIndex] packageIndex = packageIndex + 1
+    let mut manifest = Bytes.make() run G.add(&mut manifest, package) run G.add(&mut manifest, "/silk.toml")
+    let output = run Process.capture(root, run G.text(Bytes.asSlice(&silk)), &["format", "--manifest-path", run G.text(Bytes.asSlice(&manifest))])
+    drop output
+  }
+  if check {
+    let changed = run Process.capture(root, "git", &["status", "--porcelain", "--", "modules/types", "modules/parse", "font-parse-test-harness", "modules/parse/bench", "modules/shape", "font-shape-test-harness", "modules/shape/tools/wasm", "modules/outline", "modules/raster", "modules/faces", "modules/collection"])
+    if Bytes.length(&changed) != 0 {
+      let mut message = Bytes.make() run G.add(&mut message, "Generated or formatted output differs from the committed files:\n") run Bytes.append(&mut message, Bytes.asSlice(&changed))
+      run Task.abort(run G.text(Bytes.asSlice(&message)))
+    }
+    let mut stdout = StdoutWriter.make() run Writer.writeString("Generated and formatted output is committed\n") |> Effect.provideMut<Writer>(&mut stdout)
+  }
+}
+
+pub effect fn generate(root: &Path, check: bool) -> () ! TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError ? &mut HostInput | &mut Allocator | &mut ChildProcess | &mut FileSystem {
+  run accessors(root)
+  run Data.naming(root, false)
+  run Fixtures.layout(root, false)
+  run Fixtures.variation(root, false)
+  run Fixtures.aat(root, false)
+  run Data.postscript(root, false)
+  run Fixtures.cff(root, false)
+  run Tables.modelTables(root, false)
+  run Model.model(root, false)
+  run Misc.misc(root, false)
+  run generateShapingUnicode(root)
+  run generateShapingMachines(root)
+  run generateShapingLanguages(root)
+  run generateShapingFixtures(root)
+  run generateShapingTests(root, false)
+  run finish(root, check)
+}

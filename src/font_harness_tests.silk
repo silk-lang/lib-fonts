@@ -1,0 +1,332 @@
+import silk.cli.task { Task, TaskError }
+import silk.collections.bytes { Bytes }
+import silk.collections.list { List }
+import silk.core.effect { Effect }
+import silk.core.option { Option }
+import silk.core.result { Result }
+import silk.io.writer { WriterError }
+import silk.json.value { Json, Value }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.mem.pointer { Pointer }
+import silk.system.child_process { ChildProcess, ProcessError }
+import silk.system.filesystem { FileError, FileSystem, Path }
+import silk.system.host_input { HostInput, HostInputError }
+import silk.text.string { String }
+import silk.num.usize
+import font_generate_support as G
+import font_harness as Harness
+import font_harness_campaign as Campaign
+import font_harness_corpus as Corpus
+import font_harness_dump as Dump
+import font_harness_fixtures as F { Fixtures }
+import font_harness_json as Receipt
+import font_harness_malformed as Malformed
+import font_harness_process as Process
+
+type Errors = F.Errors | ProcessError
+type LoadErrors = TaskError | FileError | HostInputError | OutOfMemoryError
+const VALID: &[u8] = b"font-dump.version=9\ndump.scope=all\nfile.length=0\nfile.error=OutOfBounds\n"
+static if Intrinsic.targetOperatingSystem() == "darwin" {
+  unsafe extern "C" fn chmod(path: ?[*]const u8, mode: u16) -> i32
+} else {
+  unsafe extern "C" fn chmod(path: ?[*]const u8, mode: u32) -> i32
+}
+
+effect fn require(ok: bool, message: string) -> () ! TaskError | OutOfMemoryError ? &mut Allocator { if !ok { run Task.abort(message) } }
+effect fn named(base: string, suffix: string) -> Path ! FileError | OutOfMemoryError ? &mut Allocator { let name = run F.label(&[base, suffix])  return run Path.make(String.view(&name)) }
+effect fn configure(binary: string, output: &[u8], code: u8, delay: u8, failAt: u8) -> () ! FileError | OutOfMemoryError ? &mut Allocator | &mut FileSystem {
+  let path = run named(binary, ".output")
+  run FileSystem.writeFile(&path, output)
+  let path2 = run named(binary, ".control")
+  run FileSystem.writeFile(&path2, &[code, delay, failAt])
+}
+effect fn counter(binary: string) -> usize ! FileError | OutOfMemoryError ? &mut Allocator | &mut FileSystem { let path = run named(binary, ".count")  let bytes = run FileSystem.readFile(&path)  return G.numberAt(bytes.asSlice(), 0, 8) }
+effect fn resetCounter(binary: string) -> () ! FileError | OutOfMemoryError ? &mut Allocator | &mut FileSystem { let path = run named(binary, ".count")  run FileSystem.writeFile(&path, b"\x00\x00\x00\x00\x00\x00\x00\x00") }
+effect fn executable(directory: &Path, name: string, data: &[u8]) -> String ! Errors ? &mut Allocator | &mut FileSystem {
+  let path = run Path.join(directory, name)
+  run FileSystem.writeFile(&path, data)
+  let mut raw = run Bytes.copy(Path.rawBytes(&path))
+  run raw.append(b"\x00")
+  run require(unsafe chmod(Pointer.fromSlice(raw.asSlice()), 493) == 0, "cannot make native harness test child executable")
+  let result = run Corpus.pathText(&path)
+  run configure(String.view(&result), VALID, 0, 0, 0)
+  return move result
+}
+effect fn stream(binary: string, font: string, data: &[u8]) -> Process.RunResult ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  run configure(binary, data, 0, 0, 0)
+  let result = run Process.execute(binary, &[font], 5.0, false)
+  run require(result.code == 0 && !result.timedOut, "native harness test child failed")
+  return move result
+}
+effect fn field<'a>(value: &'a Value, key: string) -> &'a Value ! TaskError | OutOfMemoryError ? &mut Allocator { return match Json.field(value, key) { Option<&'a Value>.Some { value: found } => found Option<&'a Value>.None => run Task.abort("missing expected report field") } }
+effect fn count(value: &Value, key: string, expected: i64) -> () ! TaskError | OutOfMemoryError ? &mut Allocator { let actual = Json.asI64(Json.field(value, key)) |> Option<i64>.unwrapOr(-1)  run require(actual == expected, "unexpected harness report count") }
+
+struct RootInput { root: Bytes }
+impl HostInput for RootInput {
+  effect fn argumentCount(self: &mut Self) -> usize ! HostInputError { return 0 }
+  effect fn argument(self: &mut Self, index: usize) -> Option<Bytes> ! HostInputError | OutOfMemoryError ? &mut Allocator { return Option<Bytes>.none() }
+  effect fn variable(self: &mut Self, name: &[u8]) -> Option<Bytes> ! HostInputError | OutOfMemoryError ? &mut Allocator {
+    if Process.equal(name, b"SILK_PROJECT_ROOT") { return Option<Bytes>.some(run Bytes.copy(self.root.asSlice())) }
+    return Option<Bytes>.none()
+  }
+  effect fn workingDirectory(self: &mut Self) -> Bytes ! HostInputError | OutOfMemoryError ? &mut Allocator { return run Bytes.copy(self.root.asSlice()) }
+}
+effect fn corpusTests(directory: &Path) -> () ! Errors ? &mut Allocator | &mut FileSystem {
+  let root = run Path.join(directory, "corpus")
+  run FileSystem.createDirectoriesRecursively(&root)
+  let mut input = RootInput { root: run Bytes.copy(Path.rawBytes(&root)) }
+  let missing = run Effect.result(Corpus.load("")) |> Effect.provideMut<HostInput>(&mut input)
+  run require(match move missing { Result<Corpus.Corpus, LoadErrors>.Failure { .. } => true _ => false }, "missing corpus must fail")
+  let roots = ["modules/parse/upstream/font-test-data/test_data/ttf", "modules/parse/upstream/font-test-data/test_data/ttc", "modules/parse/upstream/font-test-data/test_data/extracted", "modules/shape/test-data/harfrust/harfrust/tests/fonts"]
+  let mut at: usize = 0
+  while at < roots.length {
+    let path = run Path.join(&root, roots[at])
+    run FileSystem.createDirectoriesRecursively(&path)
+    let readme = run Path.join(&path, "README.md")
+    run FileSystem.writeFile(&readme, b"excluded")
+    if at != 2 {
+      let file = run Path.join(&path, "bad.TTF")
+      run FileSystem.writeFile(&file, b"broken")
+      let file3 = run Path.join(&path, "legacy.dfont")
+      run FileSystem.writeFile(&file3, b"resource fork")
+      let file4 = run Path.join(&path, "no-extension")
+      run FileSystem.writeFile(&file4, b"OTTO")
+    }
+    at = at + 1
+  }
+  let corpus = run Corpus.load("") |> Effect.provideMut<HostInput>(&mut input)
+  run require(corpus.fonts.length() == 9 && corpus.excluded == 4, "corpus discovery must retain named malformed fonts and magic-only files")
+  let font = run Path.join(&root, "relative.ttf")
+  run FileSystem.writeFile(&font, b"")
+  let listing = run Path.join(&root, "fonts.txt")
+  run FileSystem.writeFile(&listing, b"relative.ttf\n")
+  let corpus5 = run Corpus.load("fonts.txt") |> Effect.provideMut<HostInput>(&mut input)
+  let expectedText = run Corpus.pathText(&font)
+  let expected = run Corpus.absolute(String.view(&expectedText)) |> Effect.provideMut<HostInput>(&mut input)
+  run require(corpus5.fonts.length() == 1 && String.view(&corpus5.fonts.asSlice()[0]) == String.view(&expected), "font list must resolve paths relative to the repository")
+  let invalid = [b"# comment\n\n", b"relative.ttf\nrelative.ttf\n"]
+  at = 0
+  while at < invalid.length {
+    run FileSystem.writeFile(&listing, invalid[at])
+    let result = run Effect.result(Corpus.load("fonts.txt")) |> Effect.provideMut<HostInput>(&mut input)
+    run require(match move result { Result<Corpus.Corpus, LoadErrors>.Failure { .. } => true _ => false }, "empty and duplicate font lists must fail")
+    at = at + 1
+  }
+}
+effect fn dumpTests(left: string, right: string, font: string) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  let cases = [DumpCase { left: b"same\nleft\n", right: b"same\nright\n", line: 2, actual: b"left\n", expected: b"right\n", eof: false }, DumpCase { left: b"x\n", right: b"x", line: 1, actual: b"x\n", expected: b"x", eof: false }, DumpCase { left: b"x\n\n", right: b"x\n", line: 2, actual: b"\n", expected: b"", eof: true }]
+  let mut at: usize = 0
+  while at < cases.length {
+    let mut a = run stream(left, font, cases[at].left)
+    let mut b = run stream(right, font, cases[at].right)
+    let difference = match move run Dump.firstDifference(&mut a.output, &mut b.output) { Option<Dump.Difference>.Some { value } => move value Option<Dump.Difference>.None => run Task.abort("missing first difference") }
+    run require(difference.line == cases[at].line && Process.equal(difference.left.asSlice(), cases[at].actual) && Process.equal(difference.right.asSlice(), cases[at].expected) && difference.rightEof == cases[at].eof, "first difference must preserve one-based lines, newlines and EOF")
+    at = at + 1
+  }
+  let invalid = [b"", b"font-dump.version=9\ndump.scope=all\ndump.status=unimplemented\n", b"font-dump.version=9\ndump.scope=all\nfile.length=0\nfile.error=OutOfBounds", b"font-dump.version=9\ndump.scope=all\nfile.length=0\nfile.error=OutOfBounds\nfont[0].error=traversal-limit\n", b"font-dump.version=9\ndump.scope=all\nfile.length=0\nfile.error=OutOfBounds\nfont[0].child.ref=7\n", b"font-dump.version=9\ndump.scope=all\nfile.length=0\nfile.error=OutOfBounds\nfont[0].node=7\nfont[0].child.node=7\n"]
+  at = 0
+  while at < invalid.length {
+    let mut result = run stream(left, font, invalid[at])
+    let inspected = run Effect.result(Dump.inspect(&mut result.output))
+    run require(match move inspected { Result<Dump.DumpInfo, TaskError | OutOfMemoryError>.Failure { .. } => true _ => false }, "incomplete, bounded, orphaned or repeated-node dump must fail")
+    at = at + 1
+  }
+  let mut graph = run Bytes.copy(VALID)
+  run graph.append(b"font[0].node=7\nfont[0].child.ref=7\n")
+  let mut result = run stream(left, font, graph.asSlice())
+  let _info = run Dump.inspect(&mut result.output)
+  run configure(left, VALID, 0, 0, 0)
+  run configure(right, VALID, 0, 0, 0)
+  let result6 = run Harness.check(font, left, right, 5.0)
+  run require(result6.status == 0, "identical complete dumps and shell-special font paths must match")
+  run configure(right, VALID, 1, 0, 0)
+  run configure(left, VALID, 1, 0, 0)
+  let result7 = run Harness.check(font, left, right, 5.0)
+  run require(result7.status == 2, "identical failed processes must never match")
+  run configure(left, VALID, 0, 5, 0)
+  let result8 = run Harness.check(font, left, right, 0.02)
+  run require(result8.status == 2, "timed-out dumper must fail")
+  let mut a = run Bytes.copy(VALID)
+  at = 0
+  while at < 5000 { run a.append(b"font[0].value=1\n")  at = at + 1 }
+  let mut b = run Bytes.copy(a.asSlice())
+  run a.append(b"font[0].value=1\n")
+  run b.append(b"font[0].value=2\n")
+  run configure(left, a.asSlice(), 0, 0, 0)
+  run configure(right, b.asSlice(), 0, 0, 0)
+  let result9 = run Harness.check(font, left, right, 5.0)
+  run require(result9.status == 1, "late field difference must not pass")
+}
+effect fn reportTests(directory: &Path, left: string, right: string, font: string) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  let report = run Path.join(directory, "comparison.json")
+  let reportName = run Corpus.pathText(&report)
+  let mut fonts = List<String>.make()
+  run fonts.append(run String.copy(font))
+  let changed = b"font-dump.version=9\ndump.scope=all\nfile.length=1\nfile.error=OutOfBounds\n"
+  let mut status: i32 = 0
+  while status < 3 {
+    run configure(left, VALID, if status == 2 { 1 } else { 0 }, 0, 0)
+    run configure(right, if status == 1 { changed } else { VALID }, if status == 2 { 1 } else { 0 }, 0, 0)
+    let result = run Effect.result(Harness.comparePaths(&fonts, left, right, 5.0, String.view(&reportName), 1))
+    let observed = match move result { Result<(), F.Errors>.Success { .. } => 0 Result<(), F.Errors>.Failure { error } => match move error { TaskError failure => failure.status FileError failure => { fail move failure } HostInputError failure => { fail move failure } OutOfMemoryError failure => { fail move failure } WriterError failure => { fail move failure } } }
+    run require(observed == status, "compare must return match/difference/process-failure status")
+    let bytes = run FileSystem.readFile(&report)
+    let document = run Receipt.parse(bytes.asSlice())
+    let summary = run field(&document, "summary")
+    run count(summary, "matched", if status == 0 { 1 } else { 0 })
+    run count(summary, "differences", if status == 1 { 1 } else { 0 })
+    run count(summary, "process_failures", if status == 2 { 1 } else { 0 })
+    if status == 0 {
+      let results = run field(&document, "results")
+      let first = match Json.item(results, 0) { Option<&Value>.Some { value } => value _ => run Task.abort("missing comparison result") }
+      run require(Receipt.text(first, "rust_dump_sha256") == Receipt.text(first, "silk_dump_sha256"), "matching report digests must agree")
+    }
+    status = status + 1
+  }
+  run configure(left, VALID, 0, 0, 0)
+  let listing = run Path.join(directory, "fonts.txt")
+  let mut list = run Bytes.copy(String.utf8Bytes(font))
+  run list.append(b"\n")
+  run FileSystem.writeFile(&listing, list.asSlice())
+  let listingName = run Corpus.pathText(&listing)
+  run Harness.verifyReference(String.view(&listingName), left, 5.0, String.view(&reportName))
+  let bytes = run FileSystem.readFile(&report)
+  let document = run Receipt.parse(bytes.asSlice())
+  let summary = run field(&document, "summary")
+  run count(summary, "completed", 1)
+  run count(summary, "faces_ok", 0)
+  run count(summary, "parse_error_records", 1)
+}
+effect fn mutationTests() -> () ! Errors ? &mut Allocator {
+  let mut source = Bytes.make()
+  let mut at: usize = 0
+  while at < 1024 { run source.append(&[usize.toU8(at % 256)])  at = at + 1 }
+  let a = run Malformed.mutations(source.asSlice(), 123)
+  let b = run Malformed.mutations(source.asSlice(), 123)
+  let other = run Malformed.mutations(source.asSlice(), 124)
+  let first = a.asSlice()
+  let second = b.asSlice()
+  let third = other.asSlice()
+  run require(first.length == second.length && first.length == third.length, "mutation counts must be stable")
+  let mut cuts: usize = 0
+  let mut flips: usize = 0
+  let mut zero = false
+  let mut half = false
+  let mut last = false
+  let mut differs = false
+  at = 0
+  while at < first.length {
+    let recipe = run Malformed.recipeJson(&first[at])
+    let repeated = run Malformed.recipeJson(&second[at])
+    run require(Process.equal(recipe.asSlice(), repeated.asSlice()), "seeded mutation recipes must reproduce exactly")
+    let different = run Malformed.recipeJson(&third[at])
+    if !Process.equal(recipe.asSlice(), different.asSlice()) { differs = true }
+    let data = run Malformed.changed(source.asSlice(), &first[at])
+    if first[at].truncate {
+      cuts = cuts + 1
+      if data.length() == 0 { zero = true }
+      if data.length() == 512 { half = true }
+      if data.length() == 1023 { last = true }
+    } else {
+      flips = flips + 1
+      run require(data.length() == source.length() && !Process.equal(data.asSlice(), source.asSlice()), "bit flips must change bytes without changing length")
+      let restored = run Malformed.changed(data.asSlice(), &first[at])
+      run require(Process.equal(restored.asSlice(), source.asSlice()), "XOR mutation recipe must reproduce and invert its mutation")
+    }
+    at = at + 1
+  }
+  run require(cuts >= 30 && flips == 8 && zero && half && last && differs, "mutation campaign must cover boundaries and seed-dependent flips")
+  let empty = run Malformed.mutations(b"", 123)
+  let one = run Malformed.mutations(b"x", 123)
+  run require(empty.length() == 0 && one.length() == 9, "empty and single-byte mutation bounds")
+}
+effect fn malformedTests(directory: &Path, left: string, right: string) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  let failures = run Path.join(directory, "failures")
+  run configure(left, VALID, 1, 0, 0)
+  run configure(right, VALID, 1, 0, 0)
+  let result = run Malformed.checkCase(b"x", b"{\"kind\":\"test\"}", left, right, 5.0, &failures)
+  run require(result.status == 2, "malformed nonzero process must save a failure")
+  let hash = run Dump.sha(b"x")
+  let artifact = run Path.join(&failures, String.view(&hash))
+  let input = run Path.join(&artifact, "input.font")
+  let contents = run FileSystem.readFile(&input)
+  run require(Process.equal(contents.asSlice(), b"x"), "saved failing input must be exact")
+  let observation = run Path.join(&artifact, "observation.json")
+  let contents10 = run FileSystem.readFile(&observation)
+  let document = run Receipt.parse(contents10.asSlice())
+  run require(Receipt.text(&document, "status") == "failure", "saved observation must mark process failure")
+  run configure(left, VALID, 0, 5, 0)
+  run configure(right, VALID, 0, 5, 0)
+  let result11 = run Malformed.checkCase(b"x", b"{}", left, right, 0.05, &failures)
+  run require(result11.status == 2, "both malformed dumpers timing out must fail")
+  let timeoutDocument = run Receipt.parse(result11.json.asSlice())
+  let processes = run field(&timeoutDocument, "processes")
+  let names = ["rust", "silk"]
+  let mut at: usize = 0
+  while at < names.length {
+    let process = run field(processes, names[at])
+    let timeout = Json.asF64(Json.field(process, "timeout_seconds")) |> Option<f64>.unwrapOr(0.0)
+    run require(timeout == 0.05, "both timeout observations must be retained")
+    at = at + 1
+  }
+  let font = run Path.join(directory, "resume.ttf")
+  run FileSystem.writeFile(&font, b"x")
+  let fontName = run Corpus.pathText(&font)
+  let cache = run Path.join(directory, "cache")
+  let cacheName = run Corpus.pathText(&cache)
+  let failureName = run Corpus.pathText(&failures)
+  run resetCounter(left)
+  run resetCounter(right)
+  run configure(left, VALID, 0, 0, 2)
+  run configure(right, VALID, 0, 0, 0)
+  let first = run Campaign.checkFont(String.view(&fontName), b"{\"silk\":{\"sha256\":\"first\"}}", left, right, 123, 5.0, String.view(&cacheName), String.view(&failureName))
+  run require(first.completed == 2 && (run counter(left)) == 2, "campaign must persist successes and stop at first failure")
+  run configure(left, VALID, 0, 0, 0)
+  let second = run Campaign.checkFont(String.view(&fontName), b"{\"silk\":{\"sha256\":\"first\"}}", left, right, 123, 5.0, String.view(&cacheName), String.view(&failureName))
+  run require(second.completed == 9 && second.matched == 9 && (run counter(left)) == 10, "resume must reuse only matching successful receipts")
+  let third = run Campaign.checkFont(String.view(&fontName), b"{\"silk\":{\"sha256\":\"first\"}}", left, right, 123, 5.0, String.view(&cacheName), String.view(&failureName))
+  run require(third.completed == 9 && (run counter(left)) == 10, "complete resume must execute no children")
+  let changed = run Campaign.checkFont(String.view(&fontName), b"{\"silk\":{\"sha256\":\"rebuilt\"}}", left, right, 123, 5.0, String.view(&cacheName), String.view(&failureName))
+  run require(changed.completed == 9 && (run counter(left)) == 19, "changed binary fingerprint must invalidate every cached case")
+  let binary = run Path.join(directory, "freeze-input")
+  let binaryName = run Corpus.pathText(&binary)
+  let snapshots = run Path.join(directory, "snapshots")
+  run FileSystem.writeFile(&binary, b"first binary")
+  let first12 = run Malformed.freeze(String.view(&binaryName), &snapshots)
+  run FileSystem.writeFile(&binary, b"rebuilt binary")
+  let second13 = run Malformed.freeze(String.view(&binaryName), &snapshots)
+  let path = run Path.make(String.view(&first12.runPath))
+  let old = run FileSystem.readFile(&path)
+  let digest = run Dump.sha(b"first binary")
+  run require(Process.equal(old.asSlice(), b"first binary") && String.view(&first12.digest) == String.view(&digest) && String.view(&first12.runPath) != String.view(&second13.runPath), "binary snapshots must survive rebuilds and be content-addressed")
+}
+effect fn perform(directory: &Path) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem | &mut ChildProcess {
+  let binary = run Path.join(directory, "native-test-child")
+  let binaryName = run Corpus.pathText(&binary)
+  run Task.silk(&["build", "src/font_harness_test_child.silk", "--output", String.view(&binaryName)])
+  let data = run FileSystem.readFile(&binary)
+  let left = run executable(directory, "rust dumper;$(not-a-command)", data.asSlice())
+  let right = run executable(directory, "silk dumper;$(not-a-command)", data.asSlice())
+  let font = run Path.join(directory, "font with spaces;$(not-a-command).ttf")
+  run FileSystem.writeFile(&font, b"")
+  let fontName = run Corpus.pathText(&font)
+  run Process.print(b"corpusTests\n")
+  run corpusTests(directory)
+  run Process.print(b"dumpTests\n")
+  run dumpTests(String.view(&left), String.view(&right), String.view(&fontName))
+  run Process.print(b"reportTests\n")
+  run reportTests(directory, String.view(&left), String.view(&right), String.view(&fontName))
+  run Process.print(b"mutationTests\n")
+  run mutationTests()
+  run Process.print(b"malformedTests\n")
+  run malformedTests(directory, String.view(&left), String.view(&right))
+  run Process.print(b"PASS: native harness and malformed campaign contracts\n")
+}
+pub effect fn checkHarness() -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem | &mut ChildProcess {
+  let fixtures = run Fixtures.make("font-harness-tests-", "")
+  let result = run Effect.result(perform(&fixtures.directory))
+  run fixtures.cleanup()
+  match move result { Result<(), Errors>.Success { .. } => {} Result<(), Errors>.Failure { error } => { fail move error } }
+}
+
+struct DumpCase { left: &'static [u8], right: &'static [u8], line: usize, actual: &'static [u8], expected: &'static [u8], eof: bool }

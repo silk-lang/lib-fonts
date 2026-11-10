@@ -1,0 +1,207 @@
+import silk.cli.task { Task, TaskError }
+import silk.collections.bytes { Bytes }
+import silk.collections.list { List }
+import silk.collections.slice { Slice }
+import silk.core.effect { Effect }
+import silk.core.order { Order, Ordering }
+import silk.io.writer { WriterError }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.system.filesystem { FileError, FileSystem, Path }
+import silk.system.host_input { HostInput, HostInputError }
+import silk.text.string { String }
+import silk.num.usize
+import silk.num.u8
+import font_generate_support as G
+import font_harness as Harness
+import font_harness_corpus as Corpus
+
+pub type Errors = TaskError | FileError | HostInputError | OutOfMemoryError | WriterError
+pub struct Table { pub tag: String, pub data: Bytes }
+impl Order for Table { fn compare(left: &Self, right: &Self) -> Ordering { return Order.compare(&String.view(&left.tag), &String.view(&right.tag)) } }
+pub struct Literal { pub name: String, pub data: Bytes }
+pub struct Fixtures { pub directory: Path, pub paths: List<String>, pub extension: String }
+impl Fixtures {
+  pub effect fn make(prefix: string, extension: string) -> Fixtures ! FileError | OutOfMemoryError ? &mut Allocator | &mut FileSystem {
+    let parent = run Path.make("/tmp")
+    return Fixtures { directory: run FileSystem.createTemporaryDirectory(&parent, String.utf8Bytes(prefix)), paths: List<String>.make(), extension: run String.copy(extension) }
+  }
+  pub effect fn add(self: &mut Self, name: string, bytes: &[u8]) -> () ! TaskError | FileError | OutOfMemoryError ? &mut Allocator | &mut FileSystem {
+    let mut filename = run String.copy(name)
+    run String.append(&mut filename, String.view(&self.extension))
+    let path = run Path.join(&self.directory, String.view(&filename))
+    if run FileSystem.exists(&path) { run Task.abort("fixture names must be unique") }
+    run FileSystem.writeFile(&path, bytes)
+    run self.paths.append(run Corpus.pathText(&path))
+  }
+  pub effect fn compare(self: &Self, reference: string, silk: string, timeout: f64, report: string) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+    let reference = run Harness.referenceBinary(reference)
+    let silk = run Harness.silkBinary(silk)
+    run Harness.comparePaths(&self.paths, String.view(&reference), String.view(&silk), timeout, report, 0)
+  }
+  pub effect fn cleanup(self: &Self) -> () ? &mut Allocator | &mut FileSystem {
+    run Effect.catchAll(FileSystem.removeDirectoryRecursively(&self.directory), ignored)
+  }
+}
+effect fn ignored(error: FileError | OutOfMemoryError) -> () {}
+
+pub effect fn label(parts: &[string]) -> String ! OutOfMemoryError ? &mut Allocator {
+  let mut result = String.make()
+  let mut at: usize = 0
+  while at < parts.length { run String.append(&mut result, parts[at])  at = at + 1 }
+  return move result
+}
+pub effect fn number(value: usize) -> String ! OutOfMemoryError ? &mut Allocator {
+  let mut bytes = Bytes.make()
+  run G.decimal(&mut bytes, value)
+  return unsafe String.fromBytesUnchecked(move bytes)
+}
+pub effect fn numbered(prefix: string, value: usize) -> String ! OutOfMemoryError ? &mut Allocator {
+  let n = run number(value)
+  return run label(&[prefix, String.view(&n)])
+}
+pub effect fn padded(value: usize, width: usize) -> String ! OutOfMemoryError ? &mut Allocator {
+  let n = run number(value)
+  let mut result = String.make()
+  let mut length = String.byteLength(String.view(&n))
+  while length < width { run String.append(&mut result, "0")  length = length + 1 }
+  run String.append(&mut result, String.view(&n))
+  return move result
+}
+pub fn has(values: &[string], value: string) -> bool {
+  let mut at: usize = 0
+  while at < values.length { if values[at] == value { return true }  at = at + 1 }
+  return false
+}
+pub fn minimum(left: usize, right: usize) -> usize { return if left < right { left } else { right } }
+pub effect fn unique(values: &mut List<usize>, value: usize) -> () ! OutOfMemoryError ? &mut Allocator {
+  let items = values.asSlice()
+  let mut at: usize = 0
+  while at < items.length { if items[at] == value { return }  at = at + 1 }
+  run values.append(value)
+}
+pub effect fn set(tables: &mut List<Table>, tag: string, bytes: &[u8]) -> () ! OutOfMemoryError ? &mut Allocator {
+  let rows = tables.asMutSlice()
+  let mut at: usize = 0
+  while at < rows.length { if String.view(&rows[at].tag) == tag { rows[at].data = run Bytes.copy(bytes)  return }  at = at + 1 }
+  drop rows
+  run tables.append(Table { tag: run String.copy(tag), data: run Bytes.copy(bytes) })
+}
+pub effect fn get<'a>(tables: &'a List<Table>, tag: string) -> &'a [u8] ! TaskError | OutOfMemoryError ? &mut Allocator {
+  let rows = tables.asSlice()
+  let mut at: usize = 0
+  while at < rows.length { if String.view(&rows[at].tag) == tag { return rows[at].data.asSlice() }  at = at + 1 }
+  run Task.abort("fixture is missing a required table")
+}
+pub fn contains(tables: &List<Table>, tag: string) -> bool {
+  let rows = tables.asSlice()
+  let mut at: usize = 0
+  while at < rows.length { if String.view(&rows[at].tag) == tag { return true }  at = at + 1 }
+  return false
+}
+pub effect fn copy(tables: &List<Table>, hidden: &[string]) -> List<Table> ! OutOfMemoryError ? &mut Allocator {
+  let mut result = List<Table>.make()
+  let rows = tables.asSlice()
+  let mut at: usize = 0
+  while at < rows.length { if !has(hidden, String.view(&rows[at].tag)) { run set(&mut result, String.view(&rows[at].tag), rows[at].data.asSlice()) }  at = at + 1 }
+  return move result
+}
+pub effect fn tables(data: &[u8]) -> List<Table> ! TaskError | OutOfMemoryError ? &mut Allocator {
+  if data.length < 12 { run Task.abort("truncated fixture SFNT") }
+  let count = G.numberAt(data, 4, 2)
+  if count > (data.length - 12) / 16 { run Task.abort("truncated fixture SFNT records") }
+  let mut result = List<Table>.make()
+  let mut at: usize = 0
+  while at < count {
+    let record = 12 + at * 16
+    let tag = run Corpus.utf8(Slice.view<u8>(data, record, 4))
+    let offset = G.numberAt(data, record + 8, 4)
+    let length = G.numberAt(data, record + 12, 4)
+    let start = minimum(offset, data.length)
+    run set(&mut result, String.view(&tag), Slice.view<u8>(data, start, minimum(length, data.length - start)))
+    at = at + 1
+  }
+  return move result
+}
+pub effect fn sfnt(tables: &mut List<Table>, version: usize, align: bool) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  run tables.sort()
+  let rows = tables.asSlice()
+  let mut out = run Bytes.zeroed(12 + 16 * rows.length)
+  G.patch(&mut out, 0, version, 4)
+  G.patch(&mut out, 4, rows.length, 2)
+  let mut at: usize = 0
+  while at < rows.length {
+    let record = 12 + 16 * at
+    let tag = String.utf8Bytes(String.view(&rows[at].tag))
+    let view = out.asMutSlice()
+    let mut k: usize = 0
+    while k < 4 { view[record + k] = tag[k]  k = k + 1 }
+    drop view
+    let offset = out.length()
+    G.patch(&mut out, record + 8, offset, 4)
+    G.patch(&mut out, record + 12, rows[at].data.length(), 4)
+    run out.append(rows[at].data.asSlice())
+    if align { let padding = (4 - out.length() % 4) % 4 run G.zeros(&mut out, padding) }
+    at = at + 1
+  }
+  return move out
+}
+pub effect fn one(tag: string, data: &[u8], align: bool) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  let mut records = List<Table>.make()
+  run set(&mut records, tag, data)
+  return run sfnt(&mut records, 65536, align)
+}
+pub effect fn emit(set: &mut Fixtures, name: string, records: &mut List<Table>) -> () ! TaskError | FileError | OutOfMemoryError ? &mut Allocator | &mut FileSystem {
+  let data = run sfnt(&mut records, 65536, true)
+  run set.add(name, data.asSlice())
+}
+pub effect fn literal(text: string) -> Bytes ! TaskError | OutOfMemoryError ? &mut Allocator {
+  let input = String.utf8Bytes(text)
+  let mut out = Bytes.make()
+  let mut at: usize = 0
+  while at < input.length {
+    let c = input[at]
+    at = at + 1
+    if c != 92 { run out.append(&[c])  continue }
+    if at == input.length { run Task.abort("truncated byte literal") }
+    let escaped = input[at]
+    at = at + 1
+    if escaped == 120 {
+      if at + 2 > input.length { run Task.abort("truncated hex byte escape") }
+      let mut value: usize = 0
+      let mut k: usize = 0
+      while k < 2 {
+        let digit = input[at + k]
+        let d = if digit >= 48 && digit <= 57 { digit - 48 } else if digit >= 65 && digit <= 70 { digit - 55 } else if digit >= 97 && digit <= 102 { digit - 87 } else { run Task.abort("invalid hex byte escape") }
+        value = value * 16 + u8.toUsize(d)
+        k = k + 1
+      }
+      run out.append(&[usize.toU8(value)])
+      at = at + 2
+    } else if escaped >= 48 && escaped <= 55 {
+      let mut value = u8.toUsize(escaped - 48)
+      let mut count: usize = 1
+      while count < 3 && at < input.length && input[at] >= 48 && input[at] <= 55 { value = value * 8 + u8.toUsize(input[at] - 48)  count = count + 1  at = at + 1 }
+      run out.append(&[usize.toU8(value % 256)])
+    } else {
+      let value = if escaped == 110 { 10 } else if escaped == 114 { 13 } else if escaped == 116 { 9 } else if escaped == 97 { 7 } else if escaped == 98 { 8 } else if escaped == 102 { 12 } else if escaped == 118 { 11 } else { escaped }
+      run out.append(&[value])
+    }
+  }
+  return move out
+}
+pub effect fn literals(root: &Path, file: string) -> List<Literal> ! TaskError | FileError | OutOfMemoryError ? &mut Allocator | &mut FileSystem {
+  let bytes = run G.read(root, file)
+  let source = run G.text(bytes.asSlice())
+  let found = run G.matches("fn (\\w+)\\(\\)[^{]*\\{\\s*return b\"((?:\\\\.|[^\"\\\\])*)\"", source)
+  let matches = found.asSlice()
+  let mut result = List<Literal>.make()
+  let mut at: usize = 0
+  while at < matches.length { run result.append(Literal { name: run String.copy(G.group(&matches[at], 1)), data: run literal(G.group(&matches[at], 2)) })  at = at + 1 }
+  return move result
+}
+pub effect fn named<'a>(values: &'a List<Literal>, name: string) -> &'a [u8] ! TaskError | OutOfMemoryError ? &mut Allocator {
+  let rows = values.asSlice()
+  let mut at: usize = 0
+  while at < rows.length { if String.view(&rows[at].name) == name { return rows[at].data.asSlice() }  at = at + 1 }
+  run Task.abort("missing named fixture literal")
+}

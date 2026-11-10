@@ -1,0 +1,101 @@
+import font_generate_support as G
+import font_generate_binary as B { Builder }
+import silk.cli.task { TaskError }
+import silk.collections.bytes { Bytes }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.num.usize
+
+struct Patch { label: string<'static>, target: string<'static>, base: string<'static>, width: usize }
+
+pub effect fn baseTable() -> Bytes ! TaskError | OutOfMemoryError ? &mut Allocator {
+  let mut b = Builder.make()
+  run B.words(&mut b.bytes, &[1, 1]) run b.tagged("axis_offset", 2) run B.words(&mut b.bytes, &[0]) run b.tagged("store_offset", 4)
+  run b.mark("axis") run b.tagged("tags_offset", 2) run b.tagged("scripts_offset", 2)
+  run b.mark("tags") run B.words(&mut b.bytes, &[3]) run G.add(&mut b.bytes, "hangideoromn")
+  run b.mark("scripts") run B.words(&mut b.bytes, &[3])
+  run G.add(&mut b.bytes, "DFLT") run b.tagged("DFLT_offset", 2)
+  run G.add(&mut b.bytes, "hani") run b.tagged("hani_offset", 2)
+  run G.add(&mut b.bytes, "latn") run b.tagged("latn_offset", 2)
+  run b.mark("latn") run b.tagged("latn_values_offset", 2) run B.words(&mut b.bytes, &[0, 0])
+  run b.mark("latn_values") run B.words(&mut b.bytes, &[2, 3])
+  run b.tagged("latn_hang_offset", 2) run b.tagged("latn_ideo_offset", 2) run b.tagged("latn_romn_offset", 2)
+  run b.mark("hani") run B.words(&mut b.bytes, &[0, 0, 0])
+  run b.mark("DFLT") run b.tagged("DFLT_values_offset", 2) run B.words(&mut b.bytes, &[0, 0])
+  run b.mark("DFLT_values") run B.words(&mut b.bytes, &[2, 3])
+  run b.tagged("DFLT_hang_offset", 2) run b.tagged("DFLT_ideo_offset", 2) run b.tagged("DFLT_romn_offset", 2)
+  run b.mark("latn_hang") run B.words(&mut b.bytes, &[3, 700]) run b.tagged("device_offset", 2)
+  run b.mark("latn_ideo") run B.words(&mut b.bytes, &[1, -120])
+  run b.mark("latn_romn") run B.words(&mut b.bytes, &[3, 0]) run b.tagged("index_offset", 2)
+  run b.mark("DFLT_hang") run B.words(&mut b.bytes, &[1, 600])
+  run b.mark("DFLT_ideo") run B.words(&mut b.bytes, &[2, -100, 9, 3])
+  run b.mark("DFLT_romn") run B.words(&mut b.bytes, &[1, 5])
+  run b.mark("device") run B.words(&mut b.bytes, &[10, 11, 3, 766])
+  run b.mark("index") run B.words(&mut b.bytes, &[0, 0, 32768])
+  run b.mark("store") run B.words(&mut b.bytes, &[1]) run b.tagged("regions_offset", 4) run B.words(&mut b.bytes, &[1]) run b.tagged("deltas_offset", 4)
+  run b.mark("regions") run B.words(&mut b.bytes, &[1, 1, 0, 16384, 16384])
+  run b.mark("deltas") run B.words(&mut b.bytes, &[1, 1, 1, 0, -40])
+  let patches = [
+    Patch { label: "axis_offset", target: "axis", base: "", width: 2 }, Patch { label: "store_offset", target: "store", base: "", width: 4 },
+    Patch { label: "tags_offset", target: "tags", base: "axis", width: 2 }, Patch { label: "scripts_offset", target: "scripts", base: "axis", width: 2 },
+    Patch { label: "device_offset", target: "device", base: "latn_hang", width: 2 }, Patch { label: "index_offset", target: "index", base: "latn_romn", width: 2 },
+    Patch { label: "regions_offset", target: "regions", base: "store", width: 4 }, Patch { label: "deltas_offset", target: "deltas", base: "store", width: 4 },
+    Patch { label: "DFLT_offset", target: "DFLT", base: "scripts", width: 2 }, Patch { label: "hani_offset", target: "hani", base: "scripts", width: 2 }, Patch { label: "latn_offset", target: "latn", base: "scripts", width: 2 },
+    Patch { label: "DFLT_values_offset", target: "DFLT_values", base: "DFLT", width: 2 }, Patch { label: "latn_values_offset", target: "latn_values", base: "latn", width: 2 },
+    Patch { label: "DFLT_hang_offset", target: "DFLT_hang", base: "DFLT_values", width: 2 }, Patch { label: "DFLT_ideo_offset", target: "DFLT_ideo", base: "DFLT_values", width: 2 }, Patch { label: "DFLT_romn_offset", target: "DFLT_romn", base: "DFLT_values", width: 2 },
+    Patch { label: "latn_hang_offset", target: "latn_hang", base: "latn_values", width: 2 }, Patch { label: "latn_ideo_offset", target: "latn_ideo", base: "latn_values", width: 2 }, Patch { label: "latn_romn_offset", target: "latn_romn", base: "latn_values", width: 2 },
+  ]
+  let mut patchIndex: usize = 0
+  while patchIndex < patches.length { let p = &patches[patchIndex] patchIndex = patchIndex + 1 run b.patch(p.label, p.target, p.base, p.width) }
+  return move b.bytes
+}
+
+pub effect fn mathTable(count: usize) -> Bytes ! TaskError | OutOfMemoryError ? &mut Allocator {
+  let mut b = Builder.make()
+  run B.words(&mut b.bytes, &[1, 0]) run b.tagged("constants_offset", 2) run b.tagged("glyph_info_offset", 2) run b.tagged("variants_offset", 2)
+  run b.mark("constants") run B.words(&mut b.bytes, &[1, 2, 3, 4])
+  let mut i: usize = 0
+  while i < count {
+    run G.be(&mut b.bytes, 100 + i, 2)
+    if i == 0 { run b.tagged("leading_device_offset", 2) } else if i == 1 { run b.tagged("axis_device_offset", 2) } else { run G.be(&mut b.bytes, 0, 2) }
+    i = i + 1
+  }
+  run B.words(&mut b.bytes, &[5])
+  run b.mark("glyph_info") run b.tagged("italics_offset", 2) run B.words(&mut b.bytes, &[0, 0]) run b.tagged("kern_info_offset", 2)
+  run b.mark("italics") run b.tagged("italics_coverage_offset", 2) run B.words(&mut b.bytes, &[1, 37]) run b.tagged("italics_device_offset", 2)
+  run b.mark("italics_coverage") run B.words(&mut b.bytes, &[1, 1, 9])
+  run b.mark("italics_device") run B.words(&mut b.bytes, &[11, 12, 3, 1535])
+  run b.mark("kern_info") run b.tagged("kern_coverage_offset", 2) run B.words(&mut b.bytes, &[1]) run b.tagged("right_kern_offset", 2) run B.words(&mut b.bytes, &[0, 0, 0])
+  run b.mark("kern_coverage") run B.words(&mut b.bytes, &[1, 1, 9])
+  run b.mark("kern") run B.words(&mut b.bytes, &[2, 20, 0, 40]) run b.tagged("height_device_offset", 2) run B.words(&mut b.bytes, &[-1, 0, -2]) run b.tagged("value_device_offset", 2) run B.words(&mut b.bytes, &[-3, 0])
+  run b.mark("variants") run B.words(&mut b.bytes, &[6]) run b.tagged("vert_coverage_offset", 2) run B.words(&mut b.bytes, &[0, 1, 0]) run b.tagged("construction_offset", 2)
+  run b.mark("vert_coverage") run B.words(&mut b.bytes, &[1, 1, 9])
+  run b.mark("construction") run b.tagged("assembly_offset", 2) run B.words(&mut b.bytes, &[2, 21, 300, 22, 400])
+  run b.mark("assembly") run B.words(&mut b.bytes, &[17, 0, 1, 23, 10, 11, 50, 1])
+  run b.mark("height_device") run B.words(&mut b.bytes, &[10, 11, 3, 1274])
+  run b.mark("value_device") run B.words(&mut b.bytes, &[10, 11, 3, 258])
+  run b.mark("axis_device") run B.words(&mut b.bytes, &[10, 12, 3, 65027, 1792])
+  run b.mark("leading_device") run B.words(&mut b.bytes, &[0, 0, 32768])
+  let patches = [
+    Patch { label: "constants_offset", target: "constants", base: "", width: 2 }, Patch { label: "glyph_info_offset", target: "glyph_info", base: "", width: 2 }, Patch { label: "variants_offset", target: "variants", base: "", width: 2 },
+    Patch { label: "italics_offset", target: "italics", base: "glyph_info", width: 2 }, Patch { label: "kern_info_offset", target: "kern_info", base: "glyph_info", width: 2 },
+    Patch { label: "italics_coverage_offset", target: "italics_coverage", base: "italics", width: 2 }, Patch { label: "italics_device_offset", target: "italics_device", base: "italics", width: 2 },
+    Patch { label: "kern_coverage_offset", target: "kern_coverage", base: "kern_info", width: 2 }, Patch { label: "right_kern_offset", target: "kern", base: "kern_info", width: 2 },
+    Patch { label: "height_device_offset", target: "height_device", base: "kern", width: 2 }, Patch { label: "value_device_offset", target: "value_device", base: "kern", width: 2 },
+    Patch { label: "vert_coverage_offset", target: "vert_coverage", base: "variants", width: 2 }, Patch { label: "construction_offset", target: "construction", base: "variants", width: 2 },
+    Patch { label: "assembly_offset", target: "assembly", base: "construction", width: 2 }, Patch { label: "axis_device_offset", target: "axis_device", base: "constants", width: 2 }, Patch { label: "leading_device_offset", target: "leading_device", base: "constants", width: 2 },
+  ]
+  let mut patchIndex: usize = 0
+  while patchIndex < patches.length { let p = &patches[patchIndex] patchIndex = patchIndex + 1 run b.patch(p.label, p.target, p.base, p.width) }
+  return move b.bytes
+}
+
+pub effect fn colorContour(lastFlag: u8) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  let mut small = Bytes.make() run B.words(&mut small, &[1, 10, 20, 50, 80, 2, 0]) run Bytes.append(&mut small, &[1, 1, 1]) run B.words(&mut small, &[10, 40, 0, 20, 0, 60])
+  let mut large = Bytes.make() run B.words(&mut large, &[1, 1000, 2000, 3000, 4000, 2, 0]) run Bytes.append(&mut large, &[1, 128, lastFlag]) run B.words(&mut large, &[1000, 2000, 0, 2000, 0, 2000])
+  let mut head = Bytes.make() run G.zeros(&mut head, 54) G.patch(&mut head, 0, 65536, 4) G.patch(&mut head, 18, 1000, 2) G.patch(&mut head, 50, 1, 2)
+  let mut maxp = Bytes.make() run G.be(&mut maxp, 65536, 4) run G.be(&mut maxp, 3, 2) run G.zeros(&mut maxp, 26)
+  let mut loca = Bytes.make() run G.be(&mut loca, 0, 4) run G.be(&mut loca, 0, 4) run G.be(&mut loca, Bytes.length(&small), 4) run G.be(&mut loca, Bytes.length(&small) + Bytes.length(&large), 4)
+  run Bytes.append(&mut small, Bytes.asSlice(&large))
+  let mut colr = Bytes.make() run B.words(&mut colr, &[0, 1]) run G.be(&mut colr, 14, 4) run G.be(&mut colr, 20, 4) run B.words(&mut colr, &[2, 0, 0, 2, 1, 0, 2, 0])
+  return run B.sfnt(&[B.Table { tag: "COLR", data: move colr }, B.Table { tag: "glyf", data: move small }, B.Table { tag: "head", data: move head }, B.Table { tag: "loca", data: move loca }, B.Table { tag: "maxp", data: move maxp }])
+}

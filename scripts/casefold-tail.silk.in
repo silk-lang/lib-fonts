@@ -1,0 +1,31 @@
+
+fn word(bytes: &[u8], at: usize) -> u32 {
+  return u8.toU32(bytes[at]) | u32.shiftLeft(u8.toU32(bytes[at + 1]), 8)
+    | u32.shiftLeft(u8.toU32(bytes[at + 2]), 16)
+}
+
+/// Writes the full case folding of `cp` to `out` and returns its length (1 to 3).
+pub fn fold(cp: u32, out: &mut [u32; 3]) -> usize {
+  let data = records()
+  let mut low: usize = 0
+  let mut high = data.length / 12
+  while low < high {
+    let middle = low + (high - low) / 2
+    let key = word(data, middle * 12)
+    if key == cp {
+      let mut length: usize = 0
+      while length < 3 {
+        let value = word(data, middle * 12 + 3 + length * 3)
+        if value == 0 {
+          return length
+        }
+        out[length] = value
+        length = length + 1
+      }
+      return length
+    }
+    if key < cp { low = middle + 1 } else { high = middle }
+  }
+  out[0] = cp
+  return 1
+}

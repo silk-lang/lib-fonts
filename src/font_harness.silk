@@ -1,0 +1,410 @@
+import font_harness_text as Text
+import silk.cli.task { Task, TaskError }
+import silk.collections.bytes { Bytes }
+import silk.collections.list { List }
+import silk.collections.slice { Slice }
+import silk.concurrency.thread_native { NativeThread, JoinHandle, SpawnError }
+import silk.core.effect { Effect }
+import silk.core.option { Option }
+import silk.core.result { Result }
+import silk.io.writer { WriterError }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.platform.native.host_input { NativeHostInput }
+import silk.system.host_input_native { OsHostInput }
+import silk.system.filesystem { FileError, FileSystem, Path }
+import silk.system.filesystem_machine { MachineFileSystem }
+import silk.system.host_input { HostInput, HostInputError }
+import silk.text.format { Format, ParseError }
+import silk.text.string { String }
+import silk.num.i32
+import silk.num.usize
+import font_harness_process as Process
+import font_harness_corpus as Corpus
+import font_harness_dump as Dump
+
+type Errors = TaskError | FileError | HostInputError | OutOfMemoryError
+pub struct Observation { pub status: i32, pub json: Bytes, pub messages: Bytes, pub invalid: bool }
+
+pub effect fn profile() -> String ! HostInputError | OutOfMemoryError ? &mut HostInput | &mut Allocator {
+  if let Option<Bytes>.Some { value } = move run HostInput.variableNamed("READ_FONTS_PROFILE") {
+    return unsafe String.fromBytesUnchecked(move value)
+  }
+  return run String.copy("debug")
+}
+
+pub effect fn referenceBinary(override: string) -> String ! HostInputError | OutOfMemoryError ? &mut HostInput | &mut Allocator {
+  if override != "" { return run String.copy(override) }
+  let profile = run profile()
+  let mut name = run String.copy("build/rust/")
+  run String.append(&mut name, String.view(&profile))
+  run String.append(&mut name, "/rust-font-dump")
+  return move name
+}
+
+pub effect fn silkBinary(override: string) -> String ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  if override != "" { return run String.copy(override) }
+  let root = run Task.root()
+  let directory = run Path.join(&root, "build/llvm")
+  let entries = run FileSystem.listDirectory(&directory)
+  let selectedProfile = run profile()
+  let mut found = String.make()
+  let mut count: usize = 0
+  let rows = entries.asSlice()
+  let mut at: usize = 0
+  while at < rows.length {
+    if rows[at].kind.code == 1 {
+      let profileDirectory = run Path.join(&rows[at].path, String.view(&selectedProfile))
+      let candidate = run Path.join(&profileDirectory, "font-parse-test-harness")
+      if run FileSystem.exists(&candidate) {
+        count = count + 1
+        found = run Corpus.pathText(&candidate)
+      }
+    }
+    at = at + 1
+  }
+  if count != 1 { run Task.abort("build font-parse-test-harness first with silk task build, or pass --silk-dumper PATH") }
+  return move found
+}
+
+pub effect fn jobs(override: usize) -> usize ! TaskError | HostInputError | OutOfMemoryError ? &mut HostInput | &mut Allocator {
+  if override != 0 { return override }
+  if let Option<Bytes>.Some { value } = move run HostInput.variableNamed("READ_FONTS_JOBS") {
+    let text = run Corpus.utf8(value.asSlice())
+    match move Format.usizeValue(String.view(&text)) {
+      Result<usize, ParseError>.Success { value: parsed } => { if parsed > 0 { return parsed } }
+      Result<usize, ParseError>.Failure { .. } => {}
+    }
+    run Task.abort("READ_FONTS_JOBS must be positive")
+  }
+  return NativeThread.processorCount()
+}
+
+pub effect fn signed(output: &mut Bytes, number: i32) -> () ! OutOfMemoryError ? &mut Allocator {
+  let mut buffer: [u8; 20] = [0; 20]
+  let length = Format.writeI64Display(i32.toI64(number), &mut buffer, 0)
+  run output.append(Slice.view<u8>(&buffer, 0, length))
+}
+
+pub effect fn showLine(bytes: &[u8], eof: bool) -> String ! OutOfMemoryError ? &mut Allocator {
+  return run Text.repr(bytes, eof)
+}
+
+pub effect fn differenceJson(difference: &Dump.Difference) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  let mut output = run Bytes.copy(b"{\"line\":")
+  run Corpus.appendNumber(&mut output, difference.line)
+  let left = run showLine(difference.left.asSlice(), difference.leftEof)
+  let right = run showLine(difference.right.asSlice(), difference.rightEof)
+  run output.append(b",\"rust\":")
+  run Corpus.quote(&mut output, String.view(&left))
+  run output.append(b",\"silk\":")
+  run Corpus.quote(&mut output, String.view(&right))
+  run output.append(b"}")
+  return move output
+}
+
+pub effect fn check(font: string, reference: string, silk: string, timeout: f64) -> Observation
+  ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  let root = run Task.root()
+  let fontName = run String.copy(font)
+  let display = Corpus.display(&root, &fontName)
+  let mut json = run Bytes.copy(b"{\"font\":")
+  run Corpus.quote(&mut json, display)
+  run json.append(b",\"input_sha256\":")
+  let digest = run Dump.fileSha(font)
+  run Corpus.quote(&mut json, String.view(&digest))
+  let result = run Effect.result(checkOutputs(font, reference, silk, timeout, &mut json))
+  match move result {
+    Result<Observation, Errors>.Success { value } => { return move value }
+    Result<Observation, Errors>.Failure { error } => {
+      let message = match move error {
+        TaskError failure => move failure.message
+        _ => run String.copy("dumper process or filesystem operation failed")
+      }
+      run json.append(b",\"status\":\"failure\",\"error\":")
+      run Corpus.quote(&mut json, String.view(&message))
+      run json.append(b"}")
+      let mut messages = run Bytes.copy(String.utf8Bytes(display))
+      run messages.append(b": ")
+      run messages.append(String.utf8Bytes(String.view(&message)))
+      run messages.append(b"\n")
+      return Observation { status: 2, json: move json, messages: move messages, invalid: true }
+    }
+  }
+}
+
+effect fn checkOutputs(font: string, reference: string, silk: string, timeout: f64, json: &mut Bytes) -> Observation
+  ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  let mut rust = run Process.execute(reference, &[font], timeout, false)
+  if rust.timedOut { run Task.abort("reference dumper timed out") }
+  let mut port = run Process.execute(silk, &[font], timeout, false)
+  if port.timedOut { run Task.abort("Silk dumper timed out") }
+  let difference = run Dump.firstDifference(&mut rust.output, &mut port.output)
+  let mut messages = Bytes.make()
+  let mut different = false
+  if let Option<Dump.Difference>.Some { value } = move difference {
+    different = true
+    run json.append(b",\"first_difference\":")
+    let detail = run differenceJson(&value)
+    run json.append(detail.asSlice())
+    run messages.append(String.utf8Bytes(font))
+    run messages.append(b": first difference at line ")
+    run Corpus.appendNumber(&mut messages, value.line)
+    let left = run showLine(value.left.asSlice(), value.leftEof)
+    let right = run showLine(value.right.asSlice(), value.rightEof)
+    run messages.append(b"\n  Rust: ")
+    run messages.append(String.utf8Bytes(String.view(&left)))
+    run messages.append(b"\n  Silk: ")
+    run messages.append(String.utf8Bytes(String.view(&right)))
+    run messages.append(b"\n")
+  }
+  if rust.code != 0 || port.code != 0 {
+    run json.append(b",\"status\":\"failure\",\"rust_exit\":")
+    run signed(&mut json, rust.code)
+    run json.append(b",\"silk_exit\":")
+    run signed(&mut json, port.code)
+    run json.append(b"}")
+    run messages.append(b"Rust: exit ")
+    run signed(&mut messages, rust.code)
+    run messages.append(b"\n")
+    let errors = run rust.errors.readAll()
+    run messages.append(errors.asSlice())
+    run messages.append(b"Silk: exit ")
+    run signed(&mut messages, port.code)
+    run messages.append(b"\n")
+    let errors2 = run port.errors.readAll()
+    run messages.append(errors2.asSlice())
+    return Observation { status: 2, json: run Bytes.copy(json.asSlice()), messages: move messages, invalid: false }
+  }
+  let info = run Dump.inspect(&mut rust.output)
+  let silkDigest = if different { let other = run Dump.inspect(&mut port.output)  move other.digest } else { run String.copy(String.view(&info.digest)) }
+  run json.append(b",\"status\":")
+  run Corpus.quote(&mut json, if different { "difference" } else { "match" })
+  run json.append(b",\"rust_dump_sha256\":")
+  run Corpus.quote(&mut json, String.view(&info.digest))
+  run json.append(b",\"silk_dump_sha256\":")
+  run Corpus.quote(&mut json, String.view(&silkDigest))
+  run json.append(b",\"lines\":")
+  run Corpus.appendNumber(&mut json, info.lines)
+  run json.append(b",\"parse_errors\":")
+  let errors = run Dump.errorsJson(&info.errors)
+  run json.append(errors.asSlice())
+  run json.append(b"}")
+  return Observation { status: if different { 1 } else { 0 }, json: run Bytes.copy(json.asSlice()), messages: move messages, invalid: false }
+}
+
+effect fn threadedCheck(font: string, reference: string, silk: string, timeout: f64) -> Observation ! Errors ? &mut Allocator {
+  let snapshot = run unsafe NativeHostInput.environmentSnapshot()
+  let mut host = OsHostInput.make(move snapshot)
+  let mut files = run MachineFileSystem.make()
+  return run check(font, reference, silk, timeout) |> Effect.provideMut<HostInput>(&mut host) |> Effect.provideMut<FileSystem>(&mut files)
+}
+
+pub effect fn comparePaths(fonts: &List<String>, reference: string, silk: string, timeout: f64, report: string, workers: usize) -> ()
+  ! Errors | WriterError ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  let count = run jobs(workers)
+  let paths = fonts.asSlice()
+  let mut observations = List<Observation>.make()
+  let mut at: usize = 0
+  while at < paths.length {
+    let mut handles = List<JoinHandle<Result<Observation, Errors>>>.make()
+    let mut started: usize = 0
+    while started < count && at < paths.length {
+      let font = run String.copy(String.view(&paths[at]))
+      let reference = run String.copy(reference)
+      let silk = run String.copy(silk)
+      let handle = match move run Effect.result(NativeThread.spawn(fn() -> Result<Observation, Errors> {
+        let ownedFont = move font
+        let ownedReference = move reference
+        let ownedSilk = move silk
+        let mut allocator = Allocator.systemAllocatorProvider()
+        return run Effect.result(threadedCheck(String.view(&ownedFont), String.view(&ownedReference), String.view(&ownedSilk), timeout)) |> Effect.provideMut<Allocator>(&mut allocator)
+      })) {
+        Result<JoinHandle<Result<Observation, Errors>>, SpawnError | OutOfMemoryError>.Success { value } => move value
+        Result<JoinHandle<Result<Observation, Errors>>, SpawnError | OutOfMemoryError>.Failure { .. } => run Task.abort("cannot start harness worker")
+      }
+      run handles.append(move handle)
+      started = started + 1
+      at = at + 1
+    }
+    while handles.length() > 0 {
+      let handle = handles.remove(0)
+      match move handle.join() {
+        Result<Observation, Errors>.Success { value } => { run observations.append(move value) }
+        Result<Observation, Errors>.Failure { error } => { fail move error }
+      }
+    }
+  }
+  let rows = observations.asSlice()
+  let mut status: i32 = 0
+  let mut matched: usize = 0
+  let mut differences: usize = 0
+  let mut failures: usize = 0
+  let mut results = run Bytes.copy(b"[")
+  at = 0
+  while at < rows.length {
+    run Process.print(rows[at].messages.asSlice())
+    if rows[at].status == 0 { matched = matched + 1 }
+    else if rows[at].status == 1 { differences = differences + 1 }
+    else { failures = failures + 1 }
+    if rows[at].status > status { status = rows[at].status }
+    if at > 0 { run results.append(b",") }
+    run results.append(rows[at].json.asSlice())
+    at = at + 1
+  }
+  run results.append(b"]")
+  if report != "" {
+    let mut json = run Bytes.copy(b"{\"summary\":{\"format_version\":9,\"scope\":\"all\",\"fonts_total\":")
+    run Corpus.appendNumber(&mut json, paths.length)
+    run json.append(b",\"completed\":")
+    run Corpus.appendNumber(&mut json, matched + differences)
+    run json.append(b",\"matched\":")
+    run Corpus.appendNumber(&mut json, matched)
+    run json.append(b",\"differences\":")
+    run Corpus.appendNumber(&mut json, differences)
+    run json.append(b",\"process_failures\":")
+    run Corpus.appendNumber(&mut json, failures)
+    run json.append(b",\"exit_code\":")
+    run signed(&mut json, status)
+    run json.append(b"},\"reference\":")
+    run binaryJson(&mut json, reference)
+    run json.append(b",\"silk\":")
+    run binaryJson(&mut json, silk)
+    run json.append(b",\"results\":")
+    run json.append(results.asSlice())
+    run json.append(b"}\n")
+    run Corpus.save(report, json.asSlice())
+  }
+  let mut summary = run Bytes.copy(if status == 0 { b"MATCH: " } else { b"FAIL: " })
+  if status != 0 {
+    run Corpus.appendNumber(&mut summary, differences + failures)
+    run summary.append(b" of ")
+  }
+  run Corpus.appendNumber(&mut summary, paths.length)
+  run summary.append(if status == 0 { b" fonts; format 9\n" } else { b" fonts differ or failed\n" })
+  run Process.print(summary.asSlice())
+  if status != 0 { fail TaskError { message: run String.copy("font comparison failed"), status: status } }
+}
+
+pub effect fn binaryJson(json: &mut Bytes, name: string) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  let root = run Task.root()
+  let path = run Corpus.resolve(name)
+  let text = run Corpus.pathText(&path)
+  let digest = run Dump.fileSha(name)
+  run json.append(b"{\"path\":")
+  run Corpus.quote(&mut json, Corpus.display(&root, &text))
+  run json.append(b",\"sha256\":")
+  run Corpus.quote(&mut json, String.view(&digest))
+  run json.append(b"}")
+}
+
+pub effect fn compare(fonts: string, reference: string, silk: string, timeout: f64, report: string) -> ()
+  ! Errors | WriterError ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  if timeout <= 0.0 { run Task.abort("timeout must be positive") }
+  let corpus = run Corpus.load(fonts)
+  let reference = run referenceBinary(reference)
+  let silk = run silkBinary(silk)
+  run comparePaths(&corpus.fonts, String.view(&reference), String.view(&silk), timeout, report, 0)
+}
+
+pub effect fn verifyReference(fonts: string, reference: string, timeout: f64, report: string) -> ()
+  ! Errors | WriterError ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  if timeout <= 0.0 { run Task.abort("timeout must be positive") }
+  let corpus = run Corpus.load(fonts)
+  let binary = run referenceBinary(reference)
+  let root = run Task.root()
+  let paths = corpus.fonts.asSlice()
+  let mut results = run Bytes.copy(b"[")
+  let mut failures = run Bytes.copy(b"[")
+  let mut completed: usize = 0
+  let mut failed: usize = 0
+  let mut faces: usize = 0
+  let mut errors: usize = 0
+  let mut missing: usize = 0
+  let mut at: usize = 0
+  while at < paths.length {
+    let name = Corpus.display(&root, &paths[at])
+    match move run Effect.result(verifyOne(String.view(&binary), String.view(&paths[at]), timeout)) {
+      Result<Dump.DumpInfo, Errors>.Success { value } => {
+        if completed > 0 { run results.append(b",") }
+        run results.append(b"{\"font\":")
+        run Corpus.quote(&mut results, name)
+        run results.append(b",\"input_sha256\":")
+        let digest = run Dump.fileSha(String.view(&paths[at]))
+        run Corpus.quote(&mut results, String.view(&digest))
+        run results.append(b",\"dump_sha256\":")
+        run Corpus.quote(&mut results, String.view(&value.digest))
+        run results.append(b",\"lines\":")
+        run Corpus.appendNumber(&mut results, value.lines)
+        run results.append(b",\"faces_ok\":")
+        run Corpus.appendNumber(&mut results, value.faces)
+        run results.append(b",\"missing_table_lookups\":")
+        run Corpus.appendNumber(&mut results, value.missing)
+        run results.append(b",\"parse_errors\":")
+        let records = run Dump.errorsJson(&value.errors)
+        run results.append(records.asSlice())
+        run results.append(b"}")
+        completed = completed + 1
+        faces = faces + value.faces
+        errors = errors + value.errors.length()
+        missing = missing + value.missing
+      }
+      Result<Dump.DumpInfo, Errors>.Failure { error } => {
+        let message = match move error {
+          TaskError failure => move failure.message
+          _ => run String.copy("reference process or filesystem failure")
+        }
+        if failed > 0 { run failures.append(b",") }
+        run failures.append(b"{\"font\":")
+        run Corpus.quote(&mut failures, name)
+        run failures.append(b",\"error\":")
+        run Corpus.quote(&mut failures, String.view(&message))
+        run failures.append(b"}")
+        let mut line = run Bytes.copy(b"FAIL: ")
+        run line.append(String.utf8Bytes(name))
+        run line.append(b": ")
+        run line.append(String.utf8Bytes(String.view(&message)))
+        run line.append(b"\n")
+        run Process.error(line.asSlice())
+        failed = failed + 1
+      }
+    }
+    at = at + 1
+  }
+  run results.append(b"]")
+  run failures.append(b"]")
+  let mut summary = run Bytes.copy(b"{\"format_version\":9,\"scope\":\"all\",\"fonts_total\":")
+  run Corpus.appendNumber(&mut summary, paths.length)
+  run summary.append(b",\"completed\":")
+  run Corpus.appendNumber(&mut summary, completed)
+  run summary.append(b",\"process_failures\":")
+  run Corpus.appendNumber(&mut summary, failed)
+  run summary.append(b",\"faces_ok\":")
+  run Corpus.appendNumber(&mut summary, faces)
+  run summary.append(b",\"parse_error_records\":")
+  run Corpus.appendNumber(&mut summary, errors)
+  run summary.append(b",\"missing_table_lookups\":")
+  run Corpus.appendNumber(&mut summary, missing)
+  run summary.append(b"}")
+  if report != "" {
+    let mut json = run Bytes.copy(b"{\"summary\":")
+    run json.append(summary.asSlice())
+    run json.append(b",\"inventory\":")
+    run json.append(corpus.inventory.asSlice())
+    run json.append(b",\"failures\":")
+    run json.append(failures.asSlice())
+    run json.append(b",\"results\":")
+    run json.append(results.asSlice())
+    run json.append(b"}\n")
+    run Corpus.save(report, json.asSlice())
+  }
+  run summary.append(b"\n")
+  run Process.print(summary.asSlice())
+  if failed > 0 { run Task.abort("reference verification failed") }
+}
+
+effect fn verifyOne(binary: string, font: string, timeout: f64) -> Dump.DumpInfo
+  ! Errors ? &mut HostInput | &mut Allocator {
+  let mut result = run Process.execute(binary, &[font], timeout, false)
+  run Process.requireSuccess(&result)
+  return run Dump.inspect(&mut result.output)
+}

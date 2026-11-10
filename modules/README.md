@@ -23,10 +23,10 @@ nonstd weekly baseline workflow are not verification of this standalone reposito
 
 ## Shared tooling
 
-- [`modules/scripts`](scripts) retains optional Python code generation, corpus,
-  robustness, malformed-input and benchmark tooling, plus Rust baseline programs
-  (`rust-font-dump`, `rust-hr-shape`). These are not required by native CI.
-  Run maintainer scripts from the repository root.
+- `silk task` lists root-owned Silk maintenance commands; their implementation lives
+  in [`src`](../src). [`modules/scripts`](scripts) holds only the Rust baseline programs
+  (`rust-font-dump`, `rust-hr-shape`) that reference comparisons build.
+  Run maintenance tasks from the repository root.
 - The internal parse dumper and shaping CLI live at
   [`font-parse-test-harness`](../font-parse-test-harness) and
   [`font-shape-test-harness`](../font-shape-test-harness), respectively, with matching
@@ -36,10 +36,10 @@ nonstd weekly baseline workflow are not verification of this standalone reposito
 - [`modules/docs`](docs) holds the [porting decisions](docs/porting-decisions.md) and the
   [standard library gaps](docs/stdlib-gaps.md) the port ran into.
 
-The standalone [Fonts workflow](../.github/workflows/fonts.yml) uses direct Silk
-commands for workspace checking, six native test roots, internal harness and benchmark
+The standalone [Fonts workflow](../.github/workflows/fonts.yml) uses Silk tasks
+for workspace checking, six native test roots, internal harness and benchmark
 builds, and Linux WebAssembly checking/building. `font-collection` has no test root
-and receives workspace-check coverage. It does not run the optional Python/Rust
+and receives workspace-check coverage. It does not run the optional reference
 baseline and generation campaigns or the JavaScript wrapper runtime tests.
 
 See the [repository overview](../README.md) for root-level commands, the pinned Silk

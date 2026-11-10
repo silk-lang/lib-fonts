@@ -2,7 +2,7 @@
 name = "font-raster"
 description = "The UI glyph cache: unhinted glyphs in atlas tiles, shaped lines and text gamma"
 version = "0.1.0"
-silk-version = "0.1.0-dev.63+657e3c900f65"
+silk-version = "0.1.0-dev.64+8214c402307b"
 kind = "library"
 exports = ["lib", "key", "face", "rasterize", "cache", "color", "gamma", "lines"]
 
@@ -11,6 +11,6 @@ read_fonts = { path = "../parse", package = "font-parse" }
 font_types = { path = "../types", package = "font-types" }
 font_outline = { path = "../outline", package = "font-outline" }
 harfrust = { path = "../shape", package = "font-shape" }
-vector = { git = "https://github.com/silk-lang/lib-graphics.git", rev = "3e4532ee810f7b28d6eb6c7331809de81cdcbc7e", path = "modules/vector", package = "graphics-vector" }
-codec = { git = "https://github.com/silk-lang/lib-graphics.git", rev = "3e4532ee810f7b28d6eb6c7331809de81cdcbc7e", path = "modules/codec", package = "graphics-codec" }
-atlas = { git = "https://github.com/silk-lang/lib-graphics.git", rev = "3e4532ee810f7b28d6eb6c7331809de81cdcbc7e", path = "modules/atlas", package = "graphics-atlas" }
+vector = { git = "https://github.com/silk-lang/lib-graphics.git", rev = "546371353e21eaef73365709ba3673dde1005181", path = "modules/vector", package = "graphics-vector" }
+codec = { git = "https://github.com/silk-lang/lib-graphics.git", rev = "546371353e21eaef73365709ba3673dde1005181", path = "modules/codec", package = "graphics-codec" }
+atlas = { git = "https://github.com/silk-lang/lib-graphics.git", rev = "546371353e21eaef73365709ba3673dde1005181", path = "modules/atlas", package = "graphics-atlas" }

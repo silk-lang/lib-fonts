@@ -1,0 +1,133 @@
+import silk.core.result { Result }
+import silk.collections.bytes { Bytes }
+import silk.collections.list { List }
+import silk.collections.slice { Slice }
+import silk.core.effect { Effect }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.system.filesystem { FileSystem }
+import silk.system.host_input { HostInput }
+import silk.text.string { String }
+import font_generate_support as G
+import font_harness_fixtures as F { Fixtures, Errors }
+
+struct Record { tag: string<'static>, offset: usize, length: usize }
+effect fn sfnt(records: &[Record], version: usize) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  let mut bytes = Bytes.make()
+  run G.be(&mut bytes, version, 4)
+  run G.be(&mut bytes, records.length, 2)
+  run G.zeros(&mut bytes, 6)
+  let mut at: usize = 0
+  while at < records.length {
+    run bytes.append(String.utf8Bytes(records[at].tag))
+    run G.be(&mut bytes, 0, 4)
+    run G.be(&mut bytes, records[at].offset, 4)
+    run G.be(&mut bytes, records[at].length, 4)
+    at = at + 1
+  }
+  return move bytes
+}
+effect fn generate(fixtures: &mut Fixtures) -> () ! Errors ? &mut Allocator | &mut FileSystem {
+  let records = [Record { tag: "head", offset: 44, length: 4 }, Record { tag: "name", offset: 48, length: 4 }]
+  let mut normal = run sfnt(&records, 65536)
+  run normal.append(b"abcdefgh")
+  let mut length: usize = 0
+  while length <= normal.length() {
+    let number = run F.padded(length, 3)
+    let name = run F.label(&["sfnt-prefix-", String.view(&number)])
+    run fixtures.add(String.view(&name), Slice.view<u8>(normal.asSlice(), 0, length))
+    length = length + 1
+  }
+  let versions: [usize; 6] = [0, 1, 1953658213, 1330926671, 1954115633, 4294967295]
+  let hex = b"0123456789abcdef"
+  let mut at: usize = 0
+  while at < versions.length {
+    let data = run sfnt(&[], versions[at])
+    let mut name = run Bytes.copy(b"sfnt-version-")
+    let mut digits: [u8; 8] = [48; 8]
+    let mut n = versions[at]
+    let mut i: usize = 8
+    while i > 0 { i = i - 1  digits[i] = hex[n % 16]  n = n / 16 }
+    run name.append(&digits)
+    run fixtures.add(run G.text(name.asSlice()), data.asSlice())
+    at = at + 1
+  }
+  let boundaries = [Boundary { offset: 0, length: 4 }, Boundary { offset: 28, length: 0 }, Boundary { offset: 28, length: 4 }, Boundary { offset: 29, length: 0 }, Boundary { offset: 4294967295, length: 4294967295 }]
+  at = 0
+  while at < boundaries.length {
+    let row = &boundaries[at]
+    let data = run sfnt(&[Record { tag: "head", offset: row.offset, length: row.length }], 65536)
+    let offset = run F.number(row.offset)
+    let length = run F.number(row.length)
+    let name = run F.label(&["record-", String.view(&offset), "-", String.view(&length)])
+    run fixtures.add(String.view(&name), data.asSlice())
+    at = at + 1
+  }
+  let mut duplicate = run sfnt(&[Record { tag: "head", offset: 0, length: 4 }, Record { tag: "head", offset: 44, length: 4 }], 65536)
+  run duplicate.append(b"abcd")
+  run fixtures.add("duplicate-first-null", duplicate.asSlice())
+  let mut unsorted = run sfnt(&[Record { tag: "name", offset: 48, length: 4 }, Record { tag: "head", offset: 44, length: 4 }], 65536)
+  run unsorted.append(b"abcdefgh")
+  run fixtures.add("unsorted", unsorted.asSlice())
+  let mut zero = run sfnt(&[Record { tag: "\x00\x00\x00\x00", offset: 28, length: 4 }], 65536)
+  run zero.append(b"abcd")
+  run fixtures.add("zero-tag", zero.asSlice())
+  let mut major: usize = 0
+  while major < 4 {
+    let mut minor: usize = 0
+    while minor < 3 {
+      let mut legacy: usize = 0
+      while legacy < 3 {
+        let mut data = run Bytes.copy(b"ttcf")
+        run G.be(&mut data, major, 2)
+        run G.be(&mut data, minor, 2)
+        run G.be(&mut data, legacy, 4)
+        let mut i: usize = 0
+        while i < legacy { run G.be(&mut data, 4294967295, 4)  i = i + 1 }
+        let legacyEnd = data.length()
+        if major == 2 { run data.append(b"DSIG")  run G.be(&mut data, 8, 4)  run G.be(&mut data, 4294967295, 4) }
+        let extended = data.length()
+        let first = extended + 12
+        run G.be(&mut data, 2, 4)
+        run G.be(&mut data, first, 4)
+        run G.be(&mut data, first + 12, 4)
+        let a = run sfnt(&[], 65536)
+        let b = run sfnt(&[], 1330926671)
+        run data.append(a.asSlice())
+        run data.append(b.asSlice())
+        let mut cuts = List<usize>.make()
+        let candidates: [usize; 11] = [0, 4, 11, 12, legacyEnd, extended, extended + 4, first - 1, first, data.length() - 1, data.length()]
+        i = 0
+        while i < candidates.length { run F.unique(&mut cuts, candidates[i])  i = i + 1 }
+        run cuts.sort()
+        let ma = run F.number(major)
+        let mi = run F.number(minor)
+        let le = run F.number(legacy)
+        let lengths = cuts.asSlice()
+        i = 0
+        while i < lengths.length {
+          let n = run F.padded(lengths[i], 3)
+          let name = run F.label(&["ttc-", String.view(&ma), "-", String.view(&mi), "-", String.view(&le), "-prefix-", String.view(&n)])
+          run fixtures.add(String.view(&name), Slice.view<u8>(data.asSlice(), 0, lengths[i]))
+          i = i + 1
+        }
+        legacy = legacy + 1
+      }
+      minor = minor + 1
+    }
+    major = major + 1
+  }
+  run fixtures.add("ttc-huge-count", b"ttcf\x00\x01\x00\x00\xff\xff\xff\xff")
+  run fixtures.add("ttc-empty", b"ttcf\x00\x01\x00\x00\x00\x00\x00\x00")
+}
+effect fn perform(fixtures: &mut Fixtures) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  run generate(&mut fixtures)
+  run fixtures.compare("", "", 5.0, "")
+}
+pub effect fn checkCoreFixtures() -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  let mut fixtures = run Fixtures.make("font-core-fixtures-", ".ttf")
+  let result = run Effect.result(perform(&mut fixtures))
+  run fixtures.cleanup()
+  match move result { Result<(), Errors>.Success { .. } => {} Result<(), Errors>.Failure { error } => { fail move error } }
+}
+
+struct Boundary { offset: usize, length: usize }

@@ -70,7 +70,7 @@ direct `vector` fill of the same outline at the same position (within 1/255, fro
 different coordinates), that variants move a stem by a quarter pixel, cache hits, empty glyphs,
 eviction and re-rasterization, a full atlas, the line cache against direct shaping, the gamma
 formula against GPUI's values, color glyphs from the three fonts in `tests/fonts` (written by
-`scripts/color-fonts.py`, which needs fontTools) at their strike size, scaled up and down and at a
+`silk task generate-color-fonts` from the repository root, with no fontTools dependency) at their strike size, scaled up and down and at a
 half-pixel offset, and two text goldens (`tests/golden/text-1x.pgm` and
 `text-2x.pgm`, raw coverage). Each golden run writes its output to `build/font-raster/`; after a
 deliberate change, inspect it and copy it over the golden.

@@ -91,8 +91,8 @@ silk test --release --manifest-path modules/shape/silk.toml --root src/tests.sil
 silk build --release --manifest-path font-shape-test-harness/silk.toml
 build/llvm/x86_64-unknown-linux-gnu/release/font-shape-test-harness --suite modules/shape/tests/shaping.bin
 build/llvm/x86_64-unknown-linux-gnu/release/font-shape-test-harness --regressions
-modules/scripts/check-shaping-trace
-modules/scripts/check-shaping-malformed
+silk task check-shaping-trace
+silk task check-shaping-malformed
 ```
 
 These run in the `font` CI workflow. Every week the same workflow also compares all cases
@@ -101,7 +101,7 @@ against the pinned Rust harfrust, mutates every corpus font, and runs the benchm
 
 ## Performance
 
-`modules/scripts/bench-shaping` runs harfrust's own benchmark workloads in both implementations
+`silk task bench-shaping` runs harfrust's own benchmark workloads in both implementations
 and checks that their glyph output matches. On 2026-10-29 (Silk dev.29, release builds), Silk
 took **0.89×** Rust's wall time and **0.85×** its instruction count, as geometric means over
 seven workloads. Every workload except Roboto with long Latin text, which is at parity

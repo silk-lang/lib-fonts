@@ -11,7 +11,7 @@
   },
   "files": ["src", "dist"],
   "scripts": {
-    "build:wasm": "../../../../scripts/build-wasm",
+    "build:wasm": "silk task --manifest-path ../../../../../silk.toml build-wasm",
     "typecheck": "tsc --noEmit",
     "test": "node test/smoke.ts"
   },

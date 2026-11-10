@@ -1,0 +1,114 @@
+import font_generate_support as G
+import silk.cli.task { Task, TaskError }
+import silk.collections.bytes { Bytes }
+import silk.collections.slice { Slice }
+import silk.core.effect { Effect }
+import silk.core.option { Option }
+import silk.io.writer { Writer, WriterError }
+import silk.io.writer_native { StderrWriter }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.system.child_process { ChildProcess, ProcessRequest, ProcessOutcome, ProcessError, Exited, Signaled }
+import silk.system.filesystem { FileSystem, FileError, Path }
+import silk.system.host_input { HostInput, HostInputError }
+import silk.text.string { String }
+
+static if Intrinsic.targetOperatingSystem() == "windows" {
+  import silk.platform.windows.host_path as HostPath
+  import silk.platform.windows.wtf8 { Wtf8 }
+  import silk.platform.windows.environment { EnvironmentEntry }
+  import silk.mem.pointer { Pointer }
+  import silk.core.ownership { Drop }
+  unsafe extern "C" fn GetEnvironmentStringsW() -> ?[*]mut u16
+  unsafe extern "C" fn FreeEnvironmentStringsW(block: [*]mut u16) -> i32
+  struct EnvironmentBlock { pointer: [*]mut u16 }
+  impl Drop for EnvironmentBlock {
+    fn drop(self: &mut Self) -> () { let ignored = unsafe FreeEnvironmentStringsW(self.pointer) drop ignored }
+  }
+  effect fn inherit(request: &mut ProcessRequest) -> () ! HostInputError | OutOfMemoryError ? &mut Allocator {
+    let pointer = match move Pointer.nonNullManyMut(unsafe GetEnvironmentStringsW()) {
+      Option<[*]mut u16>.Some { value } => value
+      _ => { fail HostInputError {} }
+    }
+    let block = EnvironmentBlock { pointer: pointer }
+    let mut offset: usize = 0
+    while unsafe Pointer.read(unsafe Pointer.at(pointer, offset)) != 0 {
+      let entry = unsafe Pointer.assumeMany(unsafe Pointer.at(pointer, offset))
+      let mut length: usize = 0
+      while unsafe Pointer.read(unsafe Pointer.at(entry, length)) != 0 { length = length + 1 }
+      let units = unsafe Pointer.borrowMany(&block, entry, length)
+      if let Option<usize>.Some { value } = EnvironmentEntry.separator(units) {
+        let name = run Wtf8.encode(Slice.view<u16>(units, 0, value))
+        let data = run Wtf8.encode(Slice.view<u16>(units, value + 1, length - value - 1))
+        run ChildProcess.setVariableBytes(&mut request, Bytes.asSlice(&name), Bytes.asSlice(&data))
+      }
+      offset = offset + length + 1
+    }
+  }
+} else {
+  import silk.system.subprocess { Subprocess }
+  effect fn inherit(request: &mut ProcessRequest) -> () ! OutOfMemoryError ? &mut Allocator {
+    run Subprocess.inheritEnvironment(&mut request)
+  }
+}
+
+effect fn candidate(root: &Path, spelled: &[u8]) -> Option<Path> ! FileError | OutOfMemoryError ? &mut Allocator | &mut FileSystem {
+  static if Intrinsic.targetOperatingSystem() == "windows" {
+    let canonical = match move run HostPath.canonicalBytes(spelled) { Option<Bytes>.Some { value } => move value _ => { return Option<Path>.none() } }
+    return Option<Path>.some(run Path.fromBytes(Bytes.asSlice(&canonical)))
+  } else {
+    let path = if spelled.length > 0 && spelled[0] == 47 { run Path.fromBytes(spelled) } else { run Path.resolveBytes(root, spelled) }
+    if run FileSystem.exists(&path) { return Option<Path>.some(move path) }
+    return Option<Path>.none()
+  }
+}
+effect fn existing(root: &Path, spelled: &[u8]) -> Option<Path> ! FileError | OutOfMemoryError ? &mut Allocator | &mut FileSystem {
+  if let Option<Path>.Some { value } = move run candidate(root, spelled) { return Option<Path>.some(move value) }
+  static if Intrinsic.targetOperatingSystem() == "windows" {
+    let mut executable = run Bytes.copy(spelled) run Bytes.append(&mut executable, b".exe")
+    return run candidate(root, Bytes.asSlice(&executable))
+  } else { return Option<Path>.none() }
+}
+effect fn locate(root: &Path, program: string) -> Path ! TaskError | FileError | HostInputError | OutOfMemoryError ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  let bytes = String.utf8Bytes(program)
+  let mut hasSeparator = false let mut i: usize = 0
+  while i < bytes.length { if bytes[i] == 47 || bytes[i] == 92 { hasSeparator = true } i = i + 1 }
+  if hasSeparator {
+    if let Option<Path>.Some { value } = move run existing(root, bytes) { return move value }
+  } else {
+    let searched = match move run HostInput.variableNamed("PATH") { Option<Bytes>.Some { value } => move value _ => run Bytes.copy(b"/bin:/usr/bin") }
+    let paths = Bytes.asSlice(&searched)
+    let mut separator: u8 = 58 static if Intrinsic.targetOperatingSystem() == "windows" { separator = 59 }
+    let mut start: usize = 0
+    while start <= paths.length {
+      let mut end = start while end < paths.length && paths[end] != separator { end = end + 1 }
+      let mut name = Bytes.make()
+      if start < end { run Bytes.append(&mut name, Slice.view<u8>(paths, start, end - start)) run Bytes.append(&mut name, b"/") }
+      run Bytes.append(&mut name, bytes)
+      if let Option<Path>.Some { value } = move run existing(root, Bytes.asSlice(&name)) { return move value }
+      start = end + 1
+    }
+  }
+  let mut message = Bytes.make() run G.add(&mut message, "Cannot find generator program: ") run G.add(&mut message, program)
+  run Task.abort(run G.text(Bytes.asSlice(&message)))
+}
+
+// Task.capture intentionally clears the environment. Generators instead preserve it,
+// as their original subprocess.check_output calls did (including compiler/git config).
+pub effect fn capture(root: &Path, program: string, arguments: &[string]) -> Bytes ! TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError ? &mut HostInput | &mut Allocator | &mut ChildProcess | &mut FileSystem {
+  let path = run locate(root, program)
+  let mut request = run ChildProcess.requestWithin(&path, root)
+  let mut i: usize = 0
+  while i < arguments.length { run ChildProcess.addArgument(&mut request, arguments[i]) i = i + 1 }
+  run inherit(&mut request)
+  let ProcessOutcome { value } = move run ChildProcess.submit(&request)
+  match move value {
+    Exited outcome => {
+      let Exited { code, output, errors } = move outcome
+      let mut stderr = StderrWriter.make()
+      run Writer.writeAll(Bytes.asSlice(&errors)) |> Effect.provideMut<Writer>(&mut stderr)
+      if code != 0 { fail TaskError { message: run String.copy(program), status: code } }
+      return move output
+    }
+    Signaled outcome => { drop outcome run Task.abort("Generator child was terminated by a signal") }
+  }
+}

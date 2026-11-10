@@ -1,0 +1,59 @@
+import font_tasks { Tasks }
+import silk.cli.command { Command, CommandLine, Opt }
+import silk.cli.task { TaskError, TaskSet }
+import silk.io.writer { WriterError }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.system.child_process { ChildProcess, ProcessError }
+import silk.system.filesystem { FileError, FileSystem }
+import silk.system.host_input { HostInput, HostInputError }
+
+pub union GeneratorTasks {
+  Generate { pub check: bool },
+  GenerateStatic { pub check: bool },
+  GeneratePsData { pub check: bool },
+  GenerateModelTables { pub check: bool },
+  GenerateModelFixtures { pub check: bool },
+  GenerateMiscTableFixtures { pub check: bool },
+  GenerateLayoutFixtures { pub check: bool },
+  GenerateVariationFixtures { pub check: bool },
+  GenerateAatFixtures { pub check: bool },
+  GenerateCffFixtures { pub check: bool },
+}
+
+impl CommandLine for GeneratorTasks {
+  static fn command() -> Command<GeneratorTasks> {
+    return Command<GeneratorTasks>.make("generator-tasks", "Font library maintenance")
+      |> Command.option("check", Opt.about("Fail when generated output is stale"))
+      |> Command.variant("Generate", "Regenerate all accessors and fixtures, then format")
+      |> Command.variant("GenerateStatic", "Generate pinned naming and character metadata")
+      |> Command.variant("GeneratePsData", "Generate pinned PostScript data")
+      |> Command.variant("GenerateModelTables", "Generate model table accessors")
+      |> Command.variant("GenerateModelFixtures", "Generate model test fixtures")
+      |> Command.variant("GenerateMiscTableFixtures", "Generate miscellaneous table fixtures")
+      |> Command.variant("GenerateLayoutFixtures", "Generate layout fixtures")
+      |> Command.variant("GenerateVariationFixtures", "Generate variation fixtures")
+      |> Command.variant("GenerateAatFixtures", "Generate AAT fixtures")
+      |> Command.variant("GenerateCffFixtures", "Generate CFF fixtures")
+  }
+}
+
+impl TaskSet for GeneratorTasks {
+  effect fn perform(self: GeneratorTasks) -> ()
+    ! TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError
+    ? &mut HostInput | &mut Allocator | &mut ChildProcess | &mut FileSystem {
+    let task = match move self {
+      GeneratorTasks.Generate { check } => Tasks.Generate { check: move check }
+      GeneratorTasks.GenerateStatic { check } => Tasks.GenerateStatic { check: move check }
+      GeneratorTasks.GeneratePsData { check } => Tasks.GeneratePsData { check: move check }
+      GeneratorTasks.GenerateModelTables { check } => Tasks.GenerateModelTables { check: move check }
+      GeneratorTasks.GenerateModelFixtures { check } => Tasks.GenerateModelFixtures { check: move check }
+      GeneratorTasks.GenerateMiscTableFixtures { check } => Tasks.GenerateMiscTableFixtures { check: move check }
+      GeneratorTasks.GenerateLayoutFixtures { check } => Tasks.GenerateLayoutFixtures { check: move check }
+      GeneratorTasks.GenerateVariationFixtures { check } => Tasks.GenerateVariationFixtures { check: move check }
+      GeneratorTasks.GenerateAatFixtures { check } => Tasks.GenerateAatFixtures { check: move check }
+      GeneratorTasks.GenerateCffFixtures { check } => Tasks.GenerateCffFixtures { check: move check }
+    }
+    run TaskSet.perform(move task)
+  }
+}
+

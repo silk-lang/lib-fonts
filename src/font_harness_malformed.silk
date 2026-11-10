@@ -1,0 +1,302 @@
+import font_harness_text as Text
+import silk.cli.task { Task, TaskError }
+import silk.collections.bytes { Bytes }
+import silk.collections.list { List }
+import silk.collections.slice { Slice }
+import silk.core.effect { Effect }
+import silk.core.option { Option }
+import silk.core.result { Result }
+import silk.io.writer { WriterError }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.mem.pointer { Pointer }
+import silk.system.filesystem { FileError, FileSystem, Path }
+import silk.system.host_input { HostInput, HostInputError }
+import silk.text.format { Format }
+import silk.text.string { String }
+import silk.num.i64
+import silk.num.usize
+import silk.num.u8
+import font_harness as Harness
+import font_harness_corpus as Corpus
+import font_harness_dump as Dump
+import font_harness_process as Process
+import font_harness_random { Random }
+import font_harness_fixtures as F
+import font_benchmark as Benchmark
+
+pub type Errors = TaskError | FileError | HostInputError | OutOfMemoryError | WriterError
+pub struct Mutation { pub truncate: bool, pub length: usize, pub index: usize, pub offsets: List<usize>, pub masks: Bytes }
+pub struct Case { pub status: i32, pub json: Bytes }
+pub struct Frozen { pub path: String, pub digest: String, pub runPath: String }
+static if Intrinsic.targetOperatingSystem() == "darwin" {
+  unsafe extern "C" fn chmod(path: ?[*]const u8, mode: u16) -> i32
+} else {
+  unsafe extern "C" fn chmod(path: ?[*]const u8, mode: u32) -> i32
+}
+@foreign(noCapture: .("from", "to"))
+unsafe extern "C" fn rename(from: ?[*]const u8, to: ?[*]const u8) -> i32
+
+pub effect fn signed(seed: i64) -> String ! OutOfMemoryError ? &mut Allocator {
+  let mut buffer: [u8; 20] = [0; 20]
+  let length = Format.writeI64Display(seed, &mut buffer, 0)
+  return unsafe String.fromBytesUnchecked(run Bytes.copy(Slice.view<u8>(&buffer, 0, length)))
+}
+pub effect fn mutations(data: &[u8], seed: i64) -> List<Mutation> ! OutOfMemoryError ? &mut Allocator {
+  let mut output = List<Mutation>.make()
+  if data.length == 0 { return move output }
+  let edges: [usize; 17] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 15, 16, 31, 32, 63, 64]
+  let mut cuts = List<usize>.make()
+  let mut at: usize = 0
+  while at < edges.length { if edges[at] < data.length { run F.unique(&mut cuts, edges[at]) }  at = at + 1 }
+  at = 1
+  while at < 16 { run F.unique(&mut cuts, data.length * at / 16)  at = at + 1 }
+  run F.unique(&mut cuts, data.length - 1)
+  run cuts.sort()
+  let lengths = cuts.asSlice()
+  at = 0
+  while at < lengths.length {
+    run output.append(Mutation { truncate: true, length: lengths[at], index: 0, offsets: List<usize>.make(), masks: Bytes.make() })
+    at = at + 1
+  }
+  let number = run signed(seed)
+  let hash = run Dump.sha(data)
+  let text = run F.label(&["read-fonts-malformed-v1:", String.view(&number), ":", String.view(&hash)])
+  let mut rng = run Random.text(String.utf8Bytes(String.view(&text)))
+  let mut tables: usize = 0
+  if data.length > 4 { tables = u8.toUsize(data[4])  if data.length > 5 { tables = tables * 256 + u8.toUsize(data[5]) } }
+  let directoryEnd = F.minimum(data.length, 12 + 16 * tables)
+  let regions = [Region { start: 0, end: F.minimum(data.length, 12) }, Region { start: 12, end: directoryEnd }, Region { start: directoryEnd, end: data.length }, Region { start: 0, end: data.length }]
+  at = 0
+  while at < 8 {
+    let region = &regions[at / 2]
+    let start = if region.start < region.end { region.start } else { 0 }
+    let end = if region.start < region.end { region.end } else { data.length }
+    let count = F.minimum(usize.shiftLeft(1, at % 4), end - start)
+    let selected = run rng.sample(end - start, count)
+    let indices = selected.asSlice()
+    let mut offsets = List<usize>.make()
+    let mut masks = Bytes.make()
+    let mut i: usize = 0
+    while i < indices.length {
+      run offsets.append(start + indices[i])
+      run masks.append(&[usize.toU8(1 + rng.below(255))])
+      i = i + 1
+    }
+    run output.append(Mutation { truncate: false, length: data.length, index: at, offsets: move offsets, masks: move masks })
+    at = at + 1
+  }
+  return move output
+}
+pub effect fn changed(data: &[u8], recipe: &Mutation) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  let mut result = run Bytes.copy(Slice.view<u8>(data, 0, recipe.length))
+  if !recipe.truncate {
+    let view = result.asMutSlice()
+    let indices = recipe.offsets.asSlice()
+    let masks = recipe.masks.asSlice()
+    let mut at: usize = 0
+    while at < indices.length { view[indices[at]] = view[indices[at]] ^ masks[at]  at = at + 1 }
+  }
+  return move result
+}
+pub effect fn recipeJson(recipe: &Mutation) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  if recipe.truncate {
+    let mut result = run Bytes.copy(b"{\"kind\":\"truncate\",\"length\":")
+    run Corpus.appendNumber(&mut result, recipe.length)
+    run result.append(b"}")
+    return move result
+  }
+  let mut result = run Bytes.copy(b"{\"kind\":\"flip\",\"index\":")
+  run Corpus.appendNumber(&mut result, recipe.index)
+  run result.append(b",\"xor\":[")
+  let offsets = recipe.offsets.asSlice()
+  let masks = recipe.masks.asSlice()
+  let mut at: usize = 0
+  while at < offsets.length {
+    if at > 0 { run result.append(b",") }
+    run result.append(b"[")
+    run Corpus.appendNumber(&mut result, offsets[at])
+    run result.append(b",")
+    run Corpus.appendNumber(&mut result, u8.toUsize(masks[at]))
+    run result.append(b"]")
+    at = at + 1
+  }
+  run result.append(b"]}")
+  return move result
+}
+pub effect fn freeze(binary: string, directory: &Path) -> Frozen ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  let absolute = run Corpus.absolute(binary)
+  let path = run Path.make(String.view(&absolute))
+  let data = run FileSystem.readFile(&path)
+  let digest = run Dump.sha(data.asSlice())
+  let folder = run Path.join(directory, String.view(&digest))
+  run FileSystem.createDirectoriesRecursively(&folder)
+  let name = match Path.name(&path) { Option<string>.Some { value } => value Option<string>.None => run Task.abort("invalid executable name") }
+  let snapshot = run Path.join(&folder, name)
+  let mut valid = false
+  if run FileSystem.exists(&snapshot) {
+    let existing = run FileSystem.readFile(&snapshot)
+    let hash = run Dump.sha(existing.asSlice())
+    valid = String.view(&hash) == String.view(&digest)
+  }
+  if !valid {
+    let mut temporaryName = run String.copy(name)
+    run String.append(&mut temporaryName, ".tmp")
+    let temporary = run Path.join(&folder, String.view(&temporaryName))
+    run FileSystem.writeFile(&temporary, data.asSlice())
+    let mut from = run Bytes.copy(Path.rawBytes(&temporary))
+    let mut to = run Bytes.copy(Path.rawBytes(&snapshot))
+    run from.append(b"\x00")
+    run to.append(b"\x00")
+    if unsafe chmod(Pointer.fromSlice(from.asSlice()), 493) != 0 || unsafe rename(Pointer.fromSlice(from.asSlice()), Pointer.fromSlice(to.asSlice())) != 0 { run Task.abort("cannot freeze campaign executable") }
+  }
+  return Frozen { path: move absolute, digest: move digest, runPath: run Corpus.pathText(&snapshot) }
+}
+pub effect fn frozenJson(value: &Frozen) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  let mut result = run Bytes.copy(b"{\"path\":")
+  run Corpus.quote(&mut result, String.view(&value.path))
+  run result.append(b",\"sha256\":")
+  run Corpus.quote(&mut result, String.view(&value.digest))
+  run result.append(b",\"run_path\":")
+  run Corpus.quote(&mut result, String.view(&value.runPath))
+  run result.append(b"}")
+  return move result
+}
+effect fn processJson(process: &mut Process.RunResult, timeout: f64) -> Bytes ! Errors ? &mut Allocator {
+  let mut json = Bytes.make()
+  if process.timedOut {
+    run json.append(b"{\"timeout_seconds\":")
+    run Benchmark.float(&mut json, timeout)
+  } else {
+    run json.append(b"{\"exit\":")
+    run Harness.signed(&mut json, process.code)
+    run json.append(b",\"stderr\":")
+    let errors = run process.errors.readAll()
+    let text = run Text.decode(errors.asSlice())
+    run Corpus.quote(&mut json, String.view(&text))
+  }
+  run json.append(b"}")
+  return move json
+}
+effect fn inspected(left: &mut Process.RunResult, right: &mut Process.RunResult, json: &mut Bytes) -> i32 ! Errors ? &mut Allocator {
+  let difference = run Dump.firstDifference(&mut left.output, &mut right.output)
+  let info = run Dump.inspect(&mut left.output)
+  let mut status: i32 = 0
+  let mut otherHash = run String.copy(String.view(&info.digest))
+  if let Option<Dump.Difference>.Some { value } = move difference {
+    let other = run Dump.inspect(&mut right.output)
+    otherHash = move other.digest
+    status = 1
+    run json.append(b",\"first_difference\":")
+    let detail = run Harness.differenceJson(&value)
+    run json.append(detail.asSlice())
+  }
+  run json.append(b",\"status\":")
+  run Corpus.quote(&mut json, if status == 0 { "match" } else { "difference" })
+  run json.append(b",\"rust_dump_sha256\":")
+  run Corpus.quote(&mut json, String.view(&info.digest))
+  run json.append(b",\"silk_dump_sha256\":")
+  run Corpus.quote(&mut json, String.view(&otherHash))
+  run json.append(b",\"lines\":")
+  run Corpus.appendNumber(&mut json, info.lines)
+  run json.append(b",\"parse_error_count\":")
+  run Corpus.appendNumber(&mut json, info.errors.length())
+  let mut errors = Bytes.make()
+  let rows = info.errors.asSlice()
+  let mut at: usize = 0
+  while at < rows.length { if at > 0 { run errors.append(b"\n") }  run errors.append(String.utf8Bytes(String.view(&rows[at])))  at = at + 1 }
+  let hash = run Dump.sha(errors.asSlice())
+  run json.append(b",\"parse_errors_sha256\":")
+  run Corpus.quote(&mut json, String.view(&hash))
+  return status
+}
+effect fn caseIn(data: &[u8], recipe: &[u8], reference: string, silk: string, timeout: f64, failures: &Path, directory: &Path) -> Case
+  ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  let hash = run Dump.sha(data)
+  let font = run Path.join(directory, "input.font")
+  run FileSystem.writeFile(&font, data)
+  let name = run Corpus.pathText(&font)
+  let mut left = run Process.execute(reference, &[String.view(&name)], timeout, false)
+  let mut right = run Process.execute(silk, &[String.view(&name)], timeout, false)
+  let mut json = run Bytes.copy(b"{\"mutation\":")
+  run json.append(recipe)
+  run json.append(b",\"input_sha256\":")
+  run Corpus.quote(&mut json, String.view(&hash))
+  run json.append(b",\"length\":")
+  run Corpus.appendNumber(&mut json, data.length)
+  run json.append(b",\"processes\":{\"rust\":")
+  let leftInfo = run processJson(&mut left, timeout)
+  run json.append(leftInfo.asSlice())
+  run json.append(b",\"silk\":")
+  let rightInfo = run processJson(&mut right, timeout)
+  run json.append(rightInfo.asSlice())
+  run json.append(b"}")
+  let mut status: i32 = 2
+  if left.code != 0 || right.code != 0 || left.timedOut || right.timedOut { run json.append(b",\"status\":\"failure\"") }
+  else {
+    match move run Effect.result(inspected(&mut left, &mut right, &mut json)) {
+      Result<i32, Errors>.Success { value } => { status = value }
+      Result<i32, Errors>.Failure { error } => {
+        run json.append(b",\"status\":\"failure\",\"error\":")
+        let message = match move error { TaskError failure => move failure.message _ => run String.copy("dump inspection failed") }
+        run Corpus.quote(&mut json, String.view(&message))
+      }
+    }
+  }
+  if status != 0 {
+    let destination = run Path.join(failures, String.view(&hash))
+    run FileSystem.createDirectoriesRecursively(&destination)
+    let input = run Path.join(&destination, "input.font")
+    run FileSystem.writeFile(&input, data)
+    let rustDump = run Path.join(&destination, "rust.dump")
+    let silkDump = run Path.join(&destination, "silk.dump")
+    run left.output.save(&rustDump)
+    run right.output.save(&silkDump)
+    let observation = run Path.join(&destination, "observation.json")
+    let mut contents = run Bytes.copy(json.asSlice())
+    run contents.append(b"}\n")
+    run FileSystem.writeFile(&observation, contents.asSlice())
+    run json.append(b",\"artifacts\":")
+    let root = run Task.root()
+    let path = run Corpus.pathText(&destination)
+    run Corpus.quote(&mut json, Corpus.display(&root, &path))
+  }
+  run json.append(b"}")
+  return Case { status: status, json: move json }
+}
+effect fn ignored(error: FileError | OutOfMemoryError) -> () {}
+effect fn cleanup(path: &Path) -> () ? &mut Allocator | &mut FileSystem { run Effect.catchAll(FileSystem.removeDirectoryRecursively(path), ignored) }
+pub effect fn checkCase(data: &[u8], recipe: &[u8], reference: string, silk: string, timeout: f64, failures: &Path) -> Case
+  ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  let parent = run Path.make("/tmp")
+  let directory = run FileSystem.createTemporaryDirectory(&parent, b"read-fonts-corrupt-")
+  return run Effect.ensuring(caseIn(data, recipe, reference, silk, timeout, failures, &directory), cleanup(&directory))
+}
+
+pub effect fn recipeLabel(recipe: &Mutation) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  let mut out = Bytes.make()
+  if recipe.truncate {
+    run out.append(b"{\"kind\": \"truncate\", \"length\": ")
+    run Corpus.appendNumber(&mut out, recipe.length)
+  } else {
+    run out.append(b"{\"index\": ")
+    run Corpus.appendNumber(&mut out, recipe.index)
+    run out.append(b", \"kind\": \"flip\", \"xor\": [")
+    let offsets = recipe.offsets.asSlice()
+    let masks = recipe.masks.asSlice()
+    let mut at: usize = 0
+    while at < offsets.length {
+      if at > 0 { run out.append(b", ") }
+      run out.append(b"[")
+      run Corpus.appendNumber(&mut out, offsets[at])
+      run out.append(b", ")
+      run Corpus.appendNumber(&mut out, u8.toUsize(masks[at]))
+      run out.append(b"]")
+      at = at + 1
+    }
+    run out.append(b"]")
+  }
+  run out.append(b"}")
+  return move out
+}
+
+struct Region { start: usize, end: usize }

@@ -7,7 +7,7 @@ draw the glyphs without any native code.
 Build and test from the repository root:
 
 ```sh
-modules/scripts/build-wasm                      # writes modules/shape/tools/wasm/js/dist/harfrust.wasm
+silk task build-wasm                              # writes modules/shape/tools/wasm/js/dist/harfrust.wasm
 cd modules/shape/tools/wasm/js && npm ci && npm test  # compares against native font-shape-test-harness output
 ```
 

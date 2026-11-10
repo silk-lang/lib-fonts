@@ -1,0 +1,56 @@
+import font_tasks { Tasks }
+import font_task_arguments { Seconds }
+import silk.cli.command { Command, CommandLine, Opt }
+import silk.cli.task { TaskError, TaskSet }
+import silk.io.writer { WriterError }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.system.child_process { ChildProcess, ProcessError }
+import silk.system.filesystem { FileError, FileSystem }
+import silk.system.host_input { HostInput, HostInputError }
+import silk.text.string { String }
+import silk.collections.list { List }
+
+pub union BenchmarkTasks {
+  BenchShaping { pub silk: String, pub rust: String, pub iterations: usize, pub samples: usize, pub filter: String, pub callgrind: bool },
+  BenchLibrary { pub fonts: String, pub librarySilk: String, pub libraryRust: String, pub workload: List<String>, pub top: i64 },
+  Benchmark { pub fonts: String, pub benchmarkReference: String, pub benchmarkSilk: String, pub rounds: usize, pub longTimeout: Seconds, pub requiredReport: String },
+}
+
+impl CommandLine for BenchmarkTasks {
+  static fn command() -> Command<BenchmarkTasks> {
+    return Command<BenchmarkTasks>.make("benchmark-tasks", "Font library maintenance")
+      |> Command.option("fonts", Opt.about("Use an explicit UTF-8 font list"))
+      |> Command.option("silk", Opt.about("Silk shaping binary") |> Opt.default("build/llvm/x86_64-unknown-linux-gnu/release/font-shape-test-harness"))
+      |> Command.option("rust", Opt.about("Rust shaping binary") |> Opt.default("build/harfrust-rust/release/rust-hr-shape"))
+      |> Command.option("filter", Opt.about("Select case or workload names containing this text"))
+      |> Command.variant("BenchShaping", "Benchmark checksum-verified pinned shaping workloads")
+      |> Command.option("iterations", Opt.about("Workload iterations") |> Opt.default("3"))
+      |> Command.option("samples", Opt.about("Timing samples") |> Opt.default("3"))
+      |> Command.option("callgrind", Opt.about("Measure instructions with Valgrind"))
+      |> Command.variant("BenchLibrary", "Benchmark library workloads after comparing checksums")
+      |> Command.option("librarySilk", Opt.about("Silk benchmark binary") |> Opt.long("silk") |> Opt.default("build/llvm/x86_64-unknown-linux-gnu/release/font-parse-bench"))
+      |> Command.option("libraryRust", Opt.about("Rust benchmark binary") |> Opt.long("rust") |> Opt.default("build/rust/release/font-bench"))
+      |> Command.option("workload", Opt.about("Repeat to select workloads") |> Opt.choice("cmap") |> Opt.choice("glyf") |> Opt.choice("hmtx") |> Opt.choice("cff") |> Opt.choice("cffsub"))
+      |> Command.option("top", Opt.about("Slowest fonts to list per workload") |> Opt.default("5"))
+      |> Command.variant("Benchmark", "Measure complete release dumper CLI runs")
+      |> Command.option("benchmarkReference", Opt.about("Release reference dumper") |> Opt.long("reference") |> Opt.default("build/rust/release/rust-font-dump"))
+      |> Command.option("benchmarkSilk", Opt.about("Release Silk dumper") |> Opt.long("silk-dumper") |> Opt.default("build/llvm/x86_64-unknown-linux-gnu/release/font-parse-test-harness"))
+      |> Command.option("rounds", Opt.about("Timing rounds") |> Opt.default("3"))
+      |> Command.option("longTimeout", Opt.about("Seconds per dumper") |> Opt.long("timeout") |> Opt.default("600"))
+      |> Command.option("requiredReport", Opt.about("Write the JSON report") |> Opt.long("report") |> Opt.required)
+  }
+}
+
+impl TaskSet for BenchmarkTasks {
+  effect fn perform(self: BenchmarkTasks) -> ()
+    ! TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError
+    ? &mut HostInput | &mut Allocator | &mut ChildProcess | &mut FileSystem {
+    let task = match move self {
+      BenchmarkTasks.BenchShaping { silk, rust, iterations, samples, filter, callgrind } => Tasks.BenchShaping { silk: move silk, rust: move rust, iterations: move iterations, samples: move samples, filter: move filter, callgrind: move callgrind }
+      BenchmarkTasks.BenchLibrary { fonts, librarySilk, libraryRust, workload, top } => Tasks.BenchLibrary { fonts: move fonts, librarySilk: move librarySilk, libraryRust: move libraryRust, workload: move workload, top: move top }
+      BenchmarkTasks.Benchmark { fonts, benchmarkReference, benchmarkSilk, rounds, longTimeout, requiredReport } => Tasks.Benchmark { fonts: move fonts, benchmarkReference: move benchmarkReference, benchmarkSilk: move benchmarkSilk, rounds: move rounds, longTimeout: longTimeout.value, requiredReport: move requiredReport }
+    }
+    run TaskSet.perform(move task)
+  }
+}
+

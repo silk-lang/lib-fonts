@@ -1,5 +1,5 @@
 // Shapes a few strings with the wasm build and compares them with the native font-shape-test-harness output.
-// Run `modules/scripts/build-wasm` first; fonts come from the modules/shape/test-data/harfrust submodule.
+// Run `silk task build-wasm` first; fonts come from the modules/shape/test-data/harfrust submodule.
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 

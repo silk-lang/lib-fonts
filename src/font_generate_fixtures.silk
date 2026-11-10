@@ -1,0 +1,147 @@
+import font_generate_support as G
+import silk.cli.task { Task, TaskError }
+import silk.collections.bytes { Bytes }
+import silk.collections.list { List }
+import silk.core.option { Option }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.system.child_process { ChildProcess, ProcessError }
+import silk.system.filesystem { FileSystem, FileError, Path }
+import silk.system.host_input { HostInput, HostInputError }
+import silk.io.writer { WriterError }
+import silk.text.regex { Match }
+
+struct NamedFile { name: string<'static>, file: string<'static> }
+struct NamedSymbol { symbol: string<'static>, name: string<'static>, file: string<'static> }
+
+effect fn font(root: &Path, filename: string) -> Bytes ! FileError | OutOfMemoryError ? &mut Allocator | &mut FileSystem {
+  let base = run Path.resolve(root, "modules/parse/upstream/font-test-data/test_data/ttf")
+  return run G.read(&base, filename)
+}
+
+pub effect fn layout(root: &Path, check: bool) -> () ! TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError ? &mut HostInput | &mut Allocator | &mut ChildProcess | &mut FileSystem {
+  let mut out = Bytes.make() run G.add(&mut out, G.HEADER)
+  let modules = ["layout", "gdef", "gsub", "gpos"] let mut moduleIndex: usize = 0
+  while moduleIndex < modules.length {
+    let module = modules[moduleIndex] moduleIndex = moduleIndex + 1
+    let mut path = Bytes.make() run G.add(&mut path, "modules/parse/upstream/font-test-data/src/") run G.add(&mut path, module) run G.add(&mut path, ".rs")
+    let raw = run G.read(root, run G.text(Bytes.asSlice(&path)))
+    let source = run G.comments(run G.text(Bytes.asSlice(&raw)))
+    let entries = run G.matches("pub (?:static|const) (\\w+): &\\[u8\\] = &\\[([^\\]]*)\\];", run G.text(Bytes.asSlice(&source)))
+    let entriesSlice = List<Match>.asSlice(&entries) let mut entryIndex: usize = 0
+    while entryIndex < entriesSlice.length {
+      let entry = &entriesSlice[entryIndex] entryIndex = entryIndex + 1
+      let suffix = run G.camel(G.group(entry, 1)) let mut name = Bytes.make()
+      run G.add(&mut name, module) run Bytes.append(&mut name, Bytes.asSlice(&suffix))
+      let data = run G.numericBytes(G.group(entry, 2), "0[xX][0-9A-Fa-f]+|0[bB][01]+|[0-9]+", 1)
+      run G.blob(&mut out, run G.text(Bytes.asSlice(&name)), Bytes.asSlice(&data), true)
+    }
+  }
+  let names = ["notoserifhebrew_autohint_metrics", "cantarell_vf_trimmed", "material_symbols_subset", "notoserif_autohint_shaping"] let mut nameIndex: usize = 0
+  while nameIndex < names.length {
+    let name = names[nameIndex] nameIndex = nameIndex + 1
+    let mut filename = Bytes.make() run G.add(&mut filename, name) run G.add(&mut filename, ".ttf")
+    let data = run font(root, run G.text(Bytes.asSlice(&filename)))
+    let payload = match move run G.table(Bytes.asSlice(&data), "GSUB") { Option<&[u8]>.Some { value } => value _ => run Task.abort("Missing GSUB fixture table") }
+    let suffix = run G.camel(name) let mut function = Bytes.make()
+    run G.add(&mut function, "font") run Bytes.append(&mut function, Bytes.asSlice(&suffix)) run G.add(&mut function, "Gsub")
+    run G.blob(&mut out, run G.text(Bytes.asSlice(&function)), payload, true)
+  }
+  run G.save(root, "modules/parse/src/generated_layout_fixtures.silk", &out, check)
+}
+
+pub effect fn variation(root: &Path, check: bool) -> () ! TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError ? &mut HostInput | &mut Allocator | &mut ChildProcess | &mut FileSystem {
+  let mut out = Bytes.make() run G.add(&mut out, G.HEADER)
+  let fonts = [NamedFile { name: "vazirmatn", file: "vazirmatn_var_trimmed.ttf" }, NamedFile { name: "checker", file: "avar2checker.ttf" }, NamedFile { name: "amstelvar", file: "Amstelvar-avar2.A.ttf" }, NamedFile { name: "truncated", file: "hvar_with_truncated_adv_index_map.ttf" }, NamedFile { name: "noto", file: "NotoSansJP-VF.subset.otf" }, NamedFile { name: "colr", file: "test_glyphs-glyf_colr_1_variable.ttf" }]
+  let mut fontIndex: usize = 0
+  while fontIndex < fonts.length {
+    let entry = &fonts[fontIndex] fontIndex = fontIndex + 1
+    let data = run font(root, entry.file)
+    let tags = ["fvar", "avar", "HVAR", "VVAR", "MVAR", "maxp", "COLR", "gvar", "glyf", "loca"] let mut tagIndex: usize = 0
+    while tagIndex < tags.length {
+      let tag = tags[tagIndex] tagIndex = tagIndex + 1
+      match move run G.table(Bytes.asSlice(&data), tag) {
+        Option<&[u8]>.None => {}
+        Option<&[u8]>.Some { value } => {
+          let suffix = run G.title(tag) let mut name = Bytes.make()
+          run G.add(&mut name, entry.name) run Bytes.append(&mut name, Bytes.asSlice(&suffix))
+          run G.blob(&mut out, run G.text(Bytes.asSlice(&name)), value, true)
+        }
+      }
+    }
+  }
+  let source = run G.read(root, "modules/parse/upstream/read-fonts/src/tables/gvar.rs")
+  let symbols = [NamedFile { name: "skiaSharedTuples", file: "SKIA_GVAR_SHARED_TUPLES_DATA" }, NamedFile { name: "skiaGlyphI", file: "SKIA_GVAR_I_DATA" }]
+  let mut symbolIndex: usize = 0
+  while symbolIndex < symbols.length {
+    let entry = &symbols[symbolIndex] symbolIndex = symbolIndex + 1
+    let mut marker = Bytes.make() run G.add(&mut marker, "static ") run G.add(&mut marker, entry.file) run G.add(&mut marker, ": FontData = FontData::new(&[")
+    let body = run G.before(run G.after(run G.text(Bytes.asSlice(&source)), run G.text(Bytes.asSlice(&marker))), "]);")
+    let data = run G.numericBytes(body, "0x[0-9A-Fa-f]{2}", 1)
+    run G.blob(&mut out, entry.name, Bytes.asSlice(&data), true)
+  }
+  let names = ["material_symbols_subset", "names_only", "vazirmatn_var_trimmed", "linear_gradient_rect_colr_1", "cubic_glyf", "gvar_use_my_metrics", "vorg"] let mut nameIndex: usize = 0
+  while nameIndex < names.length {
+    let name = names[nameIndex] nameIndex = nameIndex + 1
+    let mut filename = Bytes.make() run G.add(&mut filename, name) run G.add(&mut filename, ".ttf")
+    let data = run font(root, run G.text(Bytes.asSlice(&filename)))
+    let suffix = run G.camel(name) let mut function = Bytes.make() run G.add(&mut function, "font") run Bytes.append(&mut function, Bytes.asSlice(&suffix))
+    run G.blob(&mut out, run G.text(Bytes.asSlice(&function)), Bytes.asSlice(&data), true)
+  }
+  run G.save(root, "modules/parse/src/generated_variation_fixtures.silk", &out, check)
+}
+
+pub effect fn aat(root: &Path, check: bool) -> () ! TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError ? &mut HostInput | &mut Allocator | &mut ChildProcess | &mut FileSystem {
+  let mut out = Bytes.make() run G.add(&mut out, G.HEADER)
+  let fonts = [NamedFile { name: "one", file: "One" }, NamedFile { name: "four", file: "Four" }, NamedFile { name: "eighteen", file: "Eighteen" }, NamedFile { name: "thirtyFour", file: "Thirtyfour" }, NamedFile { name: "fortyOne", file: "Fourtyone" }]
+  let mut fontIndex: usize = 0
+  while fontIndex < fonts.length {
+    let entry = &fonts[fontIndex] fontIndex = fontIndex + 1
+    let mut filename = Bytes.make() run G.add(&mut filename, "TestMORX") run G.add(&mut filename, entry.file) run G.add(&mut filename, ".ttf")
+    let data = run font(root, run G.text(Bytes.asSlice(&filename)))
+    let payload = match move run G.table(Bytes.asSlice(&data), "morx") { Option<&[u8]>.Some { value } => value _ => run Task.abort("Missing morx fixture table") }
+    run G.blob(&mut out, entry.name, payload, true)
+  }
+  let source = run G.read(root, "modules/parse/upstream/read-fonts/src/tables/kern.rs")
+  let symbols = [NamedFile { name: "otKern0", file: "KERN_VER_0_FMT_0_DATA" }, NamedFile { name: "aatKern0", file: "KERN_VER_1_FMT_0_DATA" }, NamedFile { name: "kern2", file: "KERN_FORMAT_2" }]
+  let mut symbolIndex: usize = 0
+  while symbolIndex < symbols.length {
+    let entry = &symbols[symbolIndex] symbolIndex = symbolIndex + 1
+    let mut marker = Bytes.make() run G.add(&mut marker, "const ") run G.add(&mut marker, entry.file) run G.add(&mut marker, ": &[u8] = &[")
+    let body = run G.before(run G.after(run G.text(Bytes.asSlice(&source)), run G.text(Bytes.asSlice(&marker))), "];")
+    let clean = run G.comments(body) let data = run G.numericBytes(run G.text(Bytes.asSlice(&clean)), "0x[0-9A-Fa-f]+", 1)
+    run G.blob(&mut out, entry.name, Bytes.asSlice(&data), true)
+  }
+  run G.save(root, "modules/parse/src/generated_aat_fixtures.silk", &out, check)
+}
+
+pub effect fn cff(root: &Path, check: bool) -> () ! TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError ? &mut HostInput | &mut Allocator | &mut ChildProcess | &mut FileSystem {
+  let mut out = Bytes.make() run G.add(&mut out, G.HEADER)
+  let source = run G.read(root, "modules/parse/upstream/font-test-data/src/lib.rs")
+  let example = run G.after(run G.text(Bytes.asSlice(&source)), "pub mod cff2 {")
+  let declaration = run G.after(example, "pub static EXAMPLE:")
+  let body = run G.before(run G.after(run G.after(declaration, "&["), "&["), "];")
+  let data = run G.numericBytes(body, "0x[0-9A-Fa-f]{2}", 1)
+  run G.blob(&mut out, "exampleCff2", Bytes.asSlice(&data), true)
+  let symbols = [NamedSymbol { symbol: "NOTO_SERIF_DISPLAY_TRIMMED", name: "notoSerif", file: "lib.rs" }, NamedSymbol { symbol: "CANTARELL_VF_TRIMMED", name: "cantarell", file: "lib.rs" }, NamedSymbol { symbol: "MATERIAL_ICONS_SUBSET", name: "icons", file: "lib.rs" }, NamedSymbol { symbol: "MATERIAL_ICONS_SUBSET_MATRIX", name: "iconsMatrix", file: "lib.rs" }, NamedSymbol { symbol: "CFF_FONT", name: "notoSansCff", file: "ift.rs" }, NamedSymbol { symbol: "CFF2_FONT", name: "notoSansCff2", file: "ift.rs" }]
+  let mut symbolIndex: usize = 0
+  while symbolIndex < symbols.length {
+    let entry = &symbols[symbolIndex] symbolIndex = symbolIndex + 1
+    let base = run Path.resolve(root, "modules/parse/upstream/font-test-data/src")
+    let declarations = run G.read(&base, entry.file)
+    let font = run G.included(root, run G.text(Bytes.asSlice(&declarations)), entry.symbol)
+    let mut name = Bytes.make() run G.add(&mut name, entry.name) run G.add(&mut name, "Font")
+    run G.blob(&mut out, run G.text(Bytes.asSlice(&name)), Bytes.asSlice(&font), true)
+    // Preserve directory order, including a font containing both CFF variants.
+    let bytes = Bytes.asSlice(&font) let count = G.numberAt(bytes, 4, 2) let mut i: usize = 0
+    while i < count {
+      let at = 12 + i * 16 i = i + 1
+      if bytes[at] == 67 && bytes[at + 1] == 70 && bytes[at + 2] == 70 && (bytes[at + 3] == 32 || bytes[at + 3] == 50) {
+        let mut tag = "CFF " if bytes[at + 3] == 50 { tag = "CFF2" }
+        let payload = match move run G.table(bytes, tag) { Option<&[u8]>.Some { value } => value _ => run Task.abort("Missing CFF fixture table") }
+        let mut function = Bytes.make() run G.add(&mut function, entry.name) run G.add(&mut function, "Table")
+        run G.blob(&mut out, run G.text(Bytes.asSlice(&function)), payload, true)
+      }
+    }
+  }
+  run G.save(root, "modules/parse/src/generated_cff_fixtures.silk", &out, check)
+}

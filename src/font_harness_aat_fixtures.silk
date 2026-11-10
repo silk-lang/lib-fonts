@@ -1,0 +1,315 @@
+import silk.cli.task { Task }
+import silk.collections.bytes { Bytes }
+import silk.collections.list { List }
+import silk.collections.slice { Slice }
+import silk.core.effect { Effect }
+import silk.core.option { Option }
+import silk.core.result { Result }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.system.filesystem { FileSystem, Path }
+import silk.system.host_input { HostInput }
+import silk.text.string { String }
+import silk.num.usize
+import silk.num.u8
+import silk.num.u32
+import font_generate_support as G
+import font_generate_binary as B
+import font_harness_dump as Dump
+import font_harness_fixtures as F { Fixtures, Errors, Table }
+
+effect fn byteLiterals(source: string) -> List<Bytes> ! Errors ? &mut Allocator {
+  let found = run G.matches("b\"((?:\\\\.|[^\"\\\\])*)\"", source)
+  let rows = found.asSlice()
+  let mut values = List<Bytes>.make()
+  let mut at: usize = 0
+  while at < rows.length { run values.append(run F.literal(G.group(&rows[at], 1)))  at = at + 1 }
+  return move values
+}
+effect fn morph(body: &[u8], format: usize, extended: bool) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  let mut out = Bytes.make()
+  run G.be(&mut out, if extended { 2 } else { 1 }, 2)
+  run G.be(&mut out, 0, 2)
+  run G.be(&mut out, 1, 4)
+  run G.be(&mut out, 1, 4)
+  run G.be(&mut out, (if extended { u8.toUsize(28) } else { u8.toUsize(20) }) + body.length, 4)
+  run G.be(&mut out, 0, if extended { 4 } else { 2 })
+  run G.be(&mut out, 1, if extended { 4 } else { 2 })
+  run G.be(&mut out, body.length + (if extended { u8.toUsize(12) } else { u8.toUsize(8) }), if extended { 4 } else { 2 })
+  run G.be(&mut out, (if extended { u32.toUsize(536870912) } else { u32.toUsize(8192) }) | format, if extended { 4 } else { 2 })
+  run G.be(&mut out, 1, 4)
+  run out.append(body)
+  return move out
+}
+effect fn kerx(body: &[u8], format: usize, tuples: usize) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  let mut out = Bytes.make()
+  run B.words(&mut out, &[2, 0])
+  run G.be(&mut out, 1, 4)
+  run G.be(&mut out, body.length + 12, 4)
+  run G.be(&mut out, format, 4)
+  run G.be(&mut out, tuples, 4)
+  run out.append(body)
+  return move out
+}
+effect fn emit(fixtures: &mut Fixtures, name: string, tag: string, payload: &[u8]) -> () ! Errors ? &mut Allocator | &mut FileSystem {
+  let mut records = List<Table>.make()
+  run F.set(&mut records, "maxp", b"\x00\x00\x50\x00\x00\x20")
+  run F.set(&mut records, tag, payload)
+  run F.emit(&mut fixtures, name, &mut records)
+}
+effect fn seed(fixtures: &mut Fixtures, name: string, tag: string, payload: &[u8]) -> () ! Errors ? &mut Allocator | &mut FileSystem {
+  let mut lengths = List<usize>.make()
+  let maximum = if payload.length <= 512 { payload.length } else { F.minimum(payload.length, 160) }
+  let mut length: usize = 0
+  while length <= maximum { run F.unique(&mut lengths, length)  length = length + 1 }
+  if payload.length > 512 {
+    let stride = if payload.length / 32 > 0 { payload.length / 32 } else { 1 }
+    length = 0
+    while length < payload.length { run F.unique(&mut lengths, length)  length = length + stride }
+    run F.unique(&mut lengths, payload.length - 1)
+    run F.unique(&mut lengths, payload.length)
+  }
+  run lengths.sort()
+  let cuts = lengths.asSlice()
+  let mut at: usize = 0
+  while at < cuts.length {
+    let n = run F.number(cuts[at])
+    let label = run F.label(&[name, "-prefix-", String.view(&n)])
+    run emit(&mut fixtures, String.view(&label), tag, Slice.view<u8>(payload, 0, cuts[at]))
+    at = at + 1
+  }
+  let widths: [usize; 2] = [2, 4]
+  at = 0
+  while at < widths.length {
+    let width = widths[at]
+    let values: [usize; 3] = [0, 1, if width == 2 { 65535 } else { 4294967295 }]
+    let mut offset: usize = 0
+    while offset < 40 && offset + width <= payload.length {
+      let mut i: usize = 0
+      while i < values.length {
+        let mut broken = run Bytes.copy(payload)
+        G.patch(&mut broken, offset, values[i], width)
+        let o = run F.number(offset)
+        let w = run F.number(width)
+        let v = run F.number(values[i])
+        let label = run F.label(&[name, "-word-", String.view(&o), "-", String.view(&w), "-", String.view(&v)])
+        run emit(&mut fixtures, String.view(&label), tag, broken.asSlice())
+        i = i + 1
+      }
+      offset = offset + width
+    }
+    at = at + 1
+  }
+}
+effect fn generate(fixtures: &mut Fixtures) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  let root = run Task.root()
+  let directory = run Path.join(&root, "modules/parse/upstream/font-test-data/test_data/ttf")
+  let entries = run FileSystem.listDirectory(&directory)
+  let files = entries.asSlice()
+  let tags = ["morx", "mort", "kerx", "kern", "trak", "ankr", "feat", "ltag"]
+  let mut at: usize = 0
+  while at < files.length {
+    let name = match Path.name(&files[at].path) { Option<string>.Some { value } => value Option<string>.None => "" }
+    if String.startsWith(name, "TestMORX") && String.endsWith(name, ".ttf") {
+      let data = run FileSystem.readFile(&files[at].path)
+      let tables = run F.tables(data.asSlice())
+      let rows = tables.asSlice()
+      let mut i: usize = 0
+      while i < rows.length {
+        let tag = String.view(&rows[i].tag)
+        if F.has(&tags, tag) {
+          let label = run F.label(&[String.slice(name, 0, String.byteLength(name) - 4), "-", tag])
+          run seed(&mut fixtures, String.view(&label), tag, rows[i].data.asSlice())
+        }
+        i = i + 1
+      }
+    }
+    at = at + 1
+  }
+  let generated = run F.literals(&root, "modules/parse/src/generated_aat_fixtures.silk")
+  let kerns = ["otKern0", "aatKern0", "kern2"]
+  at = 0
+  while at < kerns.length { run seed(&mut fixtures, kerns[at], "kern", run F.named(&generated, kerns[at]))  at = at + 1 }
+  let tests = run G.read(&root, "modules/parse/src/kerning_tests.silk")
+  let mut chunks = String.split(run G.text(tests.asSlice()), "test effect fn ")
+  let _first = chunks.next()
+  while let Option<string>.Some { value: chunk } = move chunks.next() {
+    let name = run G.before(chunk, "()")
+    let literals = run byteLiterals(chunk)
+    let values = literals.asSlice()
+    if values.length > 0 {
+      if String.startsWith(name, "parseSubtable") {
+        let bytes = String.utf8Bytes(name)
+        let format = u8.toUsize(bytes[13] - 48)
+        let data = run kerx(values[0].asSlice(), format, if String.endsWith(name, "Vector") { 1 } else { 0 })
+        run seed(&mut fixtures, name, "kerx", data.asSlice())
+      } else if name == "format3" {
+        let mut data = Bytes.make()
+        run B.words(&mut data, &[0, 1, 0])
+        run G.be(&mut data, values[0].length() + 6, 2)
+        run G.be(&mut data, 769, 2)
+        run data.append(values[0].asSlice())
+        run seed(&mut fixtures, name, "kern", data.asSlice())
+      }
+    }
+  }
+  let misc = run G.read(&root, "modules/parse/src/aat_misc_tests.silk")
+  let functions = [FixtureFunction { name: "trakBytes", tag: "trak" }, FixtureFunction { name: "featBytes", tag: "feat" }, FixtureFunction { name: "anchorPoints", tag: "ankr" }, FixtureFunction { name: "languageTags", tag: "ltag" }]
+  at = 0
+  while at < functions.length {
+    let marker = run F.label(&["fn ", functions[at].name, "()"])
+    let values = run byteLiterals(run G.after(run G.text(misc.asSlice()), String.view(&marker)))
+    run seed(&mut fixtures, functions[at].name, functions[at].tag, values.asSlice()[0].asSlice())
+    at = at + 1
+  }
+  let tests2 = run G.read(&root, "modules/parse/src/aat_tests.silk")
+  let literals = run byteLiterals(run G.text(tests2.asSlice()))
+  let values = literals.asSlice()
+  at = 0
+  while at < 6 {
+    let data = run morph(values[at].asSlice(), 4, true)
+    let name = run F.numbered("lookup-", at)
+    run seed(&mut fixtures, String.view(&name), "morx", data.asSlice())
+    let legacyData = run morph(values[at].asSlice(), 4, false)
+    let name3 = run F.numbered("legacy-lookup-", at)
+    run seed(&mut fixtures, String.view(&name3), "mort", legacyData.asSlice())
+    at = at + 1
+  }
+  let data = run morph(values[6].asSlice(), 0, true)
+  run seed(&mut fixtures, "extended-state", "morx", data.asSlice())
+  let legacyState = run morph(values[7].asSlice(), 0, false)
+  run seed(&mut fixtures, "legacy-state", "mort", legacyState.asSlice())
+  let formats: [usize; 4] = [0, 1, 2, 5]
+  at = 0
+  while at < formats.length {
+    let format = formats[at]
+    let extra: usize = if format == 0 { 0 } else if format == 2 { 6 } else { 2 }
+    let payload: usize = if format == 1 || format == 5 { 4 } else { 0 }
+    let classes = 8 + extra
+    let states = classes + 8
+    let entries = states + 8
+    let glyphs = entries + (4 + payload) * 2
+    let mut body = Bytes.make()
+    run B.words(&mut body, &[4, usize.toI64(classes), usize.toI64(states), usize.toI64(entries)])
+    if extra == 2 { run G.be(&mut body, glyphs, 2) } else { run G.zeros(&mut body, extra) }
+    run B.words(&mut body, &[0, 4])
+    run body.append(b"\x00\x01\x02\x03\x00\x01\x00\x01\x01\x00\x01\x00")
+    let mut i: usize = 0
+    while i < 2 { run G.be(&mut body, states, 2)  run G.be(&mut body, 0, 2)  run G.zeros(&mut body, payload)  i = i + 1 }
+    run B.words(&mut body, &[3, 4, 5])
+    let data = run morph(body.asSlice(), format, false)
+    let name = run F.numbered("legacy-format-", format)
+    run seed(&mut fixtures, String.view(&name), "mort", data.asSlice())
+    at = at + 1
+  }
+  let keys: [usize; 5] = [0, 0, 0, 1, 0]
+  let formats4: [usize; 3] = [2, 4, 6]
+  at = 0
+  while at < 3 {
+    let format = formats4[at]
+    let mut body = Bytes.make()
+    run G.be(&mut body, format, 2)
+    run B.words(&mut body, &[if format == 6 { 4 } else { 6 }, 5, 0, 0, 0])
+    let mut i: usize = 0
+    while i < 5 {
+      run G.be(&mut body, keys[i], 2)
+      if format != 6 { run G.be(&mut body, keys[i], 2) }
+      run G.be(&mut body, if format == 4 { 42 + i * 2 } else { i }, 2)
+      i = i + 1
+    }
+    if format == 4 { run B.words(&mut body, &[0, 1, 2, 3, 4]) }
+    let data = run morph(body.asSlice(), 4, true)
+    let name = run F.numbered("unsorted-lookup-", format)
+    run seed(&mut fixtures, String.view(&name), "morx", data.asSlice())
+    at = at + 1
+  }
+  let mut pairs = Bytes.make()
+  run G.be(&mut pairs, 5, 4)
+  run G.zeros(&mut pairs, 12)
+  let mut feat = Bytes.make()
+  run G.be(&mut feat, 65536, 4)
+  run B.words(&mut feat, &[5, 0])
+  run G.be(&mut feat, 0, 4)
+  at = 0
+  while at < 5 {
+    run B.words(&mut pairs, &[0, usize.toI64(keys[at]), usize.toI64(at)])
+    run B.words(&mut feat, &[usize.toI64(keys[at]), 0])
+    run G.be(&mut feat, 0, 4)
+    run B.words(&mut feat, &[0, usize.toI64(100 + at)])
+    at = at + 1
+  }
+  let unsorted = run kerx(pairs.asSlice(), 0, 0)
+  run seed(&mut fixtures, "unsorted-kerning-pairs", "kerx", unsorted.asSlice())
+  run seed(&mut fixtures, "unsorted-features", "feat", feat.asSlice())
+  let single = run morph(b"\x00\x00\x00\x01\x00\x02\x00\x03", 4, true)
+  let chain = Slice.view<u8>(single.asSlice(), 8, single.length() - 8)
+  let mut changed = run Bytes.copy(chain)
+  G.patch(&mut changed, 0, 42, 4)
+  let mut data5 = run Bytes.copy(Slice.view<u8>(single.asSlice(), 0, 4))
+  run G.be(&mut data5, 2, 4)
+  run data5.append(chain)
+  run data5.append(changed.asSlice())
+  run seed(&mut fixtures, "equal-sized-chains", "morx", data5.asSlice())
+  let subtable = Slice.view<u8>(chain, 16, chain.length - 16)
+  let mut changed6 = run Bytes.copy(subtable)
+  G.patch(&mut changed6, 8, 42, 4)
+  let mut data7 = run Bytes.copy(Slice.view<u8>(single.asSlice(), 0, 8))
+  run G.be(&mut data7, 1, 4)
+  run G.be(&mut data7, 16 + subtable.length * 2, 4)
+  run G.be(&mut data7, 0, 4)
+  run G.be(&mut data7, 2, 4)
+  run data7.append(subtable)
+  run data7.append(changed6.asSlice())
+  run seed(&mut fixtures, "equal-sized-subtables", "morx", data7.asSlice())
+  let tags8 = ["morx", "mort"]
+  let badMorph: [usize; 3] = [3, 6, 255]
+  at = 0
+  while at < 2 {
+    let mut i: usize = 0
+    while i < 3 {
+      let n = run F.number(badMorph[i])
+      let name = run F.label(&["bad-", tags8[at], "-format-", String.view(&n)])
+      let data7 = run morph(&[], badMorph[i], at == 0)
+      run emit(&mut fixtures, String.view(&name), tags8[at], data7.asSlice())
+      i = i + 1
+    }
+    at = at + 1
+  }
+  let badKerx: [usize; 3] = [3, 5, 255]
+  at = 0
+  while at < 3 { let data7 = run kerx(&[], badKerx[at], 0)  let name = run F.numbered("bad-kerx-format-", badKerx[at])  run emit(&mut fixtures, String.view(&name), "kerx", data7.asSlice())  at = at + 1 }
+  let units: [usize; 7] = [0, 1, 2, 3, 4, 8, 65535]
+  at = 0
+  while at < units.length {
+    let mut body = Bytes.make()
+    run B.words(&mut body, &[10, usize.toI64(units[at]), 0, 1])
+    run G.zeros(&mut body, 8)
+    let data7 = run morph(body.asSlice(), 4, true)
+    let name = run F.numbered("lookup10-unit-", units[at])
+    run emit(&mut fixtures, String.view(&name), "morx", data7.asSlice())
+    at = at + 1
+  }
+  let utf8 = [b"\xff", b"\xc0\xaf", b"\xed\xa0\x80", b"\xf0\x9f\x92\xa9", b"\x00\n"]
+  at = 0
+  while at < utf8.length {
+    let mut table = Bytes.make()
+    run G.be(&mut table, 1, 4)
+    run G.be(&mut table, 0, 4)
+    run G.be(&mut table, 1, 4)
+    run G.be(&mut table, 16, 2)
+    run G.be(&mut table, utf8[at].length, 2)
+    run table.append(utf8[at])
+    let hex = run Dump.hex(utf8[at])
+    let name = run F.label(&["ltag-utf8-", String.view(&hex)])
+    run emit(&mut fixtures, String.view(&name), "ltag", table.asSlice())
+    at = at + 1
+  }
+}
+effect fn perform(fixtures: &mut Fixtures, reference: string, silk: string, report: string) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem { run generate(&mut fixtures)  run fixtures.compare(reference, silk, 30.0, report) }
+pub effect fn checkAatFixtures(reference: string, silk: string, report: string) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  let mut fixtures = run Fixtures.make("font-aat-fixtures-", ".ttf")
+  let result = run Effect.result(perform(&mut fixtures, reference, silk, report))
+  run fixtures.cleanup()
+  match move result { Result<(), Errors>.Success { .. } => {} Result<(), Errors>.Failure { error } => { fail move error } }
+}
+
+struct FixtureFunction { name: string<'static>, tag: string<'static> }

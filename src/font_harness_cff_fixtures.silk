@@ -1,0 +1,272 @@
+import silk.num.usize
+import silk.cli.task { Task }
+import silk.collections.bytes { Bytes }
+import silk.collections.list { List }
+import silk.collections.slice { Slice }
+import silk.core.effect { Effect }
+import silk.core.result { Result }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.system.filesystem { FileSystem }
+import silk.system.host_input { HostInput }
+import silk.text.string { String }
+import silk.num.i64
+import font_generate_support as G
+import font_generate_binary as B
+import font_harness_dump as Dump
+import font_harness_malformed as Malformed
+import font_harness_fixtures as F { Fixtures, Errors, Table }
+
+effect fn index(objects: &[&[u8]]) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  let mut out = Bytes.make()
+  run G.be(&mut out, objects.length, 2)
+  if objects.length == 0 { return move out }
+  run G.be(&mut out, 2, 1)
+  let mut offset: usize = 1
+  run G.be(&mut out, offset, 2)
+  let mut at: usize = 0
+  while at < objects.length { offset = offset + objects[at].length  run G.be(&mut out, offset, 2)  at = at + 1 }
+  at = 0
+  while at < objects.length { run out.append(objects[at])  at = at + 1 }
+  return move out
+}
+effect fn integer(out: &mut Bytes, value: i64) -> () ! OutOfMemoryError ? &mut Allocator { run out.append(b"\x1d")  run B.signed(&mut out, value, 4) }
+effect fn number(out: &mut Bytes, value: i64) -> () ! OutOfMemoryError ? &mut Allocator {
+  if value >= -107 && value <= 107 { run G.be(&mut out, i64.toUsize(value + 139), 1) }
+  else if value >= -32768 && value <= 32767 { run out.append(b"\x1c")  run B.signed(&mut out, value, 2) }
+  else { run out.append(b"\xff")  run B.signed(&mut out, value, 4) }
+}
+effect fn dictionary(chars: usize, private: usize, privateLength: usize, charset: usize, encoding: usize, hasCharset: bool, hasEncoding: bool, extra: &[u8]) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  let mut out = Bytes.make()
+  run integer(&mut out, usize.toI64(chars))
+  run out.append(b"\x11")
+  run integer(&mut out, usize.toI64(privateLength))
+  run integer(&mut out, usize.toI64(private))
+  run out.append(b"\x12")
+  if hasCharset { run integer(&mut out, usize.toI64(charset))  run out.append(b"\x0f") }
+  if hasEncoding { run integer(&mut out, usize.toI64(encoding))  run out.append(b"\x10") }
+  run out.append(extra)
+  return move out
+}
+effect fn font(programs: &[&[u8]], extra: &[u8], privateBytes: &[u8], local: &[&[u8]], global: &[&[u8]], charset: &[u8], encoding: &[u8]) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  let mut private = run Bytes.copy(privateBytes)
+  let mut localData = Bytes.make()
+  if local.length > 0 { run integer(&mut private, usize.toI64(privateBytes.length + 6))  run private.append(b"\x13")  localData = run index(local) }
+  let chars = run index(programs)
+  let names = run index(&[b"Fixture"])
+  let globalData = run index(global)
+  let top = run dictionary(0, 0, private.length(), 0, 0, charset.length > 0, encoding.length > 0, extra)
+  let topIndex = run index(&[top.asSlice()])
+  let prefix = 4 + names.length() + topIndex.length() + 2 + globalData.length()
+  let privateOffset = prefix + chars.length()
+  let charsetOffset = privateOffset + private.length() + localData.length()
+  let top2 = run dictionary(prefix, privateOffset, private.length(), charsetOffset, charsetOffset + charset.length, charset.length > 0, encoding.length > 0, extra)
+  let topIndex3 = run index(&[top2.asSlice()])
+  let mut out = run Bytes.copy(b"\x01\x00\x04\x02")
+  run out.append(names.asSlice())
+  run out.append(topIndex3.asSlice())
+  run out.append(b"\x00\x00")
+  run out.append(globalData.asSlice())
+  run out.append(chars.asSlice())
+  run out.append(private.asSlice())
+  run out.append(localData.asSlice())
+  run out.append(charset)
+  run out.append(encoding)
+  return move out
+}
+effect fn basicFont(programs: &[&[u8]]) -> Bytes ! OutOfMemoryError ? &mut Allocator { return run font(programs, &[], &[], &[], &[], &[], &[]) }
+effect fn emit(fixtures: &mut Fixtures, name: string, tag: string, data: &[u8]) -> () ! Errors ? &mut Allocator | &mut FileSystem {
+  let mut records = List<Table>.make()
+  run F.set(&mut records, tag, data)
+  run F.set(&mut records, "maxp", b"\x00\x00\x50\x00\x00\x20")
+  let font = run F.sfnt(&mut records, 1330926671, true)
+  run fixtures.add(name, font.asSlice())
+}
+effect fn seed(fixtures: &mut Fixtures, name: string, tag: string, data: &[u8], seedsOnly: bool) -> () ! Errors ? &mut Allocator | &mut FileSystem {
+  let full = run F.label(&[name, "-full"])
+  run emit(&mut fixtures, String.view(&full), tag, data)
+  if seedsOnly { return }
+  let mut cuts = List<usize>.make()
+  let mut at: usize = 0
+  while at < F.minimum(data.length, 257) { run F.unique(&mut cuts, at)  at = at + 1 }
+  at = if data.length > 8 { data.length - 8 } else { 0 }
+  while at < data.length { run F.unique(&mut cuts, at)  at = at + 1 }
+  at = 1
+  while at < 32 { run F.unique(&mut cuts, data.length * at / 32)  at = at + 1 }
+  run cuts.sort()
+  let lengths = cuts.asSlice()
+  at = 0
+  while at < lengths.length {
+    let n = run F.number(lengths[at])
+    let label = run F.label(&[name, "-prefix-", String.view(&n)])
+    run emit(&mut fixtures, String.view(&label), tag, Slice.view<u8>(data, 0, lengths[at]))
+    at = at + 1
+  }
+  at = 0
+  let values: [usize; 2] = [0, 255]
+  while at < F.minimum(12, data.length) {
+    let mut i: usize = 0
+    while i < 2 {
+      if data[at] != usize.toU8(values[i]) {
+        let mut changed = run Bytes.copy(data)
+        let bytes = changed.asMutSlice()
+        bytes[at] = usize.toU8(values[i])
+        let pos = run F.number(at)
+        let value = run F.number(values[i])
+        let label = run F.label(&[name, "-byte-", String.view(&pos), "-", String.view(&value)])
+        run emit(&mut fixtures, String.view(&label), tag, changed.asSlice())
+      }
+      i = i + 1
+    }
+    at = at + 1
+  }
+}
+effect fn generate(fixtures: &mut Fixtures, seedsOnly: bool) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  let root = run Task.root()
+  let generated = run F.literals(&root, "modules/parse/src/generated_cff_fixtures.silk")
+  let names = ["exampleCff2", "notoSerifTable", "cantarellTable", "iconsTable", "iconsMatrixTable", "notoSansCffTable", "notoSansCff2Table"]
+  let mut at: usize = 0
+  while at < names.length { let data = run F.named(&generated, names[at])  run seed(&mut fixtures, names[at], if data[0] == 2 { "CFF2" } else { "CFF " }, data, seedsOnly)  at = at + 1 }
+  let mut movement = Bytes.make()
+  run number(&mut movement, 10)
+  run number(&mut movement, 20)
+  run movement.append(b"\x15")
+  let mut line = Bytes.make()
+  run number(&mut line, 30)
+  run number(&mut line, -40)
+  run line.append(b"\x05")
+  let mut basic = run Bytes.copy(movement.asSlice())
+  run basic.append(line.asSlice())
+  run basic.append(b"\x0e")
+  let mut reserved = run Bytes.copy(b"\x00\x02")
+  run reserved.append(basic.asSlice())
+  run reserved.append(b"\x0c\xff")
+  let mut hint = run Bytes.copy(b"\x8b\x95\x01\x13\x80")
+  run hint.append(basic.asSlice())
+  let mut degenerate = run Bytes.copy(movement.asSlice())
+  run degenerate.append(b"\x8b\x8b\x05\x0e")
+  let mut stack514 = run Bytes.zeroed(514)
+  let stack = stack514.asMutSlice()
+  at = 0
+  while at < stack.length { stack[at] = 139  at = at + 1 }
+  drop stack
+  let mut stack513 = run Bytes.copy(Slice.view<u8>(stack514.asSlice(), 0, 513))
+  run stack513.append(b"\x0e")
+  run stack514.append(b"\x0e")
+  let programs = [
+    Program { name: "empty", data: b"" }, Program { name: "end", data: b"\x0e" },
+    Program { name: "path", data: basic.asSlice() }, Program { name: "reserved", data: reserved.asSlice() },
+    Program { name: "truncatedNumber", data: b"\xff\x01" }, Program { name: "escapeEnd", data: b"\x0c" },
+    Program { name: "stack513", data: stack513.asSlice() }, Program { name: "stack514", data: stack514.asSlice() },
+    Program { name: "missingBlend", data: b"\x8b\x10" }, Program { name: "missingVsIndex", data: b"\x8b\x0f" },
+    Program { name: "missingLocal", data: b"\x20\x0a" }, Program { name: "missingGlobal", data: b"\x20\x1d" },
+    Program { name: "negativeLocal", data: b"\x1c\x80\x00\x0a" }, Program { name: "hintMask", data: hint.asSlice() },
+    Program { name: "truncatedMask", data: b"\x8b\x95\x01\x13" }, Program { name: "emptyCurve", data: b"\x8b\x8b\x1b" },
+    Program { name: "degenerateContour", data: degenerate.asSlice() }
+  ]
+  at = 0
+  while at < programs.length { let data = run basicFont(&[b"\x0e", programs[at].data])  run seed(&mut fixtures, programs[at].name, "CFF ", data.asSlice(), seedsOnly)  at = at + 1 }
+  let mut sub = run Bytes.copy(Slice.view<u8>(basic.asSlice(), 0, basic.length() - 1))
+  run sub.append(b"\x0b")
+  let data = run font(&[b"\x20\x0a\x0e"], &[], &[], &[sub.asSlice()], &[], &[], &[])
+  run seed(&mut fixtures, "local", "CFF ", data.asSlice(), seedsOnly)
+  let data4 = run font(&[b"\x20\x0a"], &[], &[], &[b"\x20\x0a"], &[], &[], &[])
+  run seed(&mut fixtures, "recursiveLocal", "CFF ", data4.asSlice(), seedsOnly)
+  let data5 = run font(&[b"\x20\x1d\x0e"], &[], &[], &[], &[sub.asSlice()], &[], &[])
+  run seed(&mut fixtures, "global", "CFF ", data5.asSlice(), seedsOnly)
+  let data6 = run font(&[b"\x20\x1d"], &[], &[], &[], &[b"\x20\x1d"], &[], &[])
+  run seed(&mut fixtures, "recursiveGlobal", "CFF ", data6.asSlice(), seedsOnly)
+  let charsets = [b"\x00\x00\x22", b"\x01\x00\x22\x00", b"\x02\x00\x22\x00\x00"]
+  at = 0
+  while at < charsets.length { let data6 = run font(&[b"\x0e", basic.asSlice()], &[], &[], &[], &[], charsets[at], &[])  let name = run F.numbered("charset", at)  run seed(&mut fixtures, String.view(&name), "CFF ", data6.asSlice(), seedsOnly)  at = at + 1 }
+  let encodings = [Encoding { name: "format0", data: b"\x00\x01\x41" }, Encoding { name: "format1", data: b"\x01\x01\x41\x00" }, Encoding { name: "supplement", data: b"\x80\x01\x41\x01\x42\x00\x22" }]
+  at = 0
+  while at < encodings.length { let data6 = run font(&[b"\x0e", basic.asSlice()], &[], &[], &[], &[], b"\x00\x00\x22", encodings[at].data)  let name = run F.label(&["encoding-", encodings[at].name])  run seed(&mut fixtures, String.view(&name), "CFF ", data6.asSlice(), seedsOnly)  at = at + 1 }
+  let operators = [b"\x0f", b"\x10", b"\x11", b"\x0c\x24", b"\x0c\x25", b"\x18"]
+  let values: [i64; 5] = [-2147483648, -1, 0, 1, 2147483647]
+  at = 0
+  while at < operators.length {
+    let mut i: usize = 0
+    while i < values.length {
+      let mut extra = Bytes.make()
+      run integer(&mut extra, values[i])
+      run extra.append(operators[at])
+      let data6 = run font(&[basic.asSlice()], extra.asSlice(), &[], &[], &[], &[], &[])
+      let op = run Dump.hex(operators[at])
+      let value = run Malformed.signed(values[i])
+      let name = run F.label(&["offset-", String.view(&op), "-", String.view(&value)])
+      run seed(&mut fixtures, String.view(&name), "CFF ", data6.asSlice(), seedsOnly)
+      i = i + 1
+    }
+    at = at + 1
+  }
+  at = 0
+  while at < values.length {
+    let mut private = Bytes.make()
+    run integer(&mut private, values[at])
+    run private.append(b"\x13")
+    let data6 = run font(&[b"\x20\x0a"], &[], private.asSlice(), &[], &[], &[], &[])
+    let value = run Malformed.signed(values[at])
+    let name = run F.label(&["private-subr-", String.view(&value)])
+    run seed(&mut fixtures, String.view(&name), "CFF ", data6.asSlice(), seedsOnly)
+    let mut extra = Bytes.make()
+    run integer(&mut extra, values[at])
+    run integer(&mut extra, 0)
+    run extra.append(b"\x12")
+    let data7 = run font(&[basic.asSlice()], extra.asSlice(), &[], &[], &[], &[], &[])
+    let name8 = run F.label(&["private-size-", String.view(&value)])
+    run seed(&mut fixtures, String.view(&name8), "CFF ", data7.asSlice(), seedsOnly)
+    at = at + 1
+  }
+  let mut extra = run Bytes.copy(b"\x1e")
+  at = 0
+  while at < 40 { run extra.append(b"\x99")  at = at + 1 }
+  run extra.append(b"\xff\x0c\x09")
+  let data9 = run font(&[basic.asSlice()], extra.asSlice(), &[], &[], &[], &[], &[])
+  run seed(&mut fixtures, "dict-overflow-bcd", "CFF ", data9.asSlice(), seedsOnly)
+  let mut private = Bytes.make()
+  run integer(&mut private, 500)
+  run private.append(b"\x14")
+  run integer(&mut private, 100)
+  run private.append(b"\x15")
+  let mut widthProgram = Bytes.make()
+  run number(&mut widthProgram, 5)
+  run widthProgram.append(basic.asSlice())
+  let data10 = run font(&[b"\x0e", widthProgram.asSlice()], &[], private.asSlice(), &[], &[], &[], &[])
+  run seed(&mut fixtures, "private-widths", "CFF ", data10.asSlice(), seedsOnly)
+  let mut accent = Bytes.make()
+  run number(&mut accent, 3)
+  run number(&mut accent, 4)
+  run accent.append(b"\x15")
+  run accent.append(line.asSlice())
+  run accent.append(b"\x0e")
+  let mut composite = Bytes.make()
+  run number(&mut composite, 10)
+  run number(&mut composite, 20)
+  run number(&mut composite, 65)
+  run number(&mut composite, 194)
+  run composite.append(b"\x0e")
+  let mut recursive: usize = 0
+  while recursive < 2 {
+    let mut programs = List<&[u8]>.make()
+    at = 0
+    while at < 130 {
+      let program = if at == 1 { composite.asSlice() } else if at == 34 { if recursive == 0 { basic.asSlice() } else { composite.asSlice() } } else if at == 125 { accent.asSlice() } else { b"\x0e" }
+      run programs.append(program)
+      at = at + 1
+    }
+    let data10 = run basicFont(programs.asSlice())
+    run seed(&mut fixtures, if recursive == 0 { "seac" } else { "recursive-seac" }, "CFF ", data10.asSlice(), seedsOnly)
+    recursive = recursive + 1
+  }
+}
+effect fn perform(fixtures: &mut Fixtures, reference: string, silk: string, report: string, seedsOnly: bool) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem { run generate(&mut fixtures, seedsOnly)  run fixtures.compare(reference, silk, 30.0, report) }
+pub effect fn checkCffFixtures(reference: string, silk: string, report: string, seedsOnly: bool) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  let mut fixtures = run Fixtures.make("font-cff-fixtures-", ".otf")
+  let result = run Effect.result(perform(&mut fixtures, reference, silk, report, seedsOnly))
+  run fixtures.cleanup()
+  match move result { Result<(), Errors>.Success { .. } => {} Result<(), Errors>.Failure { error } => { fail move error } }
+}
+
+struct Program<'a> { name: string<'static>, data: &'a [u8] }
+
+struct Encoding { name: string<'static>, data: &'static [u8] }

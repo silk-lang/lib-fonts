@@ -1,0 +1,44 @@
+import font_tasks { Tasks }
+import silk.cli.command { Command, CommandLine, Opt }
+import silk.cli.task { TaskError, TaskSet }
+import silk.io.writer { WriterError }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.system.child_process { ChildProcess, ProcessError }
+import silk.system.filesystem { FileError, FileSystem }
+import silk.system.host_input { HostInput, HostInputError }
+
+pub union ShapingGeneratorTasks {
+  GenerateShapingUnicode,
+  GenerateShapingMachines,
+  GenerateShapingLanguages,
+  GenerateShapingFixtures,
+  GenerateShapingTests { pub check: bool },
+}
+
+impl CommandLine for ShapingGeneratorTasks {
+  static fn command() -> Command<ShapingGeneratorTasks> {
+    return Command<ShapingGeneratorTasks>.make("shaping-generator-tasks", "Font library maintenance")
+      |> Command.variant("GenerateShapingUnicode", "Generate pinned shaping Unicode properties")
+      |> Command.variant("GenerateShapingMachines", "Generate pinned shaping transition machines")
+      |> Command.variant("GenerateShapingLanguages", "Generate pinned shaping language mappings")
+      |> Command.variant("GenerateShapingFixtures", "Generate shaping fixture data")
+      |> Command.variant("GenerateShapingTests", "Materialize the pinned shaping expectations")
+      |> Command.option("check", Opt.about("Fail when generated output is stale"))
+  }
+}
+
+impl TaskSet for ShapingGeneratorTasks {
+  effect fn perform(self: ShapingGeneratorTasks) -> ()
+    ! TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError
+    ? &mut HostInput | &mut Allocator | &mut ChildProcess | &mut FileSystem {
+    let task = match move self {
+      ShapingGeneratorTasks.GenerateShapingUnicode => Tasks.GenerateShapingUnicode
+      ShapingGeneratorTasks.GenerateShapingMachines => Tasks.GenerateShapingMachines
+      ShapingGeneratorTasks.GenerateShapingLanguages => Tasks.GenerateShapingLanguages
+      ShapingGeneratorTasks.GenerateShapingFixtures => Tasks.GenerateShapingFixtures
+      ShapingGeneratorTasks.GenerateShapingTests { check } => Tasks.GenerateShapingTests { check: move check }
+    }
+    run TaskSet.perform(move task)
+  }
+}
+

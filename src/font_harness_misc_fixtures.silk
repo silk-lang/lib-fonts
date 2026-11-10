@@ -1,0 +1,204 @@
+import silk.cli.task { Task }
+import silk.collections.bytes { Bytes }
+import silk.collections.list { List }
+import silk.collections.slice { Slice }
+import silk.core.effect { Effect }
+import silk.core.result { Result }
+import silk.mem.allocator { Allocator }
+import silk.system.filesystem { FileSystem }
+import silk.system.host_input { HostInput }
+import silk.text.string { String }
+import font_generate_support as G
+import font_generate_binary as B
+import font_harness_dump as Dump
+import font_harness_fixtures as F { Fixtures, Errors, Table }
+import font_harness_misc_bitmap as Bitmap
+import font_harness_misc_varc as Varc
+
+effect fn seed(fixtures: &mut Fixtures, tag: string, data: &[u8]) -> () ! Errors ? &mut Allocator | &mut FileSystem {
+  let hex = run Dump.hex(String.utf8Bytes(tag))
+  let mut cuts = List<usize>.make()
+  let limit = if tag == "MATH" { data.length + 1 } else { F.minimum(64, data.length + 1) }
+  let mut at: usize = 0
+  while at < limit { run F.unique(&mut cuts, at)  at = at + 1 }
+  run F.unique(&mut cuts, data.length / 2)
+  if data.length > 0 { run F.unique(&mut cuts, data.length - 1) }
+  run F.unique(&mut cuts, data.length)
+  run cuts.sort()
+  let lengths = cuts.asSlice()
+  at = 0
+  while at < lengths.length {
+    let n = run F.number(lengths[at])
+    let name = run F.label(&[String.view(&hex), "-prefix-", String.view(&n)])
+    let mut tables = List<Table>.make()
+    run F.set(&mut tables, "maxp", b"\x00\x00\x50\x00\x00\x03")
+    run F.set(&mut tables, tag, Slice.view<u8>(data, 0, lengths[at]))
+    run F.emit(&mut fixtures, String.view(&name), &mut tables)
+    at = at + 1
+  }
+  let mut offsets = List<usize>.make()
+  let initial: [usize; 7] = [0, 2, 4, 8, 12, 16, 20]
+  at = 0
+  while at < initial.length { run F.unique(&mut offsets, initial[at])  at = at + 1 }
+  if data.length >= 4 { run F.unique(&mut offsets, data.length - 4) }
+  run offsets.sort()
+  let positions = offsets.asSlice()
+  at = 0
+  let values: [usize; 2] = [0, 4294967295]
+  while at < positions.length {
+    if positions[at] + 4 <= data.length {
+      let mut i: usize = 0
+      while i < values.length {
+        let mut changed = run Bytes.copy(data)
+        G.patch(&mut changed, positions[at], values[i], 4)
+        let offset = run F.number(positions[at])
+        let value = run F.number(values[i])
+        let name = run F.label(&[String.view(&hex), "-word-", String.view(&offset), "-", String.view(&value)])
+        let mut tables = List<Table>.make()
+        run F.set(&mut tables, "maxp", b"\x00\x00\x50\x00\x00\x03")
+        run F.set(&mut tables, tag, changed.asSlice())
+        run F.emit(&mut fixtures, String.view(&name), &mut tables)
+        i = i + 1
+      }
+    }
+    at = at + 1
+  }
+}
+effect fn colr(fixtures: &mut Fixtures) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  let root = run Task.root()
+  let grammar = run G.read(&root, "modules/parse/upstream/resources/codegen_inputs/colr.rs")
+  let found = run G.matches("(?s:table (Paint\\w+)\\s*\\{(.*?)\\n\\})", run G.text(grammar.asSlice()))
+  let rows = found.asSlice()
+  let mut prefix = Bytes.make()
+  run B.words(&mut prefix, &[1, 0])
+  run G.zeros(&mut prefix, 10)
+  run G.be(&mut prefix, 34, 4)
+  run G.zeros(&mut prefix, 16)
+  run G.be(&mut prefix, 1, 4)
+  run G.be(&mut prefix, 42, 2)
+  run G.be(&mut prefix, 10, 4)
+  let mut formats: usize = 0
+  let mut at: usize = 0
+  while at < rows.length {
+    let name = G.group(&rows[at], 1)
+    let body = G.group(&rows[at], 2)
+    let format = run G.matches("#\\[format = (\\d+)\\]", body)
+    at = at + 1
+    if format.length() == 0 { continue }
+    let number = run G.number(G.group(&format.asSlice()[0], 1))
+    let fields = run G.matches("(?m:^\\s*(\\w+):\\s*([^,]+),)", body)
+    let members = fields.asSlice()
+    let mut data = Bytes.make()
+    let mut i: usize = 0
+    while i < members.length {
+      let field = G.group(&members[i], 1)
+      let typ = G.group(&members[i], 2)
+      if field == "format" { run G.be(&mut data, number, 1) }
+      else if String.startsWith(typ, "Offset") {
+        let digits = run G.matches("Offset(\\d+)", typ)
+        let width = (run G.number(G.group(&digits.asSlice()[0], 1))) / 8
+        run G.zeros(&mut data, width)
+      } else {
+        let width: usize = if typ == "u8" || typ == "CompositeMode" { 1 } else if typ == "u16" || typ == "i16" || typ == "FWord" || typ == "F2Dot14" || typ == "UfWord" || typ == "GlyphId16" { 2 } else if typ == "GlyphId24" { 3 } else if typ == "u32" || typ == "Fixed" { 4 } else { run Task.abort("unknown COLR paint field type") }
+        let mut k: usize = 0
+        while k < width { run data.append(b"\x81")  k = k + 1 }
+      }
+      i = i + 1
+    }
+    formats = formats + 1
+    let mut cut: usize = 0
+    while cut <= data.length() {
+      let n = run F.number(cut)
+      let label = run F.label(&["colr-", name, "-prefix-", String.view(&n)])
+      let mut table = run Bytes.copy(prefix.asSlice())
+      run table.append(Slice.view<u8>(data.asSlice(), 0, cut))
+      let font = run F.one("COLR", table.asSlice(), true)
+      run fixtures.add(String.view(&label), font.asSlice())
+      cut = cut + 1
+    }
+    let offsets = run G.matches("paint_offset:\\s*Offset24", body)
+    if data.length() >= 4 && offsets.length() > 0 {
+      let end = data.length() - 1
+      G.patch(&mut data, 1, end, 3)
+      let mut table = run Bytes.copy(prefix.asSlice())
+      run table.append(data.asSlice())
+      let font = run F.one("COLR", table.asSlice(), true)
+      let label = run F.label(&["colr-", name, "-short-child"])
+      run fixtures.add(String.view(&label), font.asSlice())
+    }
+  }
+  if formats != 33 { run Task.abort("expected exactly 33 COLR paint formats") }
+  let unknowns: [usize; 3] = [0, 34, 255]
+  at = 0
+  while at < unknowns.length {
+    let mut table = run Bytes.copy(prefix.asSlice())
+    run G.be(&mut table, unknowns[at], 1)
+    run G.zeros(&mut table, 32)
+    let font = run F.one("COLR", table.asSlice(), true)
+    let name = run F.numbered("colr-paint-unknown-", unknowns[at])
+    run fixtures.add(String.view(&name), font.asSlice())
+    at = at + 1
+  }
+}
+effect fn generate(fixtures: &mut Fixtures) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  let root = run Task.root()
+  let packed = run F.literals(&root, "modules/parse/src/generated_misc_table_fixtures.silk")
+  let mut seeds = List<Table>.make()
+  run F.set(&mut seeds, "MATH", run F.named(&packed, "mathTable"))
+  run F.set(&mut seeds, "BASE", run F.named(&packed, "baseTable"))
+  run F.set(&mut seeds, "meta", run F.named(&packed, "simpleMeta"))
+  run F.set(&mut seeds, "gasp", b"\x00\x01\x00\x02\x01\x94\x00\x03\xff\xff\x00\x0c")
+  run F.set(&mut seeds, "hdmx", b"\x00\x00\x00\x03\x00\x00\x00\x08\x08\x0d\x0a\x0c\x0d\x00\x00\x00\x10\x15\x12\x14\x15\x00\x00\x00\x20\x34\x26\x28\x34\x00\x00\x00")
+  let cpal = b"\x00\x01\x00\x01\x00\x01\x00\x01\x00\x00\x00\x1a\x00\x00\x00\x00\x00\x1e\x00\x00\x00\x22\x00\x00\x00\x24\x01\x02\x03\x04\x00\x00\x00\x03\x01\x01\x01\x02"
+  run F.set(&mut seeds, "CPAL", cpal)
+  run F.set(&mut seeds, "DSIG", b"\x00\x00\x00\x01\x00\x01\x00\x01\x00\x00\x00\x01\x00\x00\x00\x0c\x00\x00\x00\x14\x00\x00\x00\x00\x00\x00\x00\x04\xde\xad\xbe\xef")
+  let mut svg = Bytes.make()
+  run B.words(&mut svg, &[0, 0, 10, 0, 0, 3, 1, 3, 0, 38, 0, 10, 6, 7, 0, 48, 0, 6, 9, 9, 0, 38, 0, 10, 1, 0, 0, 0, 1, 2, 0, 0])
+  run F.set(&mut seeds, "SVG ", svg.asSlice())
+  let names = ["cvarFont", "gradientFont", "embeddedBitmaps", "cbdtFont", "colrFont", "variableColrFont", "unclippedColrFont", "varcCjkFont", "varcConditionalsFont", "varcStaticFont", "varcDeltaPrecisionFont"]
+  let selected = ["cvar", "CPAL", "STAT", "VARC"]
+  let mut at: usize = 0
+  while at < names.length {
+    let data = run F.named(&packed, names[at])
+    run fixtures.add(names[at], data)
+    let tables = run F.tables(data)
+    let rows = tables.asSlice()
+    let mut i: usize = 0
+    while i < rows.length { if F.has(&selected, String.view(&rows[i].tag)) { run F.set(&mut seeds, String.view(&rows[i].tag), rows[i].data.asSlice()) }  i = i + 1 }
+    at = at + 1
+  }
+  run F.set(&mut seeds, "CPAL", cpal)
+  let rows = seeds.asSlice()
+  at = 0
+  while at < rows.length { run seed(&mut fixtures, String.view(&rows[at].tag), rows[at].data.asSlice())  at = at + 1 }
+  run Bitmap.generate(&mut fixtures)
+  run colr(&mut fixtures)
+  run Varc.generate(&mut fixtures)
+  let meta = [Metadata { tag: "dlng", payload: b"en-latn, latn" }, Metadata { tag: "slng", payload: b"\xff, x" }, Metadata { tag: "xxxx", payload: b"\x00\xff\x01" }, Metadata { tag: "dlng", payload: b",,," }]
+  at = 0
+  while at < meta.length {
+    let mut data = Bytes.make()
+    run G.be(&mut data, 1, 4)
+    run G.zeros(&mut data, 8)
+    run G.be(&mut data, 1, 4)
+    run data.append(String.utf8Bytes(meta[at].tag))
+    run G.be(&mut data, 28, 4)
+    run G.be(&mut data, meta[at].payload.length, 4)
+    run data.append(meta[at].payload)
+    let tag = run Dump.hex(String.utf8Bytes(meta[at].tag))
+    let payload = run Dump.hex(meta[at].payload)
+    let name = run F.label(&["meta-", String.view(&tag), "-", String.view(&payload)])
+    let font = run F.one("meta", data.asSlice(), true)
+    run fixtures.add(String.view(&name), font.asSlice())
+    at = at + 1
+  }
+}
+effect fn perform(fixtures: &mut Fixtures, reference: string, silk: string, report: string) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem { run generate(&mut fixtures)  run fixtures.compare(reference, silk, 120.0, report) }
+pub effect fn checkMiscTableFixtures(reference: string, silk: string, report: string) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  let mut fixtures = run Fixtures.make("font-misc-table-fixtures-", ".ttf")
+  let result = run Effect.result(perform(&mut fixtures, reference, silk, report))
+  run fixtures.cleanup()
+  match move result { Result<(), Errors>.Success { .. } => {} Result<(), Errors>.Failure { error } => { fail move error } }
+}
+
+struct Metadata { tag: string<'static>, payload: &'static [u8] }

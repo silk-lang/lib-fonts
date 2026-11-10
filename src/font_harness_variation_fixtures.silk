@@ -1,0 +1,219 @@
+import silk.cli.task { Task }
+import silk.collections.bytes { Bytes }
+import silk.collections.list { List }
+import silk.collections.slice { Slice }
+import silk.core.effect { Effect }
+import silk.core.result { Result }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.system.filesystem { FileSystem }
+import silk.system.host_input { HostInput }
+import silk.text.string { String }
+import silk.num.usize
+import font_generate_support as G
+import font_generate_binary as B
+import font_harness_fixtures as F { Fixtures, Errors, Table }
+
+effect fn gvar(extended: bool, long: bool, wide: bool) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  let header: usize = if extended { 21 } else { 20 }
+  let width: usize = if long { 4 } else { 2 }
+  let shared = header + 4 * width
+  let body = shared + 2
+  let mut payloads = List<Bytes>.make()
+  let deltas: [usize; 2] = [20, 40]
+  let mut at: usize = 0
+  while at < 2 {
+    let offset: usize = if wide { 65537 } else if extended { 9 } else { 8 }
+    let mut payload = Bytes.make()
+    run G.be(&mut payload, 1, 2)
+    run G.be(&mut payload, offset, if extended { 3 } else { 2 })
+    run B.words(&mut payload, &[7, 8192])
+    let padding = offset - payload.length()
+    run G.zeros(&mut payload, padding)
+    run payload.append(&[0, 1, usize.toU8(deltas[at]), 0, 1, 0, usize.toU8(deltas[at])])
+    if !long { let padding = payload.length() % 2 run G.zeros(&mut payload, padding) }
+    run payloads.append(move payload)
+    at = at + 1
+  }
+  let rows = payloads.asSlice()
+  let mut out = Bytes.make()
+  run B.words(&mut out, &[1, 0, 1, 1])
+  run G.be(&mut out, shared, 4)
+  run G.be(&mut out, 3, if extended { 3 } else { 2 })
+  run G.be(&mut out, if long { 1 } else { 0 }, 2)
+  run G.be(&mut out, body, 4)
+  let offsets: [usize; 4] = [0, 0, rows[0].length(), rows[0].length() + rows[1].length()]
+  at = 0
+  while at < offsets.length { run G.be(&mut out, if long { offsets[at] } else { offsets[at] / 2 }, width)  at = at + 1 }
+  run G.be(&mut out, 16384, 2)
+  run out.append(rows[0].asSlice())
+  run out.append(rows[1].asSlice())
+  return move out
+}
+effect fn single(fixtures: &mut Fixtures, name: string, tag: string, data: &[u8]) -> () ! Errors ? &mut Allocator | &mut FileSystem { let font = run F.one(tag, data, true)  run fixtures.add(name, font.asSlice()) }
+effect fn generate(fixtures: &mut Fixtures) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  let root = run Task.root()
+  let files = ["vazirmatn_var_trimmed.ttf", "avar2checker.ttf", "Amstelvar-avar2.A.ttf", "vorg.ttf"]
+  let tags = ["fvar", "avar", "HVAR", "VVAR", "MVAR", "gvar", "glyf", "loca", "vhea", "vmtx", "VORG"]
+  let mut at: usize = 0
+  while at < files.length {
+    let name = run F.label(&["modules/parse/upstream/font-test-data/test_data/ttf/", files[at]])
+    let data = run G.read(&root, String.view(&name))
+    let mut original = run F.tables(data.asSlice())
+    run original.sort()
+    let tables = original.asSlice()
+    let mut t: usize = 0
+    while t < tables.length {
+      let tag = String.view(&tables[t].tag)
+      if F.has(&tags, tag) {
+        let payload = tables[t].data.asSlice()
+        let mut lengths = List<usize>.make()
+        let mut length: usize = 0
+        let maximum = F.minimum(payload.length, 160)
+        while length <= maximum { run F.unique(&mut lengths, length)  length = length + 1 }
+        if payload.length <= 512 { length = 0  while length <= payload.length { run F.unique(&mut lengths, length)  length = length + 1 } }
+        else {
+          let stride = if payload.length / 32 > 0 { payload.length / 32 } else { 1 }
+          length = 0
+          while length < payload.length { run F.unique(&mut lengths, length)  length = length + stride }
+          run F.unique(&mut lengths, payload.length - 1)
+          run F.unique(&mut lengths, payload.length)
+        }
+        run lengths.sort()
+        let cuts = lengths.asSlice()
+        let mut k: usize = 0
+        while k < cuts.length {
+          let mut records = List<Table>.make()
+          let outlineDependencies = ["head", "maxp", "hhea", "vhea", "glyf", "loca"]
+          let basicDependencies = ["head", "maxp"]
+          let dependencies = if F.has(&["glyf", "loca", "vmtx"], tag) { Slice.view<string>(&outlineDependencies, 0, 6) } else { Slice.view<string>(&basicDependencies, 0, 2) }
+          let mut d: usize = 0
+          while d < dependencies.length { if dependencies[d] != tag && F.contains(&original, dependencies[d]) { run F.set(&mut records, dependencies[d], run F.get(&original, dependencies[d])) }  d = d + 1 }
+          run F.set(&mut records, tag, Slice.view<u8>(payload, 0, cuts[k]))
+          let n = run F.number(cuts[k])
+          let label = run F.label(&[files[at], "-", tag, "-", String.view(&n)])
+          run F.emit(&mut fixtures, String.view(&label), &mut records)
+          k = k + 1
+        }
+      }
+      t = t + 1
+    }
+    at = at + 1
+  }
+  let mut e: usize = 0
+  while e < 2 {
+    let tag = if e == 1 { "GVAR" } else { "gvar" }
+    let mut l: usize = 0
+    while l < 2 {
+      let payload = run gvar(e == 1, l == 1, false)
+      let flag = if l == 1 { "True" } else { "False" }
+      let mut length: usize = 0
+      while length <= payload.length() {
+        let n = run F.number(length)
+        let name = run F.label(&[tag, "-", flag, "-", String.view(&n)])
+        run single(&mut fixtures, String.view(&name), tag, Slice.view<u8>(payload.asSlice(), 0, length))
+        length = length + 1
+      }
+      let offsets: [usize; 3] = [0, 1, 4294967295]
+      at = 0
+      while at < offsets.length {
+        let mut broken = run Bytes.copy(payload.asSlice())
+        G.patch(&mut broken, if e == 1 { 17 } else { 16 }, offsets[at], 4)
+        let n = run F.number(offsets[at])
+        let name = run F.label(&[tag, "-", flag, "-base-", String.view(&n)])
+        run single(&mut fixtures, String.view(&name), tag, broken.asSlice())
+        at = at + 1
+      }
+      let ranges = [Range { first: 8, last: 4 }, Range { first: 65530, last: 65528 }, Range { first: 65530, last: 65530 }]
+      at = 0
+      while at < ranges.length {
+        let mut broken = run Bytes.copy(payload.asSlice())
+        let header: usize = if e == 1 { 21 } else { 20 }
+        let width: usize = if l == 1 { 4 } else { 2 }
+        G.patch(&mut broken, header, ranges[at].first, width)
+        G.patch(&mut broken, header + width, ranges[at].last, width)
+        let a = run F.number(ranges[at].first)
+        let b = run F.number(ranges[at].last)
+        let name = run F.label(&[tag, "-", flag, "-empty-range-", String.view(&a), "-", String.view(&b)])
+        run single(&mut fixtures, String.view(&name), tag, broken.asSlice())
+        at = at + 1
+      }
+      l = l + 1
+    }
+    if e == 1 { let wide = run gvar(true, true, true)  run single(&mut fixtures, "GVAR-wide-data-offset", tag, wide.asSlice()) }
+    e = e + 1
+  }
+  let mut head = run Bytes.zeroed(54)
+  G.patch(&mut head, 0, 65536, 4)
+  G.patch(&mut head, 50, 1, 2)
+  let mut glyphs = Bytes.make()
+  run B.words(&mut glyphs, &[0, 1, 0, 100, 100, 0, 0, 2, 0, 100, 100, 0])
+  let ranges: [[usize; 3]; 4] = [[0, 12, 24], [0, 24, 12], [4294967295, 4294967295, 4294967295], [0, 12, 99999]]
+  e = 0
+  while e < 2 {
+    let gt = if e == 1 { "GLYF" } else { "glyf" }
+    let lt = if e == 1 { "LOCA" } else { "loca" }
+    at = 0
+    while at < ranges.length {
+      let mut loc = Bytes.make()
+      let mut names = List<String>.make()
+      let mut k: usize = 0
+      while k < 3 { run G.be(&mut loc, ranges[at][k], 4)  run names.append(run F.number(ranges[at][k]))  k = k + 1 }
+      let parts = names.asSlice()
+      let name = run F.label(&[gt, "-scopes-(", String.view(&parts[0]), ", ", String.view(&parts[1]), ", ", String.view(&parts[2]), ")"])
+      let mut records = List<Table>.make()
+      run F.set(&mut records, "head", head.asSlice())
+      run F.set(&mut records, gt, glyphs.asSlice())
+      run F.set(&mut records, lt, loc.asSlice())
+      run F.emit(&mut fixtures, String.view(&name), &mut records)
+      at = at + 1
+    }
+    let mut records = List<Table>.make()
+    run F.set(&mut records, "head", head.asSlice())
+    run F.set(&mut records, gt, glyphs.asSlice())
+    run F.set(&mut records, lt, b"\x00")
+    let name = run F.label(&[lt, "-unaligned"])
+    run F.emit(&mut fixtures, String.view(&name), &mut records)
+    e = e + 1
+  }
+  run single(&mut fixtures, "avar-trailing-map", "avar", b"\x00\x01\x00\x00\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x40\x00")
+  e = 0
+  while e < 2 {
+    let tag = if e == 1 { "VHEA" } else { "vhea" }
+    let counts: [usize; 4] = [0, 1, 65535, if e == 1 { 4294967295 } else { 65534 }]
+    at = 0
+    while at < counts.length {
+      let mut header = Bytes.make()
+      run G.be(&mut header, 69632, 4)
+      run G.zeros(&mut header, 30)
+      run G.be(&mut header, counts[at], if e == 1 { 4 } else { 2 })
+      let mut metrics = Bytes.make()
+      run B.words(&mut metrics, &[900, -12, 800, 20])
+      let mut maxp = Bytes.make()
+      run G.be(&mut maxp, 20480, 4)
+      run G.be(&mut maxp, 3, if e == 1 { 3 } else { 2 })
+      let count = run F.number(counts[at])
+      let mut length: usize = 0
+      while length <= header.length() {
+        let n = run F.number(length)
+        let name = run F.label(&[tag, "-", String.view(&count), "-", String.view(&n)])
+        let mut records = List<Table>.make()
+        run F.set(&mut records, tag, Slice.view<u8>(header.asSlice(), 0, length))
+        run F.set(&mut records, if e == 1 { "VMTX" } else { "vmtx" }, metrics.asSlice())
+        run F.set(&mut records, if e == 1 { "MAXP" } else { "maxp" }, maxp.asSlice())
+        run F.emit(&mut fixtures, String.view(&name), &mut records)
+        length = length + 1
+      }
+      at = at + 1
+    }
+    e = e + 1
+  }
+}
+effect fn perform(fixtures: &mut Fixtures, reference: string, silk: string, report: string) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem { run generate(&mut fixtures)  run fixtures.compare(reference, silk, 30.0, report) }
+pub effect fn checkVariationFixtures(reference: string, silk: string, report: string) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  let mut fixtures = run Fixtures.make("font-variation-fixtures-", ".ttf")
+  let result = run Effect.result(perform(&mut fixtures, reference, silk, report))
+  run fixtures.cleanup()
+  match move result { Result<(), Errors>.Success { .. } => {} Result<(), Errors>.Failure { error } => { fail move error } }
+}
+
+struct Range { first: usize, last: usize }

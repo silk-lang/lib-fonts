@@ -1,6 +1,6 @@
 # Validating font-shape
 
-Run `modules/scripts/check-shaping` for the shaping PR gate, or these individual commands
+Run `silk task check-shaping` for the shaping PR gate, or these individual commands
 from the repository root with recursive submodules present:
 
 ```sh
@@ -8,8 +8,8 @@ silk test --release --manifest-path modules/shape/silk.toml --root src/tests.sil
 silk build --release --manifest-path font-shape-test-harness/silk.toml
 build/llvm/x86_64-unknown-linux-gnu/release/font-shape-test-harness --suite modules/shape/tests/shaping.bin
 build/llvm/x86_64-unknown-linux-gnu/release/font-shape-test-harness --regressions
-modules/scripts/check-shaping-trace
-modules/scripts/check-shaping-malformed
+silk task check-shaping-trace
+silk task check-shaping-malformed
 ```
 
 There are **6,090 non-macOS data-driven cases** at this pin, all passing with
@@ -22,7 +22,7 @@ plans, serialization, digests, AAT actions, extended lookups and variations.
 Rust-specific ownership, raw-pointer batch ABI, lazy-cache internals and
 Send/Sync assertions are replaced by native ownership and interface behavior.
 
-`modules/scripts/generate-shaping-tests` extracts upstream expectations into one binary
+`silk task generate-shaping-tests` extracts upstream expectations into one binary
 fixture. The seven upstream smoke cases also have exact differential assertions
 in `tests/differential.json`; repeated strings are compressed there and expanded
 by the generator. In particular these preserve work-limit results and malformed
@@ -37,10 +37,10 @@ font, and runs checksum-verified benchmarks:
 
 ```sh
 cargo build --locked --release --manifest-path modules/scripts/rust-hr-shape/Cargo.toml --target-dir build/harfrust-rust
-modules/scripts/compare-shaping
-modules/scripts/check-shaping-malformed --all-fonts --mutations-per-font 16
-modules/scripts/bench-shaping
-modules/scripts/bench-shaping --filter en-thelittleprince --iterations 1 --samples 1 --callgrind
+silk task compare-shaping
+silk task check-shaping-malformed --all-fonts --mutations-per-font 16
+silk task bench-shaping
+silk task bench-shaping --filter en-thelittleprince --iterations 1 --samples 1 --callgrind
 ```
 
 On 2026-10-27 the differential check had **zero differences**, and the broad

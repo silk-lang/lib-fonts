@@ -1,0 +1,92 @@
+import font_generate_support as G
+import font_generate_binary as B
+import silk.cli.task { TaskError }
+import silk.collections.bytes { Bytes }
+import silk.collections.list { List }
+import silk.core.option { Option }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+
+// All these model fixtures include the condition list, including its null entry.
+effect fn model(records: &[Bytes], coverage: &[usize], axes: Option<&[u8]>, condition: &[u8]) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  let mut out = Bytes.make() run G.zeros(&mut out, 24)
+  G.patch(&mut out, 0, 65536, 4) G.patch(&mut out, 4, 24, 4)
+  run G.be(&mut out, 1, 2) run G.be(&mut out, coverage.length, 2)
+  let mut coverageIndex: usize = 0
+  while coverageIndex < coverage.length { let glyph = coverage[coverageIndex] coverageIndex = coverageIndex + 1 run G.be(&mut out, glyph, 2) }
+  if let Option<&[u8]>.Some { value } = move axes {
+    let offset = Bytes.length(&out) G.patch(&mut out, 16, offset, 4)
+    let data = run B.index(&[run Bytes.copy(value)]) run Bytes.append(&mut out, Bytes.asSlice(&data))
+  }
+  let conditionOffset = Bytes.length(&out) G.patch(&mut out, 12, conditionOffset, 4)
+  run G.be(&mut out, 1, 4) let mut childOffset: usize = 0 if condition.length > 0 { childOffset = 8 }
+  run G.be(&mut out, childOffset, 4) run Bytes.append(&mut out, condition)
+  let recordsOffset = Bytes.length(&out) G.patch(&mut out, 20, recordsOffset, 4)
+  let data = run B.index(records) run Bytes.append(&mut out, Bytes.asSlice(&data))
+  return move out
+}
+effect fn append(out: &mut Bytes, name: string, record: &[u8], axes: Option<&[u8]>, condition: &[u8]) -> () ! OutOfMemoryError ? &mut Allocator {
+  let data = run model(&[run Bytes.copy(record)], &[0], move axes, condition)
+  run G.blob(&mut out, name, Bytes.asSlice(&data), true)
+}
+effect fn numbered(out: &mut Bytes, prefix: string, i: usize, record: &[u8], axes: Option<&[u8]>, condition: &[u8]) -> () ! TaskError | OutOfMemoryError ? &mut Allocator {
+  let mut name = Bytes.make() run G.add(&mut name, prefix) run G.decimal(&mut name, i)
+  run append(&mut out, run G.text(Bytes.asSlice(&name)), record, move axes, condition)
+}
+
+pub effect fn fixtures(out: &mut Bytes) -> () ! TaskError | OutOfMemoryError ? &mut Allocator {
+  let mut leaves = Bytes.make() let mut i: usize = 0
+  while i < 2049 { run Bytes.append(&mut leaves, b"\0\0\x01") i = i + 1 }
+  run append(&mut out, "varcManyLeaves", Bytes.asSlice(&leaves), Option<&[u8]>.none(), b"")
+  let cycle = run model(&[run Bytes.copy(b"\0\0\x03"), run Bytes.copy(b"\0\0\x01\0\0\x02")], &[1, 3], Option<&[u8]>.none(), b"")
+  run G.blob(&mut out, "varcCycle", Bytes.asSlice(&cycle), true)
+  let mut records = List<Bytes>.make() let mut coverage = List<usize>.make() i = 0
+  while i < 65 {
+    let mut record = Bytes.make() run G.be(&mut record, 0, 1) run G.be(&mut record, i + 1, 2)
+    run List<Bytes>.append(&mut records, move record) run List<usize>.append(&mut coverage, i) i = i + 1
+  }
+  let deep = run model(List<Bytes>.asSlice(&records), List<usize>.asSlice(&coverage), Option<&[u8]>.none(), b"")
+  run G.blob(&mut out, "varcDeepTree", Bytes.asSlice(&deep), true)
+  let component = b"\x80\x80\0\x01\0"
+  run append(&mut out, "varcNullCondition", component, Option<&[u8]>.none(), b"")
+  let leaf = b"\0\x01\0\0\xe0\0\x20\0"
+  run numbered(&mut out, "varcNoStoreCondition", 0, component, Option<&[u8]>.none(), leaf)
+  i = 1
+  let signs: [i64; 3] = [-1, 0, 1] let mut signIndex: usize = 0
+  while signIndex < signs.length {
+    let n = signs[signIndex] signIndex = signIndex + 1
+    let mut condition = Bytes.make() run B.words(&mut condition, &[2, n]) run G.be(&mut condition, 4294967295, 4)
+    run numbered(&mut out, "varcNoStoreCondition", i, component, Option<&[u8]>.none(), Bytes.asSlice(&condition)) i = i + 1
+  }
+  let mut format: usize = 3
+  while format <= 4 {
+    let mut condition = Bytes.make() run G.be(&mut condition, 0, 1) run G.be(&mut condition, format, 1) run Bytes.append(&mut condition, b"\x01\0\0\x06") run Bytes.append(&mut condition, leaf)
+    run numbered(&mut out, "varcNoStoreCondition", i, component, Option<&[u8]>.none(), Bytes.asSlice(&condition)) i = i + 1 format = format + 1
+  }
+  let mut negated = run Bytes.copy(b"\0\x05\0\0\x05") run Bytes.append(&mut negated, leaf)
+  run numbered(&mut out, "varcNoStoreCondition", 6, component, Option<&[u8]>.none(), Bytes.asSlice(&negated))
+  run numbered(&mut out, "varcZeroDelta", 0, b"\x06\0\x01\0\x40\x10\0\xf0\xff\xff\xff\xff", Option<&[u8]>.some(b"\0\0"), b"")
+  run numbered(&mut out, "varcZeroDelta", 1, b"\x06\0\x01\0\0", Option<&[u8]>.some(b""), b"")
+  run numbered(&mut out, "varcZeroDelta", 2, b"\x18\0\x01\xf0\xff\xff\xff\xff\0\x07", Option<&[u8]>.some(b""), b"")
+  run append(&mut out, "varcRepeatedAxis", b"\x02\0\x01\0\x41\x10\0\x20\0", Option<&[u8]>.some(b"\x01\0\0"), b"")
+  run append(&mut out, "varcHiddenMalformed", b"\x80\x80\0\x01\0\x80", Option<&[u8]>.none(), leaf)
+  run numbered(&mut out, "varcNullChild", 0, component, Option<&[u8]>.none(), b"\0\x03\x01\0\0\0")
+  run numbered(&mut out, "varcNullChild", 1, component, Option<&[u8]>.none(), b"\0\x04\x01\0\0\0")
+  run numbered(&mut out, "varcNullChild", 2, component, Option<&[u8]>.none(), b"\0\x05\0\0\0")
+  i = 3
+  format = 3
+  while format <= 4 {
+    let mut nullIndex: usize = 0
+    while nullIndex < 2 {
+      let nullFirst = nullIndex == 1 nullIndex = nullIndex + 1
+      let mut condition = Bytes.make() run G.be(&mut condition, 0, 1) run G.be(&mut condition, format, 1) run G.be(&mut condition, 2, 1)
+      if nullFirst { run Bytes.append(&mut condition, b"\0\0\0\0\0\x09") } else { run Bytes.append(&mut condition, b"\0\0\x09\0\0\0") }
+      run Bytes.append(&mut condition, leaf)
+      run numbered(&mut out, "varcNullChild", i, component, Option<&[u8]>.none(), Bytes.asSlice(&condition)) i = i + 1
+    }
+    format = format + 1
+  }
+  let mut deepCondition = Bytes.make() i = 0 while i < 4096 { run Bytes.append(&mut deepCondition, b"\0\x05\0\0\x05") i = i + 1 }
+  run append(&mut out, "varcDeepCondition", component, Option<&[u8]>.none(), Bytes.asSlice(&deepCondition))
+  run append(&mut out, "varcPadCoords", b"\0\0\x01", Option<&[u8]>.none(), b"")
+  run append(&mut out, "varcResetCoords", b"\x01\0\x01", Option<&[u8]>.none(), b"")
+}

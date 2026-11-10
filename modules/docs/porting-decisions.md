@@ -111,11 +111,11 @@ read outside this repository. The bundled release compiler/stdlib remain unchang
   the depth. Recursive grammar groups will need explicit traversal handling.
 
 - Silk inherent impls must share their nominal type's module. Handwritten
-  `tables/*_impl.silk` extension templates are therefore appended by `modules/scripts/generate`
+  `tables/*_impl.silk` extension templates are therefore appended by `silk task generate`
   to the relevant generated module, like upstream's `include!` arrangement. Edit
   the template, never the generated copy. Selected-table wrappers are ordinary
   separate modules.
-- `modules/scripts/generate-static` packs post names, Mac Roman, and language-ID strings
+- `silk task generate-static` packs post names, Mac Roman, and language-ID strings
   directly from the immutable upstream sources, and retains the OS/2 range data.
   The language map contains duplicate IDs; rightmost-equal binary search preserves
   the pinned Rust library's choice. Packed byte slices are returned by functions,
@@ -279,7 +279,7 @@ read outside this repository. The bundled release compiler/stdlib remain unchang
   checked multiplication, subtraction and object ranges. The common `Index.Empty`
   retains the upstream distinction between an exact empty blob and a parsed
   zero-count INDEX with a header.
-- `modules/scripts/generate-ps-data` packs all 391 standard strings, predefined encodings
+- `silk task generate-ps-data` packs all 391 standard strings, predefined encodings
   and expert charsets from the immutable sources. `Sid.fromI32` explicitly keeps
   the low 16 bits. Charset iterators yield `CharsetEntry { glyph, sid }` in place
   of Rust pairs, retain the range cursor, and reject cumulative overflow.

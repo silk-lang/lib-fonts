@@ -1,0 +1,105 @@
+import font_generate_support as G
+import silk.cli.task { Task, TaskError }
+import silk.collections.bytes { Bytes }
+import silk.collections.list { List }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.num.i64
+import silk.num.usize
+import silk.text.string { String }
+
+pub struct Table<'a> { pub tag: string<'a>, pub data: Bytes }
+pub struct Mapping { pub code: usize, pub glyph: usize }
+pub struct CmapRecord { pub platform: usize, pub encoding: usize, pub data: Bytes }
+
+pub effect fn words(out: &mut Bytes, values: &[i64]) -> () ! OutOfMemoryError ? &mut Allocator {
+  let mut i: usize = 0
+  while i < values.length { let value = values[i] i = i + 1 let mut n = value if n < 0 { n = n + 65536 } run G.be(&mut out, i64.toUsize(n), 2) }
+}
+pub effect fn signed(out: &mut Bytes, value: i64, width: usize) -> () ! OutOfMemoryError ? &mut Allocator {
+  let mut n = value
+  if n < 0 { if width == 2 { n = n + 65536 } else { n = n + 4294967296 } }
+  run G.be(&mut out, i64.toUsize(n), width)
+}
+pub effect fn sfnt(tables: &[Table<'_>]) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  let mut out = Bytes.make() run G.be(&mut out, 65536, 4) run G.be(&mut out, tables.length, 2) run G.zeros(&mut out, 6 + 16 * tables.length)
+  let mut i: usize = 0
+  while i < tables.length {
+    let table = &tables[i]
+    let at = 12 + i * 16 i = i + 1
+    let tag = String.utf8Bytes(table.tag)
+    let data = Bytes.asMutSlice(&mut out)
+    let mut j: usize = 0 while j < 4 { data[at + j] = tag[j] j = j + 1 }
+    let offset = Bytes.length(&out)
+    G.patch(&mut out, at + 8, offset, 4) G.patch(&mut out, at + 12, Bytes.length(&table.data), 4)
+    run Bytes.append(&mut out, Bytes.asSlice(&table.data))
+    let padding = (4 - Bytes.length(&out) % 4) % 4
+    run G.zeros(&mut out, padding)
+  }
+  return move out
+}
+pub effect fn cmap(records: &[CmapRecord]) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  let mut out = Bytes.make() run G.be(&mut out, 0, 2) run G.be(&mut out, records.length, 2) run G.zeros(&mut out, 8 * records.length)
+  let mut i: usize = 0
+  while i < records.length {
+    let record = &records[i]
+    let at = 4 + i * 8 i = i + 1
+    let offset = Bytes.length(&out)
+    G.patch(&mut out, at, record.platform, 2) G.patch(&mut out, at + 2, record.encoding, 2) G.patch(&mut out, at + 4, offset, 4)
+    run Bytes.append(&mut out, Bytes.asSlice(&record.data))
+  }
+  return move out
+}
+pub effect fn format12(mappings: &[Mapping]) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  let mut out = Bytes.make() run words(&mut out, &[12, 0]) run G.be(&mut out, 16 + 12 * mappings.length, 4) run G.be(&mut out, 0, 4) run G.be(&mut out, mappings.length, 4)
+  let mut i: usize = 0
+  while i < mappings.length { let item = &mappings[i] i = i + 1 run G.be(&mut out, item.code, 4) run G.be(&mut out, item.code, 4) run G.be(&mut out, item.glyph, 4) }
+  return move out
+}
+pub effect fn uvs(format: usize, defaults: &[usize], variants: &[Mapping]) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  let mut out = Bytes.make() run G.be(&mut out, format, 2) run G.be(&mut out, 0, 4) run G.be(&mut out, 1, 4) run G.be(&mut out, 65039, 3) run G.zeros(&mut out, 8)
+  if defaults.length > 0 {
+    let offset = Bytes.length(&out)
+    G.patch(&mut out, 13, offset, 4) run G.be(&mut out, defaults.length, 4)
+    let mut i: usize = 0
+    while i < defaults.length { let code = defaults[i] i = i + 1 run G.be(&mut out, code, 3) run G.be(&mut out, 0, 1) }
+  }
+  if variants.length > 0 {
+    let offset = Bytes.length(&out)
+    G.patch(&mut out, 17, offset, 4) run G.be(&mut out, variants.length, 4)
+    let mut i: usize = 0
+    while i < variants.length { let item = &variants[i] i = i + 1 run G.be(&mut out, item.code, 3) run G.be(&mut out, item.glyph, format - 12) }
+  }
+  let length = Bytes.length(&out)
+  G.patch(&mut out, 2, length, 4) return move out
+}
+pub effect fn index(entries: &[Bytes]) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  let mut out = Bytes.make() run G.be(&mut out, entries.length, 4) run G.be(&mut out, 4, 1)
+  let mut end: usize = 1 run G.be(&mut out, end, 4)
+  let mut i: usize = 0
+  while i < entries.length { let entry = &entries[i] i = i + 1 end = end + Bytes.length(entry) run G.be(&mut out, end, 4) }
+  i = 0
+  while i < entries.length { let entry = &entries[i] i = i + 1 run Bytes.append(&mut out, Bytes.asSlice(entry)) }
+  return move out
+}
+
+struct Label { name: string<'static>, at: usize }
+pub struct Builder { pub bytes: Bytes, labels: List<Label> }
+impl Builder {
+  pub fn make() -> Builder { return Builder { bytes: Bytes.make(), labels: List<Label>.make() } }
+  pub effect fn mark(self: &mut Self, name: string<'static>) -> () ! OutOfMemoryError ? &mut Allocator {
+    run List<Label>.append(&mut self.labels, Label { name: name, at: Bytes.length(&self.bytes) })
+  }
+  pub effect fn tagged(self: &mut Self, name: string<'static>, width: usize) -> () ! OutOfMemoryError ? &mut Allocator {
+    run self.mark(name) run G.zeros(&mut self.bytes, width)
+  }
+  pub effect fn position(self: &Self, name: string) -> usize ! TaskError | OutOfMemoryError ? &mut Allocator {
+    if name == "" { return 0 }
+    let labels = List<Label>.asSlice(&self.labels) let mut i: usize = 0
+    while i < labels.length { let label = &labels[i] i = i + 1 if label.name == name { return label.at } }
+    run Task.abort("Missing binary fixture label")
+  }
+  pub effect fn patch(self: &mut Self, label: string, target: string, base: string, width: usize) -> () ! TaskError | OutOfMemoryError ? &mut Allocator {
+    let at = run self.position(label) let value = (run self.position(target)) - (run self.position(base))
+    G.patch(&mut self.bytes, at, value, width)
+  }
+}

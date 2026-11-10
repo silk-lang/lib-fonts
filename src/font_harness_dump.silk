@@ -1,0 +1,201 @@
+import silk.cli.task { Task, TaskError }
+import silk.collections.bytes { Bytes }
+import silk.collections.list { List }
+import silk.collections.slice { Slice }
+import silk.collections.hash { Hash, HashKey, HashSeed }
+import silk.collections.hash_set { HashSet }
+import silk.core.option { Option }
+import silk.core.result { Result }
+import silk.crypto.sha2 { Sha256 }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.system.filesystem { FileError, FileSystem }
+import silk.system.host_input { HostInput, HostInputError }
+import silk.text.format { Format, ParseError }
+import silk.text.string { String, InvalidUtf8 }
+import silk.num.u8
+import font_harness_process as Process { DumpFile }
+import font_harness_corpus as Corpus
+
+pub const header: string = "font-dump.version=9\ndump.scope=all\n"
+
+struct Node { face: String, number: i64 }
+impl HashKey for Node {
+  fn equals(left: &Self, right: &Self) -> bool { return left.number == right.number && String.view(&left.face) == String.view(&right.face) }
+  fn hash(self: &Self, seed: &HashSeed) -> u64 {
+    let mut value = HashKey.hash(&self.number, seed)
+    let bytes = String.utf8Bytes(String.view(&self.face))
+    let mut at: usize = 0
+    while at < bytes.length { value = Hash.combine(value, u8.toU64(bytes[at]))  at = at + 1 }
+    return value
+  }
+}
+
+pub struct DumpInfo {
+  pub digest: String,
+  pub lines: usize,
+  pub faces: usize,
+  pub missing: usize,
+  pub errors: List<String>,
+}
+
+pub effect fn hex(bytes: &[u8]) -> String ! OutOfMemoryError ? &mut Allocator {
+  let digits = b"0123456789abcdef"
+  let mut text = run Bytes.zeroed(bytes.length * 2)
+  let view = text.asMutSlice()
+  let mut at: usize = 0
+  while at < bytes.length {
+    view[at * 2] = digits[u8.toUsize(bytes[at] / 16)]
+    view[at * 2 + 1] = digits[u8.toUsize(bytes[at] % 16)]
+    at = at + 1
+  }
+  drop view
+  return unsafe String.fromBytesUnchecked(move text)
+}
+
+pub effect fn sha(bytes: &[u8]) -> String ! OutOfMemoryError ? &mut Allocator {
+  let value = Sha256.hash(bytes)
+  return run hex(&value)
+}
+
+pub effect fn fileSha(path: string) -> String
+  ! TaskError | FileError | HostInputError | OutOfMemoryError
+  ? &mut HostInput | &mut FileSystem | &mut Allocator {
+  let file = run Corpus.resolve(path)
+  let bytes = run FileSystem.readFile(&file)
+  return run sha(bytes.asSlice())
+}
+
+fn starts(line: &[u8], text: &[u8]) -> bool { return line.length >= text.length && Process.equal(Slice.view<u8>(line, 0, text.length), text) }
+fn ends(line: &[u8], text: &[u8]) -> bool { return line.length >= text.length && Process.equal(Slice.view<u8>(line, line.length - text.length, text.length), text) }
+
+effect fn inspectLine(line: &[u8], info: &mut DumpInfo, nodes: &mut HashSet<Node>) -> ()
+  ! TaskError | OutOfMemoryError ? &mut Allocator {
+  let text = match String.fromUtf8(line) {
+    Result<string, InvalidUtf8>.Success { value } => value
+    Result<string, InvalidUtf8>.Failure { .. } => run Task.abort("dump is not UTF-8")
+  }
+  if info.lines == 0 && !Process.equal(line, b"font-dump.version=9") { run Task.abort("dumper did not emit a complete font dump") }
+  if info.lines == 1 && !Process.equal(line, b"dump.scope=all") { run Task.abort("dumper did not emit a complete font dump") }
+  if info.lines == 2 && !starts(line, b"file.length=") { run Task.abort("dump has no file length (a skeleton is not a passing dump)") }
+  if info.lines == 3 && !(starts(line, b"file.error=") || Process.equal(line, b"file.kind=sfnt") || Process.equal(line, b"file.kind=ttc")) { run Task.abort("dump has neither a file kind nor an upstream parse error") }
+  if ends(line, b"=traversal-limit") { run Task.abort("dump exceeded its traversal bound; not a complete field comparison") }
+  if Process.contains(line, b".node=") || Process.contains(line, b".ref=") {
+    let mut equals = line.length
+    while equals > 0 && line[equals - 1] != 61 { equals = equals - 1 }
+    if equals == 0 { run Task.abort("invalid dump node identifier") }
+    let mut dot: usize = 0
+    while dot < line.length && line[dot] != 46 { dot = dot + 1 }
+    let numberText = unsafe String.fromUtf8Unchecked(Slice.view<u8>(line, equals, line.length - equals))
+    let number = match move Format.i64Value(numberText) {
+      Result<i64, ParseError>.Success { value } => value
+      Result<i64, ParseError>.Failure { .. } => run Task.abort("invalid dump node identifier")
+    }
+    let key = Node { face: run Corpus.utf8(Slice.view<u8>(line, 0, dot)), number: number }
+    let path = Slice.view<u8>(line, 0, equals - 1)
+    if ends(path, b".node") {
+      if run nodes.insert(move key) { run Task.abort("dump reuses a node identifier") }
+    } else if ends(path, b".ref") && !nodes.contains(move key) { run Task.abort("dump reference has no preceding node") }
+  }
+  if starts(line, b"font[") && Process.contains(line, b".sfntVersion=") { info.faces = info.faces + 1 }
+  if ends(line, b".lookup=missing") { info.missing = info.missing + 1 }
+  if Process.contains(line, b".error=") { run info.errors.append(run String.copy(text)) }
+  info.lines = info.lines + 1
+}
+
+pub effect fn inspect(file: &mut DumpFile) -> DumpInfo ! TaskError | OutOfMemoryError ? &mut Allocator {
+  run file.rewind()
+  let mut block = run Bytes.zeroed(16777216)
+  let mut pending = Bytes.make()
+  let mut hash = Sha256.make()
+  let mut nodes = HashSet<Node>.make(Hash.seed(0))
+  let mut info = DumpInfo { digest: String.make(), lines: 0, faces: 0, missing: 0, errors: List<String>.make() }
+  while true {
+    let count = run file.read(block.asMutSlice())
+    if count == 0 { break }
+    let bytes = Slice.view<u8>(block.asSlice(), 0, count)
+    hash.update(bytes)
+    let mut start: usize = 0
+    let mut at: usize = 0
+    while at < bytes.length {
+      if bytes[at] == 10 {
+        if pending.length() == 0 { run inspectLine(Slice.view<u8>(bytes, start, at - start), &mut info, &mut nodes) }
+        else {
+          run pending.append(Slice.view<u8>(bytes, start, at - start))
+          run inspectLine(pending.asSlice(), &mut info, &mut nodes)
+          pending.clear()
+        }
+        start = at + 1
+      }
+      at = at + 1
+    }
+    run pending.append(Slice.view<u8>(bytes, start, bytes.length - start))
+  }
+  if pending.length() != 0 || info.lines < 4 { run Task.abort("dumper did not emit a complete font dump") }
+  info.digest = run hex(&hash.finish())
+  return move info
+}
+
+pub struct Difference { pub line: usize, pub left: Bytes, pub right: Bytes, pub leftEof: bool, pub rightEof: bool }
+
+struct Lines { bytes: Bytes, offset: usize, size: usize }
+impl Lines {
+  effect fn make() -> Lines ! OutOfMemoryError ? &mut Allocator { return Lines { bytes: run Bytes.zeroed(65536), offset: 0, size: 0 } }
+  effect fn next(self: &mut Self, file: &mut DumpFile) -> Option<Bytes> ! TaskError | OutOfMemoryError ? &mut Allocator {
+    let mut line = Bytes.make()
+    while true {
+      if self.offset == self.size { self.size = run file.read(self.bytes.asMutSlice())  self.offset = 0 }
+      if self.size == 0 {
+        if line.length() == 0 { return Option<Bytes>.none() }
+        return Option<Bytes>.some(move line)
+      }
+      let start = self.offset
+      let bytes = self.bytes.asSlice()
+      while self.offset < self.size && bytes[self.offset] != 10 { self.offset = self.offset + 1 }
+      let ended = self.offset < self.size
+      if ended { self.offset = self.offset + 1 }
+      run line.append(Slice.view<u8>(bytes, start, self.offset - start))
+      if ended { return Option<Bytes>.some(move line) }
+    }
+  }
+}
+
+pub effect fn firstDifference(left: &mut DumpFile, right: &mut DumpFile) -> Option<Difference>
+  ! TaskError | OutOfMemoryError ? &mut Allocator {
+  run left.rewind()  run right.rewind()
+  let mut a = run Bytes.zeroed(16777216)
+  let mut b = run Bytes.zeroed(16777216)
+  while true {
+    let an = run left.read(a.asMutSlice())
+    let bn = run right.read(b.asMutSlice())
+    if an != bn || !Process.equal(Slice.view<u8>(a.asSlice(), 0, an), Slice.view<u8>(b.asSlice(), 0, bn)) { break }
+    if an == 0 { return Option<Difference>.none() }
+  }
+  run left.rewind()  run right.rewind()
+  let mut aLines = run Lines.make()
+  let mut bLines = run Lines.make()
+  let mut line: usize = 1
+  while true {
+    let leftLine = run aLines.next(&mut left)
+    let rightLine = run bLines.next(&mut right)
+    let mut leftEof = false
+    let mut rightEof = false
+    let l = match move leftLine { Option<Bytes>.Some { value } => move value Option<Bytes>.None => { leftEof = true  Bytes.make() } }
+    let r = match move rightLine { Option<Bytes>.Some { value } => move value Option<Bytes>.None => { rightEof = true  Bytes.make() } }
+    if leftEof != rightEof || !Process.equal(l.asSlice(), r.asSlice()) { return Option<Difference>.some(Difference { line: line, left: move l, right: move r, leftEof: leftEof, rightEof: rightEof }) }
+    if leftEof { return Option<Difference>.none() }
+    line = line + 1
+  }
+}
+
+pub effect fn errorsJson(errors: &List<String>) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  let mut result = run Bytes.copy(b"[")
+  let rows = errors.asSlice()
+  let mut at: usize = 0
+  while at < rows.length {
+    if at > 0 { run result.append(b",") }
+    run Corpus.quote(&mut result, String.view(&rows[at]))
+    at = at + 1
+  }
+  run result.append(b"]")
+  return move result
+}

@@ -1,0 +1,151 @@
+import silk.collections.bytes { Bytes }
+import silk.collections.slice { Slice }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.text.string { String }
+import silk.text.unicode_properties { GeneralCategory }
+import silk.num.u8
+import silk.num.u32
+import silk.num.usize
+import font_harness_process as Process
+
+struct Scalar { width: usize, value: u32 }
+fn scalar(bytes: &[u8], at: usize) -> Scalar {
+  let first = bytes[at]
+  if first < 128 { return Scalar { width: 1, value: u8.toU32(first) } }
+  let width: usize = if first >= 194 && first <= 223 { 2 } else if first >= 224 && first <= 239 { 3 } else if first >= 240 && first <= 244 { 4 } else { 0 }
+  if width == 0 || width > bytes.length - at { return Scalar { width: 0, value: 0 } }
+  let second = bytes[at + 1]
+  if (first == 224 && second < 160) || (first == 237 && second >= 160) || (first == 240 && second < 144) || (first == 244 && second >= 144) { return Scalar { width: 0, value: 0 } }
+  let mask: u8 = if width == 2 { 31 } else if width == 3 { 15 } else { 7 }
+  let mut value = u8.toU32(first & mask)
+  let mut i: usize = 1
+  while i < width {
+    let byte = bytes[at + i]
+    if byte < 128 || byte > 191 { return Scalar { width: 0, value: 0 } }
+    value = value * 64 + u8.toU32(byte & 63)
+    i = i + 1
+  }
+  return Scalar { width: width, value: value }
+}
+effect fn escape(out: &mut Bytes, value: u32, width: usize) -> () ! OutOfMemoryError ? &mut Allocator {
+  let hex = b"0123456789abcdef"
+  run out.append(if width == 2 { b"\\x" } else if width == 4 { b"\\u" } else { b"\\U" })
+  let mut at = width
+  while at > 0 { at = at - 1  run out.append(&[hex[u32.toUsize((u32.shiftRight(value, usize.toU32(at * 4))) & 15)]]) }
+}
+// Match UTF-8 decode(errors="backslashreplace"), including incomplete sequences.
+pub effect fn decode(bytes: &[u8]) -> String ! OutOfMemoryError ? &mut Allocator {
+  let mut out = Bytes.make()
+  let mut at: usize = 0
+  while at < bytes.length {
+    let next = scalar(bytes, at)
+    if next.width == 0 { run escape(&mut out, u8.toU32(bytes[at]), 2)  at = at + 1 }
+    else { run out.append(Slice.view<u8>(bytes, at, next.width))  at = at + next.width }
+  }
+  return unsafe String.fromBytesUnchecked(move out)
+}
+pub effect fn repr(bytes: &[u8], eof: bool) -> String ! OutOfMemoryError ? &mut Allocator {
+  if eof { return run String.copy("<EOF>") }
+  let quote: u8 = if Process.contains(bytes, b"'") && !Process.contains(bytes, b"\"") { 34 } else { 39 }
+  let mut out = Bytes.make()
+  run out.append(&[quote])
+  let mut at: usize = 0
+  while at < bytes.length {
+    let next = scalar(bytes, at)
+    if next.width == 0 {
+      run out.append(b"\\")
+      run escape(&mut out, u8.toU32(bytes[at]), 2)
+      at = at + 1
+      continue
+    }
+    let cp = next.value
+    if cp == u8.toU32(quote) || cp == 92 { run out.append(&[92, bytes[at]]) }
+    else if cp == 9 { run out.append(b"\\t") }
+    else if cp == 10 { run out.append(b"\\n") }
+    else if cp == 13 { run out.append(b"\\r") }
+    else {
+      let category = GeneralCategory.of(cp)
+      let printable = cp == 32 || !(category == GeneralCategory.Cc || category == GeneralCategory.Cf || category == GeneralCategory.Co || category == GeneralCategory.Cs || category == GeneralCategory.Cn || category == GeneralCategory.Zl || category == GeneralCategory.Zp || category == GeneralCategory.Zs)
+      if printable { run out.append(Slice.view<u8>(bytes, at, next.width)) }
+      else { run escape(&mut out, cp, if cp <= 255 { 2 } else if cp <= 65535 { 4 } else { 8 }) }
+    }
+    at = at + next.width
+  }
+  run out.append(&[quote])
+  return unsafe String.fromBytesUnchecked(move out)
+}
+
+// JSON's ensure_ascii=True representation is part of the benchmark corpus hash.
+pub effect fn jsonAscii(out: &mut Bytes, value: string) -> () ! OutOfMemoryError ? &mut Allocator {
+  run out.append(b"\"")
+  let bytes = String.utf8Bytes(value)
+  let mut at: usize = 0
+  while at < bytes.length {
+    let next = scalar(bytes, at)
+    let cp = next.value
+    if cp == 34 || cp == 92 { run out.append(&[92, bytes[at]]) }
+    else if cp == 8 { run out.append(b"\\b") }
+    else if cp == 9 { run out.append(b"\\t") }
+    else if cp == 10 { run out.append(b"\\n") }
+    else if cp == 12 { run out.append(b"\\f") }
+    else if cp == 13 { run out.append(b"\\r") }
+    else if cp < 32 || cp >= 127 {
+      if cp <= 65535 { run escape(&mut out, cp, 4) }
+      else { let pair = cp - 65536  run escape(&mut out, 55296 + (u32.shiftRight(pair, 10)), 4)  run escape(&mut out, 56320 + (pair & 1023), 4) }
+    } else { run out.append(&[bytes[at]]) }
+    at = at + next.width
+  }
+  run out.append(b"\"")
+}
+
+// Python's errors="replace" consumes the valid prefix of a malformed sequence.
+pub effect fn replace(bytes: &[u8]) -> String ! OutOfMemoryError ? &mut Allocator {
+  let mut out = Bytes.make()
+  let mut at: usize = 0
+  while at < bytes.length {
+    let next = scalar(bytes, at)
+    if next.width > 0 { run out.append(Slice.view<u8>(bytes, at, next.width))  at = at + next.width  continue }
+    let first = bytes[at]
+    let width: usize = if first >= 194 && first <= 223 { 2 } else if first >= 224 && first <= 239 { 3 } else if first >= 240 && first <= 244 { 4 } else { 1 }
+    let mut consumed: usize = 1
+    while consumed < width && at + consumed < bytes.length {
+      let c = bytes[at + consumed]
+      if c < 128 || c > 191 { break }
+      if consumed == 1 && ((first == 224 && c < 160) || (first == 237 && c >= 160) || (first == 240 && c < 144) || (first == 244 && c >= 144)) { break }
+      consumed = consumed + 1
+    }
+    run out.append(b"\xef\xbf\xbd")
+    at = at + consumed
+  }
+  return unsafe String.fromBytesUnchecked(move out)
+}
+
+pub fn last<'a>(value: string<'a>, count: usize) -> string<'a> {
+  let bytes = String.utf8Bytes(value)
+  let mut at = bytes.length
+  let mut remaining = count
+  while at > 0 && remaining > 0 {
+    at = at - 1
+    if bytes[at] < 128 || bytes[at] >= 192 { remaining = remaining - 1 }
+  }
+  return String.slice(value, at, bytes.length - at)
+}
+
+pub effect fn bytesRepr(bytes: &[u8]) -> String ! OutOfMemoryError ? &mut Allocator {
+  let quote: u8 = if Process.contains(bytes, b"'") && !Process.contains(bytes, b"\"") { 34 } else { 39 }
+  let mut out = run Bytes.copy(b"b")
+  run out.append(&[quote])
+  let mut at: usize = 0
+  while at < bytes.length {
+    let c = bytes[at]
+    if c == quote || c == 92 { run out.append(&[92, c]) }
+    else if c == 9 { run out.append(b"\\t") }
+    else if c == 10 { run out.append(b"\\n") }
+    else if c == 13 { run out.append(b"\\r") }
+    else if c < 32 || c >= 127 { run escape(&mut out, u8.toU32(c), 2) }
+    else { run out.append(&[c]) }
+    at = at + 1
+  }
+  run out.append(&[quote])
+  return unsafe String.fromBytesUnchecked(move out)
+}

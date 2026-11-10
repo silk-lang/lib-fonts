@@ -1,5 +1,5 @@
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
-// Included by modules/scripts/generate in generated_name, whose nominal types this extends.
+// Included by silk task generate in generated_name, whose nominal types this extends.
 import tables.name_string { NameString, Encoding }
 
 impl<'a> Name<'a> {

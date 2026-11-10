@@ -39,34 +39,27 @@ jobs:
           done < silk.toml
           test -n "$version"
           curl --fail --silent --show-error --location --retry 3 \
-            "https://raw.githubusercontent.com/silk-lang/silk/v${version}/install.sh" \
+            "https://raw.githubusercontent.com/silk-lang/silk/8214c402307b/install.sh" \
             -o "$RUNNER_TEMP/install-silk.sh"
           SILK_RELEASE="v$version" sh "$RUNNER_TEMP/install-silk.sh"
           echo "$HOME/.silk/bin" >> "$GITHUB_PATH"
-      - name: Select Linux Clang
+      # Tasks are compiled programs: provision their compiler before invoking one.
+      - name: Bootstrap task compiler on Linux
         if: runner.os == 'Linux'
-        run: echo "SILK_CLANG=$(command -v clang-22)" >> "$GITHUB_ENV"
-      - name: Select macOS Clang and SDK
+        run: |
+          test -x /usr/bin/clang-22 && test -x /usr/lib/llvm-22/bin/wasm-ld || { sudo apt-get update && sudo apt-get install -y clang-22 lld-22; }
+          echo "SILK_CLANG=/usr/bin/clang-22" >> "$GITHUB_ENV"
+          echo "/usr/lib/llvm-22/bin" >> "$GITHUB_PATH"
+      - name: Bootstrap task compiler on macOS
         if: runner.os == 'macOS'
         run: |
-          brew list llvm >/dev/null 2>&1 || brew install llvm
-          echo "SILK_CLANG=$(brew --prefix llvm)/bin/clang" >> "$GITHUB_ENV"
+          test -x /opt/homebrew/opt/llvm@22/bin/clang || brew install llvm@22
+          test -x /opt/homebrew/opt/lld@22/bin/ld64.lld || brew install lld@22
+          echo "SILK_CLANG=/opt/homebrew/opt/llvm@22/bin/clang" >> "$GITHUB_ENV"
+          echo "/opt/homebrew/opt/lld@22/bin" >> "$GITHUB_PATH"
           echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)" >> "$GITHUB_ENV"
       - run: silk use
-      - run: silk check --workspace
-      - run: silk test --manifest-path modules/types/silk.toml --root src/tests.silk
-      - run: silk test --manifest-path modules/parse/silk.toml --root src/tests.silk
-      - run: silk test --manifest-path modules/shape/silk.toml --root src/tests.silk
-      - run: silk test --manifest-path modules/outline/silk.toml --root src/tests.silk
-      - run: silk test --manifest-path modules/raster/silk.toml --root src/tests.silk
-      - run: silk test --manifest-path modules/faces/silk.toml --root src/tests.silk
-      - run: silk build --package font-parse-test-harness
-      - run: silk build --package font-shape-test-harness
-      - run: silk build --package font-parse-bench
+      - run: silk task check
       - name: Check and build WebAssembly wrapper
         if: runner.os == 'Linux'
-        run: |
-          export PATH="$(dirname "$SILK_CLANG"):$PATH"
-          command -v wasm-ld || { sudo apt-get update && sudo apt-get install -y lld; }
-          silk check --manifest-path modules/shape/tools/wasm/silk.toml --target wasm32-unknown-unknown
-          silk build --release --manifest-path modules/shape/tools/wasm/silk.toml --target wasm32-unknown-unknown
+        run: silk task check-wasm

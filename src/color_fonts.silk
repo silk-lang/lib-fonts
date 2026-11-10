@@ -1,0 +1,270 @@
+import silk.cli.task { Task, TaskError }
+import silk.collections.bytes { Bytes }
+import silk.collections.list { List }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.system.filesystem { FileError, FileSystem, Path }
+import silk.system.host_input { HostInput, HostInputError }
+import silk.text.string { String }
+import silk.num.u8
+import silk.num.u32
+import silk.num.usize
+
+struct Table { pub tag: string<'static>, pub data: Bytes }
+
+effect fn byte(out: &mut Bytes, value: u32) -> () ! OutOfMemoryError ? &mut Allocator {
+  run Bytes.append(&mut out, &[u32.toU8(value & 255)])
+}
+effect fn word(out: &mut Bytes, value: u32) -> () ! OutOfMemoryError ? &mut Allocator {
+  run byte(&mut out, u32.shiftRight(value, 8))
+  run byte(&mut out, value)
+}
+effect fn long(out: &mut Bytes, value: u32) -> () ! OutOfMemoryError ? &mut Allocator {
+  run word(&mut out, u32.shiftRight(value, 16))
+  run word(&mut out, value)
+}
+effect fn zeros(out: &mut Bytes, count: usize) -> () ! OutOfMemoryError ? &mut Allocator {
+  let mut at: usize = 0
+  while at < count { run byte(&mut out, 0)  at = at + 1 }
+}
+fn patch(out: &mut Bytes, at: usize, value: u32) -> () {
+  let bytes = Bytes.asMutSlice(&mut out)
+  bytes[at] = u32.toU8(u32.shiftRight(value, 24))
+  bytes[at + 1] = u32.toU8(u32.shiftRight(value, 16) & 255)
+  bytes[at + 2] = u32.toU8(u32.shiftRight(value, 8) & 255)
+  bytes[at + 3] = u32.toU8(value & 255)
+}
+fn checksum(bytes: &[u8]) -> u32 {
+  let mut result: u32 = 0
+  let mut at: usize = 0
+  while at < bytes.length {
+    let mut value: u32 = 0
+    let mut part: usize = 0
+    while part < 4 {
+      value = u32.shiftLeft(value, 8)
+      if at + part < bytes.length { value = value | u8.toU32(bytes[at + part]) }
+      part = part + 1
+    }
+    result = u32.wrappingAdd(result, value)
+    at = at + 4
+  }
+  return result
+}
+fn crcPart(initial: u32, bytes: &[u8]) -> u32 {
+  let mut value = initial
+  let mut at: usize = 0
+  while at < bytes.length {
+    value = value ^ u8.toU32(bytes[at])
+    let mut bit: usize = 0
+    while bit < 8 {
+      if value & 1 == 1 { value = u32.shiftRight(value, 1) ^ 0xedb88320 }
+      else { value = u32.shiftRight(value, 1) }
+      bit = bit + 1
+    }
+    at = at + 1
+  }
+  return value
+}
+effect fn chunk(out: &mut Bytes, tag: string, body: &[u8]) -> () ! OutOfMemoryError ? &mut Allocator {
+  run long(&mut out, usize.toU32(body.length))
+  let tagBytes = String.utf8Bytes(tag)
+  run Bytes.append(&mut out, tagBytes)
+  run Bytes.append(&mut out, body)
+  run long(&mut out, crcPart(crcPart(0xffffffff, tagBytes), body) ^ 0xffffffff)
+}
+effect fn image() -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  let mut pixels = run Bytes.makeWithCapacity(1040)
+  let mut y: usize = 0
+  while y < 16 {
+    run byte(&mut pixels, 0)
+    let mut x: usize = 0
+    while x < 16 {
+      if x < 8 { run Bytes.append(&mut pixels, b"\x00\xc8\x00\xff") }
+      else { run Bytes.append(&mut pixels, b"\x00\x00\xdc\xff") }
+      x = x + 1
+    }
+    y = y + 1
+  }
+  // A zlib stream with one uncompressed DEFLATE block: no codec dependency or timestamp.
+  let mut compressed = run Bytes.copy(b"\x78\x01\x01\x10\x04\xef\xfb")
+  run Bytes.append(&mut compressed, Bytes.asSlice(&pixels))
+  let mut a: u32 = 1
+  let mut b: u32 = 0
+  let bytes = Bytes.asSlice(&pixels)
+  let mut at: usize = 0
+  while at < bytes.length { a = (a + u8.toU32(bytes[at])) % 65521  b = (b + a) % 65521  at = at + 1 }
+  run long(&mut compressed, u32.shiftLeft(b, 16) | a)
+  let mut out = run Bytes.copy(b"\x89PNG\r\n\x1a\n")
+  run chunk(&mut out, "IHDR", b"\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00")
+  run chunk(&mut out, "IDAT", Bytes.asSlice(&compressed))
+  run chunk(&mut out, "IEND", b"")
+  return move out
+}
+effect fn add(tables: &mut List<Table>, tag: string<'static>, data: Bytes) -> () ! OutOfMemoryError ? &mut Allocator {
+  run List<Table>.append(&mut tables, Table { tag: tag, data: move data })
+}
+effect fn square(out: &mut Bytes, x0: u32, y0: u32, x1: u32, y1: u32) -> () ! OutOfMemoryError ? &mut Allocator {
+  run word(&mut out, 1)
+  run word(&mut out, x0)  run word(&mut out, y0)  run word(&mut out, x1)  run word(&mut out, y1)
+  run word(&mut out, 3)  run word(&mut out, 0)
+  run Bytes.append(&mut out, b"\x01\x01\x01\x01")
+  run word(&mut out, x0)  run word(&mut out, 0)  run word(&mut out, x1 - x0)  run word(&mut out, 0)
+  run word(&mut out, y0)  run word(&mut out, y1 - y0)  run word(&mut out, 0)  run word(&mut out, 65536 - (y1 - y0))
+}
+effect fn names(family: string) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  let mut out = Bytes.make()
+  run word(&mut out, 0)  run word(&mut out, 2)  run word(&mut out, 30)
+  let values = [family, "Regular"]
+  let mut offset: u32 = 0
+  let mut index: usize = 0
+  while index < 2 {
+    run word(&mut out, 3)  run word(&mut out, 1)  run word(&mut out, 0x409)
+    run word(&mut out, usize.toU32(index + 1))
+    let length = usize.toU32(String.byteLength(values[index]) * 2)
+    run word(&mut out, length)  run word(&mut out, offset)
+    offset = offset + length
+    index = index + 1
+  }
+  index = 0
+  while index < 2 {
+    let bytes = String.utf8Bytes(values[index])
+    let mut at: usize = 0
+    while at < bytes.length { run word(&mut out, u8.toU32(bytes[at]))  at = at + 1 }
+    index = index + 1
+  }
+  return move out
+}
+effect fn base(family: string, layers: bool) -> List<Table> ! OutOfMemoryError ? &mut Allocator {
+  let count: u32 = if layers { 6 } else { 3 }
+  let mut tables = List<Table>.make()
+  let mut os2 = run Bytes.zeroed(96)
+  let os = Bytes.asMutSlice(&mut os2)
+  os[1] = 4  os[2] = 3  os[3] = 232  os[4] = 1  os[5] = 144  os[7] = 5
+  os[45] = 1  os[63] = 64  os[65] = 65  os[67] = 66
+  os[68] = 3  os[69] = 32  os[70] = 255  os[71] = 56
+  os[74] = 3  os[75] = 32  os[77] = 200  os[81] = 1
+  os[93] = 32  os[95] = 2
+  drop os
+  run add(&mut tables, "OS/2", move os2)
+  let cmap = run Bytes.copy(b"\x00\x00\x00\x01\x00\x03\x00\x01\x00\x00\x00\x0c\x00\x04\x00\x20\x00\x00\x00\x04\x00\x04\x00\x01\x00\x00\x00\x42\xff\xff\x00\x00\x00\x41\xff\xff\xff\xc0\x00\x01\x00\x00\x00\x00")
+  run add(&mut tables, "cmap", move cmap)
+  let mut glyf = Bytes.make()
+  let mut loca = Bytes.make()
+  let mut index: u32 = 0
+  while index < count {
+    run long(&mut loca, usize.toU32(Bytes.length(&glyf)))
+    if index == 3 { run square(&mut glyf, 100, 0, 600, 800) }
+    else if index == 4 { run square(&mut glyf, 400, 0, 900, 800) }
+    else if index == 5 { run square(&mut glyf, 100, 350, 900, 450) }
+    else { run square(&mut glyf, 100, 0, 900, 800) }
+    index = index + 1
+  }
+  run long(&mut loca, usize.toU32(Bytes.length(&glyf)))
+  run add(&mut tables, "glyf", move glyf)
+  let mut head = run Bytes.copy(b"\x00\x01\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x5f\x0f\x3c\xf5\x00\x03\x03\xe8")
+  run zeros(&mut head, 16)
+  run word(&mut head, 100)  run word(&mut head, 0)  run word(&mut head, 900)  run word(&mut head, 800)
+  run word(&mut head, 0)  run word(&mut head, 3)  run word(&mut head, 2)  run word(&mut head, 1)  run word(&mut head, 0)
+  run add(&mut tables, "head", move head)
+  let mut hhea = Bytes.make()
+  run long(&mut hhea, 0x10000)
+  run word(&mut hhea, 800)  run word(&mut hhea, 65336)  run word(&mut hhea, 0)
+  run word(&mut hhea, 1000)  run word(&mut hhea, 100)  run word(&mut hhea, 100)  run word(&mut hhea, 900)
+  run word(&mut hhea, 1)  run word(&mut hhea, 0)
+  run zeros(&mut hhea, 12)  run word(&mut hhea, count)
+  run add(&mut tables, "hhea", move hhea)
+  let mut hmtx = Bytes.make()
+  index = 0
+  while index < count { run word(&mut hmtx, 1000)  run word(&mut hmtx, if index == 4 { 400 } else { 100 })  index = index + 1 }
+  run add(&mut tables, "hmtx", move hmtx)
+  run add(&mut tables, "loca", move loca)
+  let mut maxp = Bytes.make()
+  run long(&mut maxp, 0x10000)  run word(&mut maxp, count)  run word(&mut maxp, 4)  run word(&mut maxp, 1)
+  run word(&mut maxp, 0)  run word(&mut maxp, 0)  run word(&mut maxp, 2)  run zeros(&mut maxp, 16)
+  run add(&mut tables, "maxp", move maxp)
+  run add(&mut tables, "name", run names(family))
+  let mut post = Bytes.make()
+  run long(&mut post, 0x20000)  run zeros(&mut post, 28)  run word(&mut post, count)
+  run word(&mut post, 0)  run word(&mut post, 36)  run word(&mut post, 37)
+  if layers {
+    run word(&mut post, 258)  run word(&mut post, 259)  run word(&mut post, 260)
+    run Bytes.append(&mut post, b"\x03red\x04blue\x03bar")
+  }
+  run add(&mut tables, "post", move post)
+  return move tables
+}
+effect fn font(tables: &List<Table>) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  let entries = List<Table>.asSlice(tables)
+  let count = entries.length
+  let mut order = List<usize>.make()
+  let mut index: usize = 0
+  while index < count {
+    let mut position: usize = 0
+    while position < List<usize>.length(&order) && checksum(String.utf8Bytes(entries[List<usize>.asSlice(&order)[position]].tag)) < checksum(String.utf8Bytes(entries[index].tag)) { position = position + 1 }
+    run List<usize>.insert(&mut order, position, index)
+    index = index + 1
+  }
+  let mut out = Bytes.make()
+  run long(&mut out, 0x10000)  run word(&mut out, usize.toU32(count))
+  let mut power: usize = 1
+  let mut selector: u32 = 0
+  while power * 2 <= count { power = power * 2  selector = selector + 1 }
+  run word(&mut out, usize.toU32(power * 16))  run word(&mut out, selector)  run word(&mut out, usize.toU32((count - power) * 16))
+  let mut offset = 12 + count * 16
+  let mut headAt: usize = 0
+  index = 0
+  while index < count {
+    let entry = &entries[List<usize>.asSlice(&order)[index]]
+    let data = Bytes.asSlice(&entry.data)
+    run Bytes.append(&mut out, String.utf8Bytes(entry.tag))
+    run long(&mut out, checksum(data))  run long(&mut out, usize.toU32(offset))  run long(&mut out, usize.toU32(data.length))
+    if entry.tag == "head" { headAt = offset }
+    offset = offset + (data.length + 3) / 4 * 4
+    index = index + 1
+  }
+  index = 0
+  while index < count {
+    run Bytes.append(&mut out, Bytes.asSlice(&entries[List<usize>.asSlice(&order)[index]].data))
+    while Bytes.length(&out) % 4 != 0 { run byte(&mut out, 0) }
+    index = index + 1
+  }
+  let adjustment = u32.wrappingSubtract(0xb1b0afba, checksum(Bytes.asSlice(&out)))
+  patch(&mut out, headAt + 8, adjustment)
+  return move out
+}
+
+pub effect fn generate() -> ()
+  ! TaskError | HostInputError | FileError | OutOfMemoryError
+  ? &mut HostInput | &mut FileSystem | &mut Allocator {
+  let root = run Task.root()
+  let directory = run Path.join(&root, "modules/raster/tests/fonts")
+  run FileSystem.createDirectoriesRecursively(&directory)
+  let mut colr = run base("Raster COLRv0", true)
+  run add(&mut colr, "COLR", run Bytes.copy(b"\x00\x00\x00\x01\x00\x00\x00\x0e\x00\x00\x00\x14\x00\x03\x00\x01\x00\x00\x00\x03\x00\x03\x00\x00\x00\x04\x00\x01\x00\x05\xff\xff"))
+  run add(&mut colr, "CPAL", run Bytes.copy(b"\x00\x00\x00\x02\x00\x01\x00\x02\x00\x00\x00\x0e\x00\x00\x00\x00\xff\xff\xff\x00\x00\x80"))
+  let colrBytes = run font(&colr)
+  let colrPath = run Path.join(&directory, "ColrV0.ttf")
+  run FileSystem.writeFile(&colrPath, Bytes.asSlice(&colrBytes))
+  let png = run image()
+  let imageLength = usize.toU32(Bytes.length(&png))
+  let mut sbix = run base("Raster sbix", false)
+  let mut sbixTable = run Bytes.copy(b"\x00\x01\x00\x01\x00\x00\x00\x01\x00\x00\x00\x0c\x00\x14\x00\x48")
+  run long(&mut sbixTable, 20)  run long(&mut sbixTable, 20)  run long(&mut sbixTable, 28 + imageLength)  run long(&mut sbixTable, 28 + imageLength)
+  run word(&mut sbixTable, 2)  run word(&mut sbixTable, 65535)  run Bytes.append(&mut sbixTable, b"png ")  run Bytes.append(&mut sbixTable, Bytes.asSlice(&png))
+  run add(&mut sbix, "sbix", move sbixTable)
+  let sbixBytes = run font(&sbix)
+  let sbixPath = run Path.join(&directory, "Sbix.ttf")
+  run FileSystem.writeFile(&sbixPath, Bytes.asSlice(&sbixBytes))
+  let mut cbdt = run base("Raster CBDT", false)
+  let mut cbdtTable = run Bytes.copy(b"\x00\x03\x00\x00\x10\x10\x02\x0f\x14")
+  run long(&mut cbdtTable, imageLength)  run Bytes.append(&mut cbdtTable, Bytes.asSlice(&png))
+  let mut cblc = run Bytes.copy(b"\x00\x03\x00\x00\x00\x00\x00\x01")
+  run long(&mut cblc, 56)  run long(&mut cblc, 24)  run long(&mut cblc, 1)  run long(&mut cblc, 0)
+  run Bytes.append(&mut cblc, b"\x10\xfc\x14\x00\x00\x00\x00\x00\x00\x00\x00\x00\x10\xfc\x14\x00\x00\x00\x00\x00\x00\x00\x00\x00")
+  run word(&mut cblc, 1)  run word(&mut cblc, 1)  run Bytes.append(&mut cblc, b"\x14\x14\x20\x01")
+  run word(&mut cblc, 1)  run word(&mut cblc, 1)  run long(&mut cblc, 8)
+  run word(&mut cblc, 1)  run word(&mut cblc, 17)  run long(&mut cblc, 4)  run long(&mut cblc, 0)  run long(&mut cblc, imageLength + 9)
+  run add(&mut cbdt, "CBDT", move cbdtTable)  run add(&mut cbdt, "CBLC", move cblc)
+  let cbdtBytes = run font(&cbdt)
+  let cbdtPath = run Path.join(&directory, "Cbdt.ttf")
+  run FileSystem.writeFile(&cbdtPath, Bytes.asSlice(&cbdtBytes))
+}

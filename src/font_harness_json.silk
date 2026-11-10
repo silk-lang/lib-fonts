@@ -1,0 +1,34 @@
+import silk.cli.task { Task, TaskError }
+import silk.collections.bytes { Bytes }
+import silk.core.effect { Effect }
+import silk.core.option { Option }
+import silk.core.result { Result }
+import silk.io.writer { Writer, WriterError }
+import silk.json.scanner { JsonError }
+import silk.json.value { Json, Value }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+
+struct Buffer { bytes: Bytes }
+impl Writer for Buffer {
+  effect fn writeAll(self: &mut Self, bytes: &[u8]) -> () ! WriterError ? &mut Writer {
+    let mut allocator = Allocator.systemAllocatorProvider()
+    match move run Effect.result(self.bytes.append(bytes)) |> Effect.provideMut<Allocator>(&mut allocator) {
+      Result<(), OutOfMemoryError>.Success { .. } => {}
+      Result<(), OutOfMemoryError>.Failure { .. } => { fail Writer.failure() }
+    }
+  }
+  effect fn flush(self: &mut Self) -> () ! WriterError ? &mut Writer {}
+}
+effect fn invalid(error: JsonError) -> never ! TaskError | OutOfMemoryError ? &mut Allocator { run Task.abort("invalid JSON campaign receipt") }
+pub effect fn parse(bytes: &[u8]) -> Value ! TaskError | OutOfMemoryError ? &mut Allocator { return run Effect.catch<JsonError>(Json.parse(bytes), invalid) }
+pub effect fn write(value: &Value) -> Bytes ! TaskError | WriterError | OutOfMemoryError ? &mut Allocator {
+  let mut buffer = Buffer { bytes: Bytes.make() }
+  run Effect.catch<JsonError>(Json.write(value), invalid) |> Effect.provideMut<Writer>(&mut buffer)
+  return move buffer.bytes
+}
+pub fn text<'a>(value: &'a Value, key: string) -> string<'a> {
+  return Json.asString(Json.field(value, key)) |> Option<string>.unwrapOr("")
+}
+pub fn equalField(value: &Value, key: string, expected: &Value) -> bool {
+  return match Json.field(value, key) { Option<&Value>.Some { value: found } => Json.equal(found, expected) Option<&Value>.None => false }
+}

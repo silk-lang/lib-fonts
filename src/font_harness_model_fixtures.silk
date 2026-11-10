@@ -1,0 +1,226 @@
+import silk.cli.task { Task }
+import silk.collections.bytes { Bytes }
+import silk.collections.list { List }
+import silk.collections.slice { Slice }
+import silk.core.effect { Effect }
+import silk.core.result { Result }
+import silk.mem.allocator { Allocator }
+import silk.system.filesystem { FileSystem }
+import silk.system.host_input { HostInput }
+import silk.text.string { String }
+import font_generate_support as G
+import font_generate_binary as B
+import font_harness_fixtures as F { Fixtures, Errors, Table }
+import font_harness_malformed as Malformed
+
+effect fn without(fixtures: &mut Fixtures, prefix: string, original: &List<Table>, hidden: &[string]) -> () ! Errors ? &mut Allocator | &mut FileSystem {
+  let mut present = false
+  let mut name = run F.label(&[prefix, "-without-"])
+  let mut at: usize = 0
+  while at < hidden.length {
+    if F.contains(original, hidden[at]) { present = true }
+    if at > 0 { run String.append(&mut name, "-") }
+    let safe = run G.replace(hidden[at], "/", "_")
+    run String.append(&mut name, run G.text(safe.asSlice()))
+    at = at + 1
+  }
+  if present { let mut records = run F.copy(original, hidden)  run F.emit(&mut fixtures, String.view(&name), &mut records) }
+}
+effect fn generate(fixtures: &mut Fixtures) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  let root = run Task.root()
+  let mut seeds = run F.literals(&root, "modules/parse/src/generated_model_fixtures.silk")
+  let rows = seeds.asMutSlice()
+  let mut at: usize = 0
+  while at < rows.length {
+    let name = String.view(&rows[at].name)
+    if !String.endsWith(name, "DrawnBounds") {
+      if name == "postSimple" {
+        let mut records = List<Table>.make()
+        run F.set(&mut records, "post", rows[at].data.asSlice())
+        run F.set(&mut records, "maxp", b"\x00\x00\x50\x00\x00\x07")
+        rows[at].data = run F.sfnt(&mut records, 65536, true)
+      }
+      run fixtures.add(name, rows[at].data.asSlice())
+    }
+    at = at + 1
+  }
+  drop rows
+  let selected = ["tinos", "vazirmatn", "mplusVertical", "negativeVarAdvances", "verticalCff2"]
+  let hidden: [&[string]; 8] = [Slice.view<string>(&["HVAR"], 0, 1), Slice.view<string>(&["VVAR"], 0, 1), Slice.view<string>(&["HVAR", "VVAR"], 0, 2), Slice.view<string>(&["hmtx"], 0, 1), Slice.view<string>(&["vmtx"], 0, 1), Slice.view<string>(&["hhea", "OS/2"], 0, 2), Slice.view<string>(&["glyf", "loca"], 0, 2), Slice.view<string>(&["post"], 0, 1)]
+  let tags = ["hmtx", "vmtx", "HVAR", "VVAR", "MVAR", "gvar", "VORG"]
+  at = 0
+  while at < selected.length {
+    let original = run F.tables(run F.named(&seeds, selected[at]))
+    let mut i: usize = 0
+    while i < hidden.length { run without(&mut fixtures, selected[at], &original, hidden[i])  i = i + 1 }
+    i = 0
+    while i < tags.length {
+      if F.contains(&original, tags[i]) {
+        let value = run F.get(&original, tags[i])
+        let mut cuts = List<usize>.make()
+        let lengths: [usize; 4] = [0, F.minimum(2, value.length), F.minimum(4, value.length), value.length - 1]
+        let mut k: usize = 0
+        while k < lengths.length { run F.unique(&mut cuts, lengths[k])  k = k + 1 }
+        run cuts.sort()
+        let cuts2 = cuts.asSlice()
+        k = 0
+        while k < cuts2.length {
+          let mut records = run F.copy(&original, &[])
+          run F.set(&mut records, tags[i], Slice.view<u8>(value, 0, cuts2[k]))
+          let n = run F.number(cuts2[k])
+          let name = run F.label(&[selected[at], "-", tags[i], "-prefix-", String.view(&n)])
+          run F.emit(&mut fixtures, String.view(&name), &mut records)
+          k = k + 1
+        }
+      }
+      i = i + 1
+    }
+    at = at + 1
+  }
+  let tinos = run F.tables(run F.named(&seeds, "tinos"))
+  let ems: [usize; 7] = [0, 15, 16, 1000, 16384, 16385, 65535]
+  at = 0
+  while at < ems.length {
+    let mut records = run F.copy(&tinos, &[])
+    let mut head = run Bytes.copy(run F.get(&records, "head"))
+    G.patch(&mut head, 18, ems[at], 2)
+    run F.set(&mut records, "head", head.asSlice())
+    let name = run F.numbered("tinos-em-", ems[at])
+    run F.emit(&mut fixtures, String.view(&name), &mut records)
+    at = at + 1
+  }
+  let lines: [[i64; 2]; 4] = [[1600, -400], [1600, 400], [-1600, 400], [-1600, -400]]
+  at = 0
+  while at < lines.length {
+    let mut records = run F.copy(&tinos, &["OS/2"])
+    let mut hhea = run Bytes.copy(run F.get(&records, "hhea"))
+    let mut values = Bytes.make()
+    run B.words(&mut values, &lines[at])
+    let bytes = hhea.asMutSlice()
+    let mut i: usize = 0
+    while i < 4 { bytes[4 + i] = values.asSlice()[i]  i = i + 1 }
+    drop bytes
+    run F.set(&mut records, "hhea", hhea.asSlice())
+    let ascender = run Malformed.signed(lines[at][0])
+    let descender = run Malformed.signed(lines[at][1])
+    let name = run F.label(&["tinos-line-", String.view(&ascender), "-", String.view(&descender)])
+    run F.emit(&mut fixtures, String.view(&name), &mut records)
+    at = at + 1
+  }
+  let mut variable = run F.tables(run F.named(&seeds, "verticalCff2"))
+  let vorg = run F.tables(run F.named(&seeds, "vorgFont"))
+  run F.set(&mut variable, "VORG", run F.get(&vorg, "VORG"))
+  run F.emit(&mut fixtures, "combined-VORG-VVAR", &mut variable)
+  let labels = ["duplicate", "long", "utf8", "empty"]
+  at = 0
+  while at < labels.length {
+    let mut a = Bytes.make()
+    let mut b = Bytes.make()
+    if at == 0 { run a.append(b"alpha")  run b.append(b"alpha") }
+    else if at == 1 { let mut i: usize = 0  while i < 80 { run a.append(b"x")  i = i + 1 }  i = 0  while i < 63 { run b.append(b"x")  i = i + 1 } }
+    else if at == 2 { let mut i: usize = 0  while i < 40 { run a.append(b"\xc3\xa9")  i = i + 1 }  run b.append(b"\xff") }
+    else { run b.append(b"valid") }
+    let mut post = run Bytes.zeroed(32)
+    G.patch(&mut post, 0, 131072, 4)
+    run B.words(&mut post, &[2, 258, 259])
+    run G.be(&mut post, a.length(), 1)
+    run post.append(a.asSlice())
+    run G.be(&mut post, b.length(), 1)
+    run post.append(b.asSlice())
+    let mut records = List<Table>.make()
+    run F.set(&mut records, "post", post.asSlice())
+    run F.set(&mut records, "maxp", b"\x00\x00\x50\x00\x00\x02")
+    let name = run F.label(&["post-", labels[at]])
+    run F.emit(&mut fixtures, String.view(&name), &mut records)
+    at = at + 1
+  }
+  let misc = run F.literals(&root, "modules/parse/src/generated_misc_table_fixtures.silk")
+  let cubic = ["colrInvalidCubicFont", "colrValidCubicFont"]
+  at = 0
+  while at < cubic.length { run fixtures.add(cubic[at], run F.named(&misc, cubic[at]))  at = at + 1 }
+  let names = ["cbdtFont", "cbdtMissingGlyph2At16", "colrFont", "colrV0Font", "variableColrFont", "unclippedColrFont", "gradientFont", "varcCjkFont", "varcConditionalsFont", "varcStaticFont", "varcDeltaPrecisionFont", "colrEmptyColorLineFont"]
+  let omissions: [&[string]; 7] = [Slice.view<string>(&["COLR"], 0, 1), Slice.view<string>(&["VARC"], 0, 1), Slice.view<string>(&["CBDT"], 0, 1), Slice.view<string>(&["CBLC"], 0, 1), Slice.view<string>(&["glyf", "loca"], 0, 2), Slice.view<string>(&["gvar"], 0, 1), Slice.view<string>(&["fvar"], 0, 1)]
+  at = 0
+  while at < names.length {
+    let data = run F.named(&misc, names[at])
+    let name = run F.label(&["misc-", names[at]])
+    run fixtures.add(String.view(&name), data)
+    let records = run F.tables(data)
+    let mut i: usize = 0
+    while i < omissions.length { run without(&mut fixtures, String.view(&name), &records, omissions[i])  i = i + 1 }
+    at = at + 1
+  }
+  let base = run F.tables(run F.named(&seeds, "materialSymbols"))
+  let rows3 = misc.asSlice()
+  at = 0
+  while at < rows3.length {
+    let name = String.view(&rows3[at].name)
+    let data = rows3[at].data.asSlice()
+    if String.startsWith(name, "varc") && !F.has(&names, name) && name != "varcDeepCondition" {
+      let mut records = run F.copy(&base, &[])
+      run F.set(&mut records, "VARC", data)
+      let label = run F.label(&["model-", name])
+      run F.emit(&mut fixtures, String.view(&label), &mut records)
+      let mut cuts = List<usize>.make()
+      let values: [usize; 5] = [0, 4, 24, data.length / 2, data.length - 1]
+      let mut i: usize = 0
+      while i < values.length { run F.unique(&mut cuts, values[i])  i = i + 1 }
+      run cuts.sort()
+      let cutValues = cuts.asSlice()
+      i = 0
+      while i < cutValues.length {
+        let mut records = run F.copy(&base, &[])
+        run F.set(&mut records, "VARC", Slice.view<u8>(data, 0, F.minimum(cutValues[i], data.length)))
+        let n = run F.number(cutValues[i])
+        let label = run F.label(&["model-", name, "-prefix-", String.view(&n)])
+        run F.emit(&mut fixtures, String.view(&label), &mut records)
+        i = i + 1
+      }
+    }
+    at = at + 1
+  }
+  let bitmaps = ["cbdtFont", "cbdtMissingGlyph2At16"]
+  at = 0
+  while at < bitmaps.length {
+    let original = run F.tables(run F.named(&misc, bitmaps[at]))
+    let mut bitmap = List<Table>.make()
+    run F.set(&mut bitmap, "CBDT", run F.get(&original, "CBDT"))
+    run F.set(&mut bitmap, "CBLC", run F.get(&original, "CBLC"))
+    let mut combined = run F.copy(&base, &[])
+    run F.set(&mut combined, "CBDT", run F.get(&bitmap, "CBDT"))
+    run F.set(&mut combined, "CBLC", run F.get(&bitmap, "CBLC"))
+    let name = run F.label(&["mixed-", bitmaps[at]])
+    run F.emit(&mut fixtures, String.view(&name), &mut combined)
+    let counts: [usize; 2] = [0, 2]
+    let mut i: usize = 0
+    while i < 2 {
+      let mut maxp = run Bytes.copy(run F.get(&combined, "maxp"))
+      G.patch(&mut maxp, 4, counts[i], 2)
+      let mut mixed = run F.copy(&combined, &[])
+      let mut only = run F.copy(&bitmap, &[])
+      run F.set(&mut mixed, "maxp", maxp.asSlice())
+      run F.set(&mut only, "maxp", maxp.asSlice())
+      let n = run F.number(counts[i])
+      let name = run F.label(&["mixed-", bitmaps[at], "-count-", String.view(&n)])
+      run F.emit(&mut fixtures, String.view(&name), &mut mixed)
+      let name4 = run F.label(&["only-", bitmaps[at], "-count-", String.view(&n)])
+      run F.emit(&mut fixtures, String.view(&name4), &mut only)
+      i = i + 1
+    }
+    at = at + 1
+  }
+  let color = ["variableColrFont", "colrFont"]
+  at = 0
+  while at < color.length {
+    let mut records = run F.tables(run F.named(&misc, color[at]))
+    if F.contains(&records, "loca") { run F.set(&mut records, "loca", b"\x00\x00")  let name = run F.label(&[color[at], "-short-loca"])  run F.emit(&mut fixtures, String.view(&name), &mut records) }
+    at = at + 1
+  }
+}
+effect fn perform(fixtures: &mut Fixtures, reference: string, silk: string, report: string) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem { run generate(&mut fixtures)  run fixtures.compare(reference, silk, 120.0, report) }
+pub effect fn checkModelFixtures(reference: string, silk: string, report: string) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  let mut fixtures = run Fixtures.make("font-model-fixtures-", ".ttf")
+  let result = run Effect.result(perform(&mut fixtures, reference, silk, report))
+  run fixtures.cleanup()
+  match move result { Result<(), Errors>.Success { .. } => {} Result<(), Errors>.Failure { error } => { fail move error } }
+}

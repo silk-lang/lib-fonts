@@ -1,0 +1,53 @@
+import silk.io.writer { WriterError }
+import silk.core.option { Option }
+import silk.cli.task { Task, TaskError }
+import silk.collections.slice { Slice }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.mem.pointer { Pointer }
+import silk.system.child_process { ChildProcess, ProcessError }
+import silk.system.filesystem { FileSystem, FileError }
+import silk.system.host_input { HostInput, HostInputError }
+import silk.text.string { String }
+import font_harness_corpus as Corpus
+import font_harness_process as Process
+
+type Errors = TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError
+static if Intrinsic.targetOperatingSystem() == "linux" { unsafe extern "C" fn confstr(name: i32, output: ?[*]mut u8, length: usize) -> usize }
+pub struct Platform { pub name: String, pub processor: String }
+effect fn capture(program: string, arguments: &[string]) -> String ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem | &mut ChildProcess {
+  let output = run Task.capture(program, arguments)
+  return run Corpus.utf8(Process.trim(output.asSlice()))
+}
+pub effect fn current() -> Platform ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem | &mut ChildProcess {
+  let mut processor = run capture("uname", &["-p"])
+  if String.view(&processor) == "unknown" { processor = String.make() }
+  let machine = run capture("uname", &["-m"])
+  let mut name = String.make()
+  static if Intrinsic.targetOperatingSystem() == "darwin" {
+    let version = run capture("/usr/bin/sw_vers", &["-productVersion"])
+    run String.append(&mut name, "macOS-")
+    run String.append(&mut name, String.view(&version))
+    run String.append(&mut name, "-")
+    run String.append(&mut name, String.view(&machine))
+    run String.append(&mut name, "-64bit")
+  } else {
+    let release = run capture("uname", &["-r"])
+    run String.append(&mut name, "Linux-")
+    run String.append(&mut name, String.view(&release))
+    run String.append(&mut name, "-")
+    run String.append(&mut name, String.view(&machine))
+    if String.view(&processor) != "" && String.view(&processor) != String.view(&machine) { run String.append(&mut name, "-")  run String.append(&mut name, String.view(&processor)) }
+    run String.append(&mut name, "-with")
+    static if Intrinsic.targetOperatingSystem() == "linux" {
+      let mut buffer: [u8; 256] = [0; 256]
+      let length = unsafe confstr(2, Pointer.fromMutSlice(&mut buffer), 256)
+      if length > 1 && length <= 256 {
+        let value = run Corpus.utf8(Slice.view<u8>(&buffer, 0, length - 1))
+        run String.append(&mut name, "-")
+        let mut parts = String.split(String.view(&value), " ")
+        while let Option<string>.Some { value: part } = move parts.next() { run String.append(&mut name, part) }
+      }
+    }
+  }
+  return Platform { name: move name, processor: move processor }
+}

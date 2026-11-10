@@ -1,0 +1,167 @@
+import silk.collections.bytes { Bytes }
+import silk.collections.list { List }
+import silk.collections.slice { Slice }
+import silk.mem.allocator { Allocator }
+import silk.system.filesystem { FileSystem }
+import silk.text.string { String }
+import silk.num.usize
+import font_generate_support as G
+import font_generate_binary as B
+import font_harness_fixtures as F { Fixtures, Errors, Table }
+
+effect fn emit(fixtures: &mut Fixtures, name: string, locationTag: string, location: &[u8], dataTag: string, data: &[u8]) -> () ! Errors ? &mut Allocator | &mut FileSystem {
+  let mut tables = List<Table>.make()
+  run F.set(&mut tables, locationTag, location)
+  run F.set(&mut tables, dataTag, data)
+  run F.emit(&mut fixtures, name, &mut tables)
+}
+pub effect fn generate(fixtures: &mut Fixtures) -> () ! Errors ? &mut Allocator | &mut FileSystem {
+  let small = b"\x02\x03\x01\x02\x04"
+  let big = b"\x02\x03\x01\x02\x04\x00\x00\x00"
+  let components = b"\x00\x02\x00\x08\xff\x02\x00\x09\x03\xfe"
+  let formats: [usize; 12] = [1, 2, 5, 6, 7, 8, 9, 17, 18, 19, 3, 4]
+  let mut payloads = List<Bytes>.make()
+  let mut at: usize = 0
+  while at < formats.length {
+    let format = formats[at]
+    let mut payload = Bytes.make()
+    if format == 1 || format == 2 || format == 8 || format == 17 { run payload.append(small) }
+    if format == 6 || format == 7 || format == 9 || format == 18 { run payload.append(big) }
+    if format == 1 || format == 6 { run payload.append(b"\xa0\x40") }
+    if format == 2 || format == 5 || format == 7 { run payload.append(b"\xa8") }
+    if format == 8 { run payload.append(b"\x00") }
+    if format == 8 || format == 9 { run payload.append(components) }
+    if format >= 17 { run G.be(&mut payload, 3, 4)  run payload.append(b"png") }
+    if format == 3 || format == 4 { run payload.append(b"unsupported") }
+    run payloads.append(move payload)
+    at = at + 1
+  }
+  let payloads2 = payloads.asSlice()
+  let mut color: usize = 0
+  while color < 2 {
+    let locationTag = if color == 1 { "CBLC" } else { "EBLC" }
+    let dataTag = if color == 1 { "CBDT" } else { "EBDT" }
+    let major = color + 2
+    let mut index: usize = 1
+    while index <= 5 {
+      at = 0
+      while at < formats.length {
+        let payload = payloads2[at].asSlice()
+        let n = payload.length
+        let mut subtable = Bytes.make()
+        run G.be(&mut subtable, index, 2)
+        run G.be(&mut subtable, formats[at], 2)
+        run G.be(&mut subtable, 4, 4)
+        if index == 1 { run G.be(&mut subtable, 0, 4)  run G.be(&mut subtable, n, 4)  run G.be(&mut subtable, 2 * n, 4) }
+        else if index == 2 { run G.be(&mut subtable, n, 4)  run subtable.append(big) }
+        else if index == 3 { run B.words(&mut subtable, &[0, usize.toI64(n), usize.toI64(2 * n)]) }
+        else if index == 4 { run G.be(&mut subtable, 2, 4)  run B.words(&mut subtable, &[0, 0, 1, usize.toI64(n), 2, usize.toI64(2 * n)]) }
+        else { run G.be(&mut subtable, n, 4)  run subtable.append(big)  run G.be(&mut subtable, 2, 4)  run B.words(&mut subtable, &[0, 2]) }
+        let last: usize = if index == 5 { 2 } else { 1 }
+        let mut location = Bytes.make()
+        run G.be(&mut location, major, 2)
+        run G.be(&mut location, 0, 2)
+        run G.be(&mut location, 1, 4)
+        run G.be(&mut location, 56, 4)
+        run G.be(&mut location, 8 + subtable.length(), 4)
+        run G.be(&mut location, 1, 4)
+        run G.be(&mut location, 0, 4)
+        run G.zeros(&mut location, 24)
+        run G.be(&mut location, 0, 2)
+        run G.be(&mut location, last, 2)
+        run location.append(b"\x10\x10\x01\x01")
+        run G.be(&mut location, 0, 2)
+        run G.be(&mut location, last, 2)
+        run G.be(&mut location, 8, 4)
+        run location.append(subtable.asSlice())
+        let mut image = Bytes.make()
+        run G.be(&mut image, major, 2)
+        run G.be(&mut image, 0, 2)
+        run image.append(payload)
+        run image.append(payload)
+        let m = run F.number(major)
+        let i = run F.number(index)
+        let f = run F.number(formats[at])
+        let name = run F.label(&["bitmap-", String.view(&m), "-", String.view(&i), "-", String.view(&f)])
+        run emit(&mut fixtures, String.view(&name), locationTag, location.asSlice(), dataTag, image.asSlice())
+        let mut cuts = List<usize>.make()
+        run F.unique(&mut cuts, 0)
+        run F.unique(&mut cuts, 4)
+        run F.unique(&mut cuts, image.length() - 1)
+        run cuts.sort()
+        let lengths = cuts.asSlice()
+        let mut k: usize = 0
+        while k < lengths.length {
+          let n = run F.number(lengths[k])
+          let label = run F.label(&[String.view(&name), "-image-prefix-", String.view(&n)])
+          run emit(&mut fixtures, String.view(&label), locationTag, location.asSlice(), dataTag, Slice.view<u8>(image.asSlice(), 0, lengths[k]))
+          k = k + 1
+        }
+        let mut cuts3 = List<usize>.make()
+        run F.unique(&mut cuts3, 56)
+        run F.unique(&mut cuts3, 64)
+        run F.unique(&mut cuts3, location.length() - 1)
+        run cuts3.sort()
+        let lengths4 = cuts3.asSlice()
+        k = 0
+        while k < lengths4.length {
+          let n = run F.number(lengths4[k])
+          let label = run F.label(&[String.view(&name), "-location-prefix-", String.view(&n)])
+          run emit(&mut fixtures, String.view(&label), locationTag, Slice.view<u8>(location.asSlice(), 0, lengths4[k]), dataTag, image.asSlice())
+          k = k + 1
+        }
+        let offsets: [usize; 4] = [8, 12, 16, 68]
+        k = 0
+        while k < offsets.length {
+          if offsets[k] + 4 <= location.length() {
+            let mut changed = run Bytes.copy(location.asSlice())
+            G.patch(&mut changed, offsets[k], 4294967295, 4)
+            let n = run F.number(offsets[k])
+            let label = run F.label(&[String.view(&name), "-offset-", String.view(&n)])
+            run emit(&mut fixtures, String.view(&label), locationTag, changed.asSlice(), dataTag, image.asSlice())
+          }
+          k = k + 1
+        }
+        at = at + 1
+      }
+      index = index + 1
+    }
+    color = color + 1
+  }
+  let glyph0 = b"\xff\xff\x00\x02png abc"
+  let glyph1 = b"\x00\x03\xff\xfcdupexyz"
+  let mut strike = Bytes.make()
+  run B.words(&mut strike, &[16, 72])
+  run G.be(&mut strike, 16, 4)
+  run G.be(&mut strike, 16 + glyph0.length, 4)
+  run G.be(&mut strike, 16 + glyph0.length + glyph1.length, 4)
+  run strike.append(glyph0)
+  run strike.append(glyph1)
+  let labels = ["valid", "empty", "reversed", "past-end"]
+  let offsets: [[usize; 3]; 4] = [[16, 27, 38], [16, 16, 16], [27, 16, 38], [1000, 1000, 2000]]
+  at = 0
+  while at < labels.length {
+    let mut changed = run Bytes.copy(strike.asSlice())
+    let mut k: usize = 0
+    while k < 3 { G.patch(&mut changed, 4 + k * 4, offsets[at][k], 4)  k = k + 1 }
+    let mut table = Bytes.make()
+    run B.words(&mut table, &[1, 3])
+    run G.be(&mut table, 1, 4)
+    run G.be(&mut table, 12, 4)
+    run table.append(changed.asSlice())
+    let mut cuts = List<usize>.make()
+    let initial: [usize; 6] = [0, 8, 12, 16, table.length() - 1, table.length()]
+    k = 0
+    while k < initial.length { run F.unique(&mut cuts, initial[k])  k = k + 1 }
+    run cuts.sort()
+    let lengths = cuts.asSlice()
+    k = 0
+    while k < lengths.length {
+      let n = run F.number(lengths[k])
+      let name = run F.label(&["sbix-", labels[at], "-prefix-", String.view(&n)])
+      run emit(&mut fixtures, String.view(&name), "sbix", Slice.view<u8>(table.asSlice(), 0, lengths[k]), "maxp", b"\x00\x00\x50\x00\x00\x02")
+      k = k + 1
+    }
+    at = at + 1
+  }
+}

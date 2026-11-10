@@ -3,12 +3,12 @@
 This is the record of how the port got from 11.25× to below Rust, with the instruction-count table
 measured on Silk dev.25. The [README](../README.md#performance) has the current numbers.
 
-`modules/scripts/bench-shaping` mirrors harfrust's `benches/shaping.rs` workloads. Both
+`silk task bench-shaping` mirrors harfrust's `benches/shaping.rs` workloads. Both
 twins reuse fonts, buffers and shape plans, process the same pinned text, and
 check identical glyph/cluster/position checksums. Wall times for the Rust twin
-are tens of milliseconds and too noisy to compare, so the ratios below are
-callgrind instruction counts for one iteration
-(`modules/scripts/bench-shaping --callgrind --iterations 1 --samples 1`), Silk
+are tens of milliseconds and too noisy to compare. The historical ratios below
+are callgrind instruction counts for one iteration; the current equivalent is
+`silk task bench-shaping --callgrind --iterations 1 --samples 1`. Measurements used Silk
 `0.1.0-dev.25+584955edf9ef` with Clang 22.1.8 against Rust 1.99.1, both release
 builds. Lower is better.
 

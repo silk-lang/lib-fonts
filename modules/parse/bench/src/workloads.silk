@@ -1,4 +1,4 @@
-//! Library workloads for modules/scripts/bench-library. Each returns a checksum that the Rust
+//! Library workloads for silk task bench-library. Each returns a checksum that the Rust
 //! counterpart (modules/scripts/rust-font-dump/src/bin/font-bench.rs) must reproduce.
 import read_fonts.lib { FontRef, ReadError }
 import read_fonts.tables.cmap { Cmap, BestCmapSubtable, CmapSubtable }

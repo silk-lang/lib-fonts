@@ -1,0 +1,90 @@
+import font_tasks { Tasks }
+import task_shaping_cli { ShapingTasks }
+import task_benchmark_cli { BenchmarkTasks }
+import task_harness_cli { HarnessTasks }
+import task_fixture_cli { FixtureTasks }
+import task_generator_cli { GeneratorTasks }
+import task_shaping_generator_cli { ShapingGeneratorTasks }
+import font_task_arguments { Seconds }
+import silk.cli.command { Command, CommandLine, Opt }
+import silk.cli.task { Task, TaskError, TaskSet }
+import silk.io.writer { WriterError }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.system.child_process { ChildProcess, ProcessError }
+import silk.system.filesystem { FileError, FileSystem }
+import silk.system.host_input { HostInput, HostInputError }
+import silk.text.string { String }
+
+union Commands {
+  Shaping { pub shaping: ShapingTasks },
+  Benchmarks { pub benchmarks: BenchmarkTasks },
+  Harness { pub harness: HarnessTasks },
+  Fixtures { pub fixtures: FixtureTasks },
+  Generators { pub generators: GeneratorTasks },
+  ShapingData { pub shapingData: ShapingGeneratorTasks },
+  GenerateCasefold { pub fetch: bool, pub update: bool },
+  GenerateColorFonts,
+  Build { pub referenceOnly: bool, pub release: bool },
+  BuildWasm,
+  CheckWasm,
+  Check,
+  FontList { pub fonts: String, pub output: String, pub report: String, pub timeout: Seconds },
+}
+
+impl CommandLine for Commands {
+  static fn command() -> Command<Commands> {
+    return Command<Commands>.make("tasks", "Font library maintenance")
+      |> Command.variant("Shaping", "Shaping maintenance tasks")
+      |> Command.subcommand("shaping")
+      |> Command.variant("Benchmarks", "Benchmarks maintenance tasks")
+      |> Command.subcommand("benchmarks")
+      |> Command.variant("Harness", "Harness maintenance tasks")
+      |> Command.subcommand("harness")
+      |> Command.variant("Fixtures", "Fixtures maintenance tasks")
+      |> Command.subcommand("fixtures")
+      |> Command.variant("Generators", "Generators maintenance tasks")
+      |> Command.subcommand("generators")
+      |> Command.variant("ShapingData", "ShapingData maintenance tasks")
+      |> Command.subcommand("shapingData")
+      |> Command.variant("GenerateCasefold", "Generate pinned Unicode 18 case folding (offline by default)")
+      |> Command.option("fetch", Opt.about("Hydrate missing locked sources"))
+      |> Command.option("update", Opt.about("Explicitly refresh Unicode source pins"))
+      |> Command.variant("GenerateColorFonts", "Write COLRv0, sbix and CBDT raster fixtures")
+      |> Command.variant("Build", "Build Rust references and Silk parser harnesses")
+      |> Command.option("referenceOnly", Opt.about("Build only the Rust reference"))
+      |> Command.option("release", Opt.about("Build optimized binaries"))
+      |> Command.variant("BuildWasm", "Build and install the JavaScript wrapper's WebAssembly artifact")
+      |> Command.variant("CheckWasm", "Check and build the WebAssembly wrapper for CI")
+      |> Command.variant("Check", "Check the workspace, run native tests, and build harnesses")
+      |> Command.variant("FontList", "List the pinned font corpus and optional inventory")
+      |> Command.option("fonts", Opt.about("Use an explicit UTF-8 font list"))
+      |> Command.option("output", Opt.about("Write font paths instead of printing them"))
+      |> Command.option("report", Opt.about("Write results or corpus inventory as JSON"))
+      |> Command.option("timeout", Opt.about("Seconds per dumper") |> Opt.default("30"))
+  }
+}
+
+impl TaskSet for Commands {
+  effect fn perform(self: Commands) -> ()
+    ! TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError
+    ? &mut HostInput | &mut Allocator | &mut ChildProcess | &mut FileSystem {
+    let task = match move self {
+      Commands.Shaping { shaping } => { return run TaskSet.perform(move shaping) }
+      Commands.Benchmarks { benchmarks } => { return run TaskSet.perform(move benchmarks) }
+      Commands.Harness { harness } => { return run TaskSet.perform(move harness) }
+      Commands.Fixtures { fixtures } => { return run TaskSet.perform(move fixtures) }
+      Commands.Generators { generators } => { return run TaskSet.perform(move generators) }
+      Commands.ShapingData { shapingData } => { return run TaskSet.perform(move shapingData) }
+      Commands.GenerateCasefold { fetch, update } => Tasks.GenerateCasefold { fetch: move fetch, update: move update }
+      Commands.GenerateColorFonts => Tasks.GenerateColorFonts
+      Commands.Build { referenceOnly, release } => Tasks.Build { referenceOnly: move referenceOnly, release: move release }
+      Commands.BuildWasm => Tasks.BuildWasm
+      Commands.CheckWasm => Tasks.CheckWasm
+      Commands.Check => Tasks.Check
+      Commands.FontList { fonts, output, report, timeout } => Tasks.FontList { fonts: move fonts, output: move output, report: move report, timeout: timeout.value }
+    }
+    run TaskSet.perform(move task)
+  }
+}
+
+pub effect fn main() -> i32 ? &mut HostInput { return run Task.main<Commands>() }

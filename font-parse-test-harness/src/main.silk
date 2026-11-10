@@ -27,7 +27,9 @@ effect fn process() -> i32
   ! HostInputError | OutOfMemoryError | WriterError | FileError
   ? &mut HostInput | &mut Allocator {
   if (run HostInput.argumentCount()) != 2 {
-    run stderr("usage: font-parse-test-harness FONT\n       font-parse-test-harness --help | --version\n")
+    run stderr(
+      "usage: font-parse-test-harness FONT\n       font-parse-test-harness --help | --version\n",
+    )
     return 2
   }
   let argument = run HostInput.argument(1)
@@ -36,7 +38,9 @@ effect fn process() -> i32
     let flag = HostInput.text(Bytes.asSlice(&value))
     if let Result<string, InvalidUtf8>.Success { value: text } = move flag {
       if text == "--help" {
-        run Writer.writeString("usage: font-parse-test-harness FONT\nDump format 9: tables and model APIs.\n")
+        run Writer.writeString(
+          "usage: font-parse-test-harness FONT\nDump format 9: tables and model APIs.\n",
+        )
           |> Effect.provideMut<Writer>(&mut writer)
         return 0
       }

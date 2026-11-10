@@ -1,8 +1,8 @@
 # Silk generator fork
 
 Copied from fontations `cf5676b29faa8c7787abe003c5dfb85fd81e8a7c`.
-The original documentation follows below. Run `modules/scripts/generate` from this
-repository root, or `modules/scripts/generate --check` to reject generated-file drift.
+The original documentation follows below. Run `silk task generate` from this
+repository root, or `silk task generate --check` to reject generated-file drift.
 The local plan is `modules/parse/tools/codegen-plan.toml`; never run a plan that writes into the
 read-only upstream submodule.
 

@@ -1,0 +1,388 @@
+import font_shape_generate_common as G
+import silk.cli.task { TaskError }
+import silk.collections.bytes { Bytes }
+import silk.collections.list { List }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.system.filesystem { FileError, FileSystem, Path }
+import silk.text.string { String }
+import silk.num.usize
+
+const A: u64 = 0x10001
+const B: u64 = 0x10002
+const C: u64 = 0x10003
+struct Label { name: string<'static>, offset: usize }
+struct Fixup { at: usize, name: string<'static>, width: usize, base: string<'static> }
+struct Table { data: Bytes, labels: List<Label>, fixups: List<Fixup> }
+struct Lookup<'a> { kind: u64, data: &'a [u8] }
+struct FontTable<'a> { tag: string<'static>, data: &'a [u8] }
+fn table() -> Table { return Table { data: Bytes.make(), labels: List<Label>.make(), fixups: List<Fixup>.make() } }
+effect fn w(t: &mut Table, values: &[u64]) -> () ! OutOfMemoryError ? &mut Allocator { run G.packed(&mut t.data, values, 2) }
+effect fn n(t: &mut Table, value: u64, width: usize) -> () ! OutOfMemoryError ? &mut Allocator { run G.integer(&mut t.data, value, width) }
+effect fn label(t: &mut Table, name: string<'static>) -> () ! OutOfMemoryError ? &mut Allocator {
+  run List<Label>.append(&mut t.labels, Label { name: name, offset: Bytes.length(&t.data) })
+}
+effect fn reference(t: &mut Table, name: string<'static>, width: usize, base: string<'static>) -> () ! OutOfMemoryError ? &mut Allocator {
+  run List<Fixup>.append(&mut t.fixups, Fixup { at: Bytes.length(&t.data), name: name, width: width, base: base })
+  run n(&mut t, 0, width)
+}
+effect fn offset(labels: &[Label], name: string) -> usize ! TaskError | OutOfMemoryError ? &mut Allocator {
+  if name == "start" { return 0 }
+  let mut i: usize = 0
+  while i < labels.length {
+    if labels[i].name == name { return labels[i].offset }
+    i = i + 1
+  }
+  run G.require(false, "missing fixture offset label")
+  return 0
+}
+effect fn finish(t: &mut Table) -> () ! TaskError | OutOfMemoryError ? &mut Allocator {
+  let fixes = List<Fixup>.asSlice(&t.fixups)
+  let labels = List<Label>.asSlice(&t.labels)
+  let mut i: usize = 0
+  while i < fixes.length {
+    let target = run offset(labels, fixes[i].name)
+    let base = run offset(labels, fixes[i].base)
+    run G.require(target >= base, "negative fixture offset")
+    G.patch(&mut t.data, fixes[i].at, usize.toU64(target - base), fixes[i].width)
+    i = i + 1
+  }
+}
+effect fn coverage(t: &mut Table, glyphs: &[u64]) -> () ! OutOfMemoryError ? &mut Allocator {
+  run w(&mut t, &[3])
+  run n(&mut t, usize.toU64(glyphs.length), 3)
+  run G.packed(&mut t.data, glyphs, 3)
+}
+effect fn classes(t: &mut Table, glyph: u64, value: u64) -> () ! OutOfMemoryError ? &mut Allocator {
+  run w(&mut t, &[3])
+  run n(&mut t, glyph, 3)
+  run n(&mut t, 1, 3)
+  run n(&mut t, value, 3)
+}
+effect fn single(format: u64, glyph: u64, target: u64) -> Table ! TaskError | OutOfMemoryError ? &mut Allocator {
+  let mut t = table()
+  run w(&mut t, &[format])
+  run reference(&mut t, "coverage", 4, "start")
+  if format == 3 { run n(&mut t, if target >= glyph { target - glyph } else { 16777216 - (glyph - target) }, 3) }
+  else {
+    run n(&mut t, 1, 3)
+    run n(&mut t, target, 3)
+  }
+  run label(&mut t, "coverage")
+  run coverage(&mut t, &[glyph])
+  run finish(&mut t)
+  return move t
+}
+effect fn layout(lookups: &[Lookup<'_>]) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  let mut data = Bytes.make()
+  run G.packed(&mut data, &[1, 2, 0, 0, 0], 2)
+  run Bytes.append(&mut data, &[0; 12])
+  run G.integer(&mut data, 26, 4)
+  run G.integer(&mut data, usize.toU64(lookups.length), 2)
+  let mut at = 2 + lookups.length * 4
+  let mut i: usize = 0
+  while i < lookups.length {
+    run G.integer(&mut data, usize.toU64(at), 4)
+    at = at + 8 + lookups[i].data.length
+    i = i + 1
+  }
+  i = 0
+  while i < lookups.length {
+    run G.packed(&mut data, &[lookups[i].kind, 0, 1, 8], 2)
+    run Bytes.append(&mut data, lookups[i].data)
+    i = i + 1
+  }
+  return move data
+}
+effect fn emit(out: &mut String, name: string, kind: u64, t: &mut Table) -> () ! TaskError | OutOfMemoryError ? &mut Allocator {
+  run finish(&mut t)
+  let data = run layout(&[Lookup { kind: kind, data: Bytes.asSlice(&t.data) }])
+  run G.byteFunction(&mut out, name, Bytes.asSlice(&data))
+}
+effect fn sfnt(tables: &[FontTable<'_>]) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  let mut data = Bytes.make()
+  run G.integer(&mut data, 65536, 4)
+  run G.packed(&mut data, &[usize.toU64(tables.length), 0, 0, 0], 2)
+  let mut at = 12 + tables.length * 16
+  let mut i: usize = 0
+  while i < tables.length {
+    run Bytes.append(&mut data, String.utf8Bytes(tables[i].tag))
+    run G.integer(&mut data, 0, 4)
+    run G.integer(&mut data, usize.toU64(at), 4)
+    run G.integer(&mut data, usize.toU64(tables[i].data.length), 4)
+    at = at + tables[i].data.length
+    i = i + 1
+  }
+  i = 0
+  while i < tables.length {
+    run Bytes.append(&mut data, tables[i].data)
+    i = i + 1
+  }
+  return move data
+}
+
+pub effect fn generateShapingFixtures(root: &Path) -> () ! TaskError | FileError | OutOfMemoryError ? &mut Allocator | &mut FileSystem {
+  let mut out = run String.copy("// THIS FILE IS AUTOGENERATED by silk task generate-shaping-fixtures. DO NOT EDIT.\n")
+  let mut feat = table()
+  run n(&mut feat, 65536, 4)
+  run w(&mut feat, &[4, 0, 0, 0])
+  run w(&mut feat, &[1, 2, 0, 0, 0, 0, 17, 2, 0, 0, 0x8000, 0, 35, 2, 0, 0, 0, 0, 37, 2, 0, 0, 0x8000, 0])
+  let mut ltag = table()
+  run n(&mut ltag, 1, 4)
+  run n(&mut ltag, 0, 4)
+  run n(&mut ltag, 1, 4)
+  run w(&mut ltag, &[16, 2])
+  run Bytes.append(&mut ltag.data, b"tr")
+  let featureFont = run sfnt(&[FontTable { tag: "feat", data: Bytes.asSlice(&feat.data) }, FontTable { tag: "ltag", data: Bytes.asSlice(&ltag.data) }])
+  run G.byteFunction(&mut out, "aatFeatureFont", Bytes.asSlice(&featureFont))
+  let mut chain = table()
+  run n(&mut chain, 1, 4)
+  run Bytes.append(&mut chain.data, &[0; 12])
+  let chainRows: [u64; 28] = [1, 3, 0, 0xfffffffe, 1, 2, 1, 0xffffffff, 3, 3, 2, 0xffffffff, 35, 2, 4, 0xffffffff, 35, 3, 0, 0xfffffffb, 17, 7, 8, 0xffffffff, 39, 1, 16, 0xffffffff]
+  let mut i: usize = 0
+  while i < chainRows.length {
+    run w(&mut chain, &[chainRows[i], chainRows[i + 1]])
+    run n(&mut chain, chainRows[i + 2], 4)
+    run n(&mut chain, chainRows[i + 3], 4)
+    i = i + 4
+  }
+  run G.byteFunction(&mut out, "aatFeatureChain", Bytes.asSlice(&chain.data))
+  let mut gdef = table()
+  run w(&mut gdef, &[1, 3, 0, 0, 0, 0, 0])
+  run n(&mut gdef, 18, 4)
+  run w(&mut gdef, &[1])
+  run n(&mut gdef, 12, 4)
+  run w(&mut gdef, &[1])
+  run n(&mut gdef, 22, 4)
+  run w(&mut gdef, &[1, 1, 0, 16384, 16384, 1, 1, 1, 0, 3])
+  run G.byteFunction(&mut out, "fractionalGdef", Bytes.asSlice(&gdef.data))
+  let mut fractional = table()
+  run w(&mut fractional, &[3])
+  run reference(&mut fractional, "coverage", 4, "start")
+  run w(&mut fractional, &[64])
+  run reference(&mut fractional, "device", 2, "start")
+  run label(&mut fractional, "device")
+  run w(&mut fractional, &[0, 0, 0x8000])
+  run label(&mut fractional, "coverage")
+  run coverage(&mut fractional, &[A])
+  run emit(&mut out, "fractionalPosition", 1, &mut fractional)
+  let mut delta = run single(3, A, C)
+  run emit(&mut out, "singleDelta", 1, &mut delta)
+  let mut negative = run single(3, C, A)
+  run emit(&mut out, "singleNegativeDelta", 1, &mut negative)
+  let mut array = run single(4, A, C)
+  run emit(&mut out, "singleArray", 1, &mut array)
+  let names = &["multiple", "alternate", "ligature"]
+  i = 0
+  while i < names.length {
+    let kind = usize.toU64(i + 2)
+    let mut t = table()
+    run w(&mut t, &[2])
+    run reference(&mut t, "coverage", 4, "start")
+    run n(&mut t, 1, 3)
+    run reference(&mut t, "set", 3, "start")
+    run label(&mut t, "coverage")
+    run coverage(&mut t, &[A])
+    run label(&mut t, "set")
+    if kind == 4 {
+      run w(&mut t, &[1])
+      run reference(&mut t, "ligature", 3, "set")
+      run label(&mut t, "ligature")
+      run n(&mut t, C, 3)
+      run w(&mut t, &[2])
+      run n(&mut t, B, 3)
+    } else {
+      run w(&mut t, &[2])
+      run n(&mut t, B, 3)
+      run n(&mut t, C, 3)
+    }
+    run emit(&mut out, names[i], kind, &mut t)
+    if kind == 4 { run plannedFonts(&mut out, Bytes.asSlice(&t.data)) }
+    i = i + 1
+  }
+  let mut reverse = table()
+  run w(&mut reverse, &[2])
+  run reference(&mut reverse, "coverage", 4, "start")
+  run w(&mut reverse, &[1])
+  run reference(&mut reverse, "back", 3, "start")
+  run w(&mut reverse, &[1])
+  run reference(&mut reverse, "ahead", 3, "start")
+  run n(&mut reverse, 1, 3)
+  run n(&mut reverse, C, 3)
+  run label(&mut reverse, "coverage")
+  run coverage(&mut reverse, &[A])
+  run label(&mut reverse, "back")
+  run coverage(&mut reverse, &[B])
+  run label(&mut reverse, "ahead")
+  run coverage(&mut reverse, &[B])
+  run emit(&mut out, "reverse", 8, &mut reverse)
+  run contexts(&mut out)
+  let mut format: u64 = 3
+  while format <= 4 {
+    let mut t = table()
+    run w(&mut t, &[format])
+    run reference(&mut t, "coverage", 4, "start")
+    run w(&mut t, &[4])
+    if format == 4 { run n(&mut t, 1, 3) }
+    run w(&mut t, &[65499])
+    run label(&mut t, "coverage")
+    run coverage(&mut t, &[A])
+    run emit(&mut out, if format == 3 { "position3" } else { "position4" }, 1, &mut t)
+    format = format + 1
+  }
+  let mut pair3 = table()
+  run w(&mut pair3, &[3])
+  run reference(&mut pair3, "coverage", 4, "start")
+  run w(&mut pair3, &[4, 1])
+  run n(&mut pair3, 1, 3)
+  run reference(&mut pair3, "pairs", 3, "start")
+  run label(&mut pair3, "pairs")
+  run n(&mut pair3, 1, 3)
+  run n(&mut pair3, B, 3)
+  run w(&mut pair3, &[65499, 19])
+  run label(&mut pair3, "coverage")
+  run coverage(&mut pair3, &[A])
+  run emit(&mut out, "pair3", 2, &mut pair3)
+  let mut pair4 = table()
+  run w(&mut pair4, &[4])
+  run reference(&mut pair4, "coverage", 4, "start")
+  run w(&mut pair4, &[4, 1])
+  run reference(&mut pair4, "left", 4, "start")
+  run reference(&mut pair4, "right", 4, "start")
+  run w(&mut pair4, &[1, 1, 65499, 19])
+  run label(&mut pair4, "coverage")
+  run coverage(&mut pair4, &[A])
+  run label(&mut pair4, "left")
+  run classes(&mut pair4, A, 0)
+  run label(&mut pair4, "right")
+  run classes(&mut pair4, B, 0)
+  run emit(&mut out, "pair4", 2, &mut pair4)
+  let mut cursive = table()
+  run w(&mut cursive, &[2])
+  run reference(&mut cursive, "coverage", 4, "start")
+  run n(&mut cursive, 2, 3)
+  run n(&mut cursive, 0, 3)
+  run reference(&mut cursive, "exit", 3, "start")
+  run reference(&mut cursive, "entry", 3, "start")
+  run n(&mut cursive, 0, 3)
+  run label(&mut cursive, "coverage")
+  run coverage(&mut cursive, &[A, B])
+  run label(&mut cursive, "entry")
+  run w(&mut cursive, &[1, 10, 20])
+  run label(&mut cursive, "exit")
+  run w(&mut cursive, &[1, 100, 200])
+  run emit(&mut out, "cursive2", 3, &mut cursive)
+  run marks(&mut out)
+  run G.save(root, "modules/shape/src/generated_fixtures.silk", String.view(&out))
+}
+
+effect fn plannedFonts(out: &mut String, ligature: &[u8]) -> () ! OutOfMemoryError ? &mut Allocator {
+  let mut cmap = table()
+  run w(&mut cmap, &[0, 1, 3, 10])
+  run n(&mut cmap, 12, 4)
+  run w(&mut cmap, &[12, 0])
+  run G.packed(&mut cmap.data, &[28, 0, 1, 65, 66, A], 4)
+  let mut gsub = run layout(&[Lookup { kind: 4, data: ligature }])
+  let scriptOffset = Bytes.length(&gsub)
+  run G.packed(&mut gsub, &[1], 2)
+  run Bytes.append(&mut gsub, b"latn")
+  run G.packed(&mut gsub, &[8, 4, 0, 0, 0xffff, 1, 0], 2)
+  let featureOffset = Bytes.length(&gsub)
+  run G.packed(&mut gsub, &[1], 2)
+  run Bytes.append(&mut gsub, b"test")
+  run G.packed(&mut gsub, &[8, 0, 1, 0], 2)
+  G.patch(&mut gsub, 14, usize.toU64(scriptOffset), 4)
+  G.patch(&mut gsub, 18, usize.toU64(featureOffset), 4)
+  let planned = run sfnt(&[FontTable { tag: "GSUB", data: Bytes.asSlice(&gsub) }, FontTable { tag: "cmap", data: Bytes.asSlice(&cmap.data) }])
+  run G.byteFunction(&mut out, "plannedFont", Bytes.asSlice(&planned))
+  G.patch(&mut gsub, scriptOffset + 14, 0, 2)
+  let required = run sfnt(&[FontTable { tag: "GSUB", data: Bytes.asSlice(&gsub) }, FontTable { tag: "cmap", data: Bytes.asSlice(&cmap.data) }])
+  run G.byteFunction(&mut out, "requiredFont", Bytes.asSlice(&required))
+}
+effect fn contexts(out: &mut String) -> () ! TaskError | OutOfMemoryError ? &mut Allocator {
+  let mut chained: usize = 0
+  while chained < 2 {
+    let mut format: u64 = 4
+    while format <= (if chained == 1 { usize.toU64(5) } else { usize.toU64(6) }) {
+      let mut t = table()
+      run w(&mut t, &[format])
+      if format == 6 {
+        run w(&mut t, &[2, 1])
+        run reference(&mut t, "coverage", 3, "start")
+        run reference(&mut t, "second", 3, "start")
+        run w(&mut t, &[0, 1])
+      } else {
+        run reference(&mut t, "coverage", 4, "start")
+        if format == 5 {
+          if chained == 1 { run reference(&mut t, "emptyClasses", 4, "start") }
+          run reference(&mut t, "classes", 4, "start")
+          if chained == 1 { run reference(&mut t, "emptyClasses", 4, "start") }
+        }
+        run n(&mut t, 1, if chained == 1 && format == 5 { 2 } else { 3 })
+        run reference(&mut t, "set", 3, "start")
+        run label(&mut t, "set")
+        run w(&mut t, &[1])
+        run reference(&mut t, "rule", if chained == 0 && format == 4 { 2 } else { 3 }, "set")
+        run label(&mut t, "rule")
+        if chained == 1 { run w(&mut t, &[0, 2]) } else { run w(&mut t, &[2, 1]) }
+        run n(&mut t, if format == 4 { B } else { 1 }, if format == 4 { 3 } else { 2 })
+        if chained == 1 { run w(&mut t, &[0, 1]) }
+        run w(&mut t, &[0, 1])
+      }
+      run label(&mut t, "coverage")
+      run coverage(&mut t, &[A])
+      run label(&mut t, "second")
+      run coverage(&mut t, &[B])
+      run label(&mut t, "classes")
+      run classes(&mut t, B, 1)
+      run label(&mut t, "emptyClasses")
+      run w(&mut t, &[1, 0, 0])
+      run finish(&mut t)
+      let singleTable = run single(4, A, C)
+      let data = run layout(&[Lookup { kind: if chained == 1 { 6 } else { 5 }, data: Bytes.asSlice(&t.data) }, Lookup { kind: 1, data: Bytes.asSlice(&singleTable.data) }])
+      let mut name = run String.copy(if chained == 1 { "chain" } else { "context" })
+      run G.decimal(&mut name, format)
+      run G.byteFunction(&mut out, String.view(&name), Bytes.asSlice(&data))
+      format = format + 1
+    }
+    chained = chained + 1
+  }
+}
+effect fn marks(out: &mut String) -> () ! TaskError | OutOfMemoryError ? &mut Allocator {
+  let names = &["markBase2", "markLigature2", "markMark2"]
+  let mut i: usize = 0
+  while i < names.length {
+    let kind = usize.toU64(i + 4)
+    let mut t = table()
+    run w(&mut t, &[2])
+    run reference(&mut t, "markCoverage", 4, "start")
+    run reference(&mut t, "baseCoverage", 4, "start")
+    run w(&mut t, &[1])
+    run reference(&mut t, "marks", 4, "start")
+    run reference(&mut t, "bases", 4, "start")
+    run label(&mut t, "markCoverage")
+    run coverage(&mut t, &[B])
+    run label(&mut t, "baseCoverage")
+    run coverage(&mut t, &[A])
+    run label(&mut t, "marks")
+    run n(&mut t, 1, 3)
+    run w(&mut t, &[0])
+    run reference(&mut t, "markAnchor", 3, "marks")
+    run label(&mut t, "markAnchor")
+    run w(&mut t, &[1, 10, 20])
+    run label(&mut t, "bases")
+    if kind == 5 {
+      run n(&mut t, 1, 3)
+      run reference(&mut t, "components", 3, "bases")
+      run label(&mut t, "components")
+      run w(&mut t, &[1])
+      run reference(&mut t, "baseAnchor", 3, "components")
+    } else {
+      run n(&mut t, 1, if kind == 6 { 2 } else { 3 })
+      run reference(&mut t, "baseAnchor", 3, "bases")
+    }
+    run label(&mut t, "baseAnchor")
+    run w(&mut t, &[1, 100, 200])
+    run emit(&mut out, names[i], kind, &mut t)
+    i = i + 1
+  }
+}

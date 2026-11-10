@@ -1,0 +1,205 @@
+import silk.cli.task { Task }
+import silk.collections.bytes { Bytes }
+import silk.collections.list { List }
+import silk.collections.slice { Slice }
+import silk.core.effect { Effect }
+import silk.core.result { Result }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.system.filesystem { FileSystem }
+import silk.system.host_input { HostInput }
+import silk.text.string { String }
+import silk.num.usize
+import silk.num.i64
+import font_generate_support as G
+import font_generate_binary as B
+import font_harness_dump as Dump
+import font_harness_fixtures as F { Fixtures, Errors, Table, Literal }
+
+effect fn nameTable(records: &[[i64; 6]], storage: &[u8]) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+  let mut out = Bytes.make()
+  run G.be(&mut out, 0, 2)
+  run G.be(&mut out, records.length, 2)
+  run G.be(&mut out, 6 + 12 * records.length, 2)
+  let mut at: usize = 0
+  while at < records.length { run B.words(&mut out, &records[at])  at = at + 1 }
+  run out.append(storage)
+  return move out
+}
+effect fn emit(fixtures: &mut Fixtures, name: string, tag: string, bytes: &[u8]) -> () ! Errors ? &mut Allocator | &mut FileSystem {
+  let data = run F.one(tag, bytes, true)
+  run fixtures.add(name, data.asSlice())
+}
+effect fn generate(fixtures: &mut Fixtures) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  let root = run Task.root()
+  let cmaps = run F.literals(&root, "modules/parse/src/cmap_tests.silk")
+  let containers = ["vazirmatn", "simple", "font6", "font10", "font12", "font14", "vorg", "symbol", "format0", "format6Small", "prefer15a", "prefer15b"]
+  let rows = cmaps.asSlice()
+  let mut at: usize = 0
+  while at < rows.length {
+    let row = &rows[at]
+    let name = String.view(&row.name)
+    if name == "limitsFont" { run fixtures.add(name, row.data.asSlice()) }
+    else {
+      let mut payload = Bytes.make()
+      if !F.has(&containers, name) {
+        let format = if row.data.length() >= 2 { G.numberAt(row.data.asSlice(), 0, 2) } else { 0 }
+        let metrics: [i64; 4] = if format == 14 || format == 15 { [0, 1, 0, 5] } else { [0, 1, 3, 10] }
+        run B.words(&mut payload, &metrics)
+        run G.be(&mut payload, 12, 4)
+      }
+      run payload.append(row.data.asSlice())
+      let label = run F.label(&["cmap-", name])
+      run emit(&mut fixtures, String.view(&label), "cmap", payload.asSlice())
+    }
+    at = at + 1
+  }
+  let languages = run G.read(&root, "modules/parse/upstream/read-fonts/src/tables/name/language.rs")
+  let found = run G.matches("\\((0x[0-9a-fA-F]+|[0-9]+),\\s*\"", run G.text(languages.asSlice()))
+  let mut ids = List<usize>.make()
+  let initial: [usize; 6] = [0, 151, 152, 1024, 1025, 65535]
+  at = 0
+  while at < initial.length { run F.unique(&mut ids, initial[at])  at = at + 1 }
+  let matches = found.asSlice()
+  at = 0
+  while at < matches.length {
+    let key = run G.number(G.group(&matches[at], 1))
+    if key > 0 && key - 1 <= 65535 { run F.unique(&mut ids, key - 1) }
+    if key <= 65535 { run F.unique(&mut ids, key) }
+    if key < 65535 { run F.unique(&mut ids, key + 1) }
+    at = at + 1
+  }
+  run ids.sort()
+  let platforms: [usize; 4] = [0, 1, 3, 4]
+  at = 0
+  while at < platforms.length {
+    let mut records = List<[i64; 6]>.make()
+    let values = ids.asSlice()
+    let mut i: usize = 0
+    while i < values.length { run records.append([usize.toI64(platforms[at]), 0, usize.toI64(values[i]), 1, 0, 0])  i = i + 1 }
+    let data = run nameTable(records.asSlice(), &[])
+    let name = run F.numbered("name-languages-", platforms[at])
+    run emit(&mut fixtures, String.view(&name), "name", data.asSlice())
+    at = at + 1
+  }
+  let strings = [b"", b"\x00A", b"\xd8\x00", b"\xdc\x00", b"\xd8\x00\x00A", b"\xd8\x00\xd8\x00", b"\xd8\x00\xdc\x00", b"\xdb\xff\xdf\xff", b"\x00A\x00"]
+  let mut storage = Bytes.make()
+  at = 0
+  while at < strings.length { run storage.append(strings[at])  at = at + 1 }
+  at = 0
+  while at < 256 { run storage.append(&[usize.toU8(at)])  at = at + 1 }
+  let encodings = [Encoding { platform: 0, encoding: 0 }, Encoding { platform: 1, encoding: 0 }, Encoding { platform: 1, encoding: 1 }, Encoding { platform: 3, encoding: 0 }, Encoding { platform: 3, encoding: 1 }, Encoding { platform: 3, encoding: 10 }, Encoding { platform: 3, encoding: 2 }]
+  at = 0
+  while at < encodings.length {
+    let row = &encodings[at]
+    let mut records = List<[i64; 6]>.make()
+    let mut offset: usize = 0
+    let mut i: usize = 0
+    while i <= strings.length {
+      let length = if i < strings.length { strings[i].length } else { 256 }
+      run records.append([row.platform, row.encoding, 0, 1, usize.toI64(length), usize.toI64(offset)])
+      offset = offset + length
+      i = i + 1
+    }
+    run records.append([row.platform, row.encoding, 0, 1, 65535, 0])
+    run records.append([row.platform, row.encoding, 0, 1, 1, 65535])
+    let data = run nameTable(records.asSlice(), storage.asSlice())
+    let p = run F.number(i64.toUsize(row.platform))
+    let e = run F.number(i64.toUsize(row.encoding))
+    let name = run F.label(&["name-decode-", String.view(&p), "-", String.view(&e)])
+    run emit(&mut fixtures, String.view(&name), "name", data.asSlice())
+    at = at + 1
+  }
+  let versions: [usize; 6] = [0, 65536, 131072, 151552, 196608, 4294967295]
+  let postStrings = [b"", b"\x00", b"\x02ok", b"\x05short", b"\x07short", b"\x01\xff", b"\x00\x01x\x02ok"]
+  at = 0
+  while at < versions.length {
+    let mut i: usize = 0
+    while i < postStrings.length {
+      let mut data = Bytes.make()
+      run G.be(&mut data, versions[at], 4)
+      run G.zeros(&mut data, 28)
+      run B.words(&mut data, &[6, 0, 257, 258, 259, 260, 65535])
+      run data.append(postStrings[i])
+      let version = run F.number(versions[at])
+      let hex = run Dump.hex(postStrings[i])
+      let name = run F.label(&["post-", String.view(&version), "-", String.view(&hex)])
+      run emit(&mut fixtures, String.view(&name), "post", data.asSlice())
+      i = i + 1
+    }
+    at = at + 1
+  }
+  let mut header = run Bytes.zeroed(36)
+  G.patch(&mut header, 0, 65536, 4)
+  G.patch(&mut header, 34, 2, 2)
+  let mut metrics = Bytes.make()
+  run B.words(&mut metrics, &[500, 50, 600, 60, -10])
+  let counts: [usize; 7] = [0, 1, 2, 3, 65535, 65536, 4294967295]
+  at = 0
+  while at < counts.length {
+    let mut wide = run Bytes.copy(Slice.view<u8>(header.asSlice(), 0, 34))
+    run G.be(&mut wide, counts[at], 4)
+    let count = run F.number(counts[at])
+    let mut length: usize = 0
+    while length <= metrics.length() {
+      let n = run F.number(length)
+      let name = run F.label(&["HMTX-", String.view(&count), "-", String.view(&n)])
+      let mut records = List<Table>.make()
+      run F.set(&mut records, "HHEA", wide.asSlice())
+      run F.set(&mut records, "HMTX", Slice.view<u8>(metrics.asSlice(), 0, length))
+      run F.emit(&mut fixtures, String.view(&name), &mut records)
+      length = length + 1
+    }
+    at = at + 1
+  }
+  let mut samples = List<Literal>.make()
+  run samples.append(Literal { name: run String.copy("head"), data: run Bytes.zeroed(54) })
+  let mut maxp = run Bytes.zeroed(32)
+  G.patch(&mut maxp, 0, 65536, 4)
+  G.patch(&mut maxp, 4, 5, 2)
+  run samples.append(Literal { name: run String.copy("maxp"), data: move maxp })
+  run samples.append(Literal { name: run String.copy("hhea"), data: run Bytes.copy(header.asSlice()) })
+  run samples.append(Literal { name: run String.copy("hmtx"), data: run Bytes.copy(metrics.asSlice()) })
+  let mut os2 = run Bytes.zeroed(100)
+  G.patch(&mut os2, 0, 5, 2)
+  run samples.append(Literal { name: run String.copy("OS/2"), data: move os2 })
+  let mut post = run Bytes.copy(b"\x00\x02")
+  run G.zeros(&mut post, 32)
+  run post.append(b"\x00\x01\x01x")
+  run samples.append(Literal { name: run String.copy("post"), data: move post })
+  run samples.append(Literal { name: run String.copy("name"), data: run nameTable(&[[3, 1, 1033, 1, 2, 0]], b"\x00A") })
+  let mut cmap = Bytes.make()
+  run B.words(&mut cmap, &[0, 1, 3, 10])
+  run G.be(&mut cmap, 12, 4)
+  run B.words(&mut cmap, &[12, 0])
+  let words: [usize; 6] = [28, 0, 1, 65, 67, 1]
+  at = 0
+  while at < words.length { run G.be(&mut cmap, words[at], 4)  at = at + 1 }
+  run samples.append(Literal { name: run String.copy("cmap"), data: move cmap })
+  let rows2 = samples.asSlice()
+  at = 0
+  while at < rows2.length {
+    let tag = String.view(&rows2[at].name)
+    let mut length: usize = 0
+    while length <= rows2[at].data.length() {
+      let n = run F.number(length)
+      let mut display = tag
+      if tag == "OS/2" { display = "OS_2" }
+      let name = run F.label(&[display, "-prefix-", String.view(&n)])
+      let mut records = List<Table>.make()
+      run F.set(&mut records, tag, Slice.view<u8>(rows2[at].data.asSlice(), 0, length))
+      if tag == "hmtx" { run F.set(&mut records, "hhea", header.asSlice()) }
+      run F.emit(&mut fixtures, String.view(&name), &mut records)
+      length = length + 1
+    }
+    at = at + 1
+  }
+}
+effect fn perform(fixtures: &mut Fixtures, reference: string, silk: string, report: string) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem { run generate(&mut fixtures)  run fixtures.compare(reference, silk, 30.0, report) }
+pub effect fn checkTableFixtures(reference: string, silk: string, report: string) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  let mut fixtures = run Fixtures.make("font-table-fixtures-", ".ttf")
+  let result = run Effect.result(perform(&mut fixtures, reference, silk, report))
+  run fixtures.cleanup()
+  match move result { Result<(), Errors>.Success { .. } => {} Result<(), Errors>.Failure { error } => { fail move error } }
+}
+
+struct Encoding { platform: i64, encoding: i64 }

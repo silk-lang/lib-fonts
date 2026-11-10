@@ -1,4 +1,4 @@
-//! Color glyph tests over the fonts modules/raster/scripts/color-fonts.py writes.
+//! Color glyph tests over the fonts `silk task generate-color-fonts` writes.
 import face { FontFace }
 import key { GlyphKey }
 import cache { GlyphCache, RasterGlyph }

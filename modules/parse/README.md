@@ -76,14 +76,14 @@ Dependents import the package as `read_fonts`.
 | `modules/parse/tools/font-codegen-silk` | (Rust) | The fontations codegen grammar parser with Silk backends |
 | `modules/parse/upstream` | | The pinned fontations checkout. It is the codegen input and the Rust baseline, and is never modified |
 
-Shared scripts for the font packages live in [`modules/scripts`](../scripts). All of them run
-from the repository root.
+Shared maintenance commands are Silk tasks in the root [`src`](../../src).
+Run `silk task` from the repository root to list them.
 
 ## Generated code
 
-`modules/scripts/generate` regenerates the table accessors and test fixtures, then formats every
+`silk task generate` regenerates the table accessors and test fixtures, then formats every
 Silk source. `modules/parse/tools/codegen-plan.toml` lists each generated file. Never edit a
-`generated_*.silk` file by hand; `modules/scripts/generate --check` fails when a generated file
+`generated_*.silk` file by hand; `silk task generate --check` fails when a generated file
 is stale.
 
 ## Tests
@@ -92,10 +92,10 @@ From the repository root:
 
 ```sh
 silk test --manifest-path modules/parse/silk.toml --root src/tests.silk
-modules/scripts/generate --check
-python3 -m unittest discover -s modules/scripts/tests
+silk task generate --check
+silk task test-harness
 silk build --release --manifest-path font-parse-test-harness/silk.toml
-READ_FONTS_PROFILE=release modules/scripts/check-robustness --mutations-per-font 4
+READ_FONTS_PROFILE=release silk task check-robustness --mutations-per-font 4
 ```
 
 The robustness check dumps every one of the 566 corpus fonts, plus four seeded corruptions of
