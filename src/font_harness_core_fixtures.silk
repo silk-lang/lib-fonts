@@ -10,8 +10,15 @@ import silk.text.string { String }
 import font_generate_support as G
 import font_harness_fixtures as F { Fixtures, Errors }
 
-struct Record { tag: string<'static>, offset: usize, length: usize }
-effect fn sfnt(records: &[Record], version: usize) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+struct Record {
+  tag: string<'static>,
+  offset: usize,
+  length: usize
+}
+
+effect fn sfnt(records: &[Record], version: usize) -> Bytes
+  ! OutOfMemoryError
+  ? &mut Allocator {
   let mut bytes = Bytes.make()
   run G.be(&mut bytes, version, 4)
   run G.be(&mut bytes, records.length, 2)
@@ -26,8 +33,14 @@ effect fn sfnt(records: &[Record], version: usize) -> Bytes ! OutOfMemoryError ?
   }
   return move bytes
 }
-effect fn generate(fixtures: &mut Fixtures) -> () ! Errors ? &mut Allocator | &mut FileSystem {
-  let records = [Record { tag: "head", offset: 44, length: 4 }, Record { tag: "name", offset: 48, length: 4 }]
+
+effect fn generate(fixtures: &mut Fixtures) -> ()
+  ! Errors
+  ? &mut Allocator | &mut FileSystem {
+  let records = [
+    Record { tag: "head", offset: 44, length: 4 },
+    Record { tag: "name", offset: 48, length: 4 },
+  ]
   let mut normal = run sfnt(&records, 65536)
   run normal.append(b"abcdefgh")
   let mut length: usize = 0
@@ -46,12 +59,22 @@ effect fn generate(fixtures: &mut Fixtures) -> () ! Errors ? &mut Allocator | &m
     let mut digits: [u8; 8] = [48; 8]
     let mut n = versions[at]
     let mut i: usize = 8
-    while i > 0 { i = i - 1  digits[i] = hex[n % 16]  n = n / 16 }
+    while i > 0 {
+      i = i - 1
+      digits[i] = hex[n % 16]
+      n = n / 16
+    }
     run name.append(&digits)
     run fixtures.add(run G.text(name.asSlice()), data.asSlice())
     at = at + 1
   }
-  let boundaries = [Boundary { offset: 0, length: 4 }, Boundary { offset: 28, length: 0 }, Boundary { offset: 28, length: 4 }, Boundary { offset: 29, length: 0 }, Boundary { offset: 4294967295, length: 4294967295 }]
+  let boundaries = [
+    Boundary { offset: 0, length: 4 },
+    Boundary { offset: 28, length: 0 },
+    Boundary { offset: 28, length: 4 },
+    Boundary { offset: 29, length: 0 },
+    Boundary { offset: 4294967295, length: 4294967295 },
+  ]
   at = 0
   while at < boundaries.length {
     let row = &boundaries[at]
@@ -62,10 +85,16 @@ effect fn generate(fixtures: &mut Fixtures) -> () ! Errors ? &mut Allocator | &m
     run fixtures.add(String.view(&name), data.asSlice())
     at = at + 1
   }
-  let mut duplicate = run sfnt(&[Record { tag: "head", offset: 0, length: 4 }, Record { tag: "head", offset: 44, length: 4 }], 65536)
+  let mut duplicate = run sfnt(
+    &[Record { tag: "head", offset: 0, length: 4 }, Record { tag: "head", offset: 44, length: 4 }],
+    65536,
+  )
   run duplicate.append(b"abcd")
   run fixtures.add("duplicate-first-null", duplicate.asSlice())
-  let mut unsorted = run sfnt(&[Record { tag: "name", offset: 48, length: 4 }, Record { tag: "head", offset: 44, length: 4 }], 65536)
+  let mut unsorted = run sfnt(
+    &[Record { tag: "name", offset: 48, length: 4 }, Record { tag: "head", offset: 44, length: 4 }],
+    65536,
+  )
   run unsorted.append(b"abcdefgh")
   run fixtures.add("unsorted", unsorted.asSlice())
   let mut zero = run sfnt(&[Record { tag: "\x00\x00\x00\x00", offset: 28, length: 4 }], 65536)
@@ -82,9 +111,16 @@ effect fn generate(fixtures: &mut Fixtures) -> () ! Errors ? &mut Allocator | &m
         run G.be(&mut data, minor, 2)
         run G.be(&mut data, legacy, 4)
         let mut i: usize = 0
-        while i < legacy { run G.be(&mut data, 4294967295, 4)  i = i + 1 }
+        while i < legacy {
+          run G.be(&mut data, 4294967295, 4)
+          i = i + 1
+        }
         let legacyEnd = data.length()
-        if major == 2 { run data.append(b"DSIG")  run G.be(&mut data, 8, 4)  run G.be(&mut data, 4294967295, 4) }
+        if major == 2 {
+          run data.append(b"DSIG")
+          run G.be(&mut data, 8, 4)
+          run G.be(&mut data, 4294967295, 4)
+        }
         let extended = data.length()
         let first = extended + 12
         run G.be(&mut data, 2, 4)
@@ -95,9 +131,24 @@ effect fn generate(fixtures: &mut Fixtures) -> () ! Errors ? &mut Allocator | &m
         run data.append(a.asSlice())
         run data.append(b.asSlice())
         let mut cuts = List<usize>.make()
-        let candidates: [usize; 11] = [0, 4, 11, 12, legacyEnd, extended, extended + 4, first - 1, first, data.length() - 1, data.length()]
+        let candidates: [usize; 11] = [
+          0,
+          4,
+          11,
+          12,
+          legacyEnd,
+          extended,
+          extended + 4,
+          first - 1,
+          first,
+          data.length() - 1,
+          data.length(),
+        ]
         i = 0
-        while i < candidates.length { run F.unique(&mut cuts, candidates[i])  i = i + 1 }
+        while i < candidates.length {
+          run F.unique(&mut cuts, candidates[i])
+          i = i + 1
+        }
         run cuts.sort()
         let ma = run F.number(major)
         let mi = run F.number(minor)
@@ -106,7 +157,18 @@ effect fn generate(fixtures: &mut Fixtures) -> () ! Errors ? &mut Allocator | &m
         i = 0
         while i < lengths.length {
           let n = run F.padded(lengths[i], 3)
-          let name = run F.label(&["ttc-", String.view(&ma), "-", String.view(&mi), "-", String.view(&le), "-prefix-", String.view(&n)])
+          let name = run F.label(
+            &[
+              "ttc-",
+              String.view(&ma),
+              "-",
+              String.view(&mi),
+              "-",
+              String.view(&le),
+              "-prefix-",
+              String.view(&n),
+            ],
+          )
           run fixtures.add(String.view(&name), Slice.view<u8>(data.asSlice(), 0, lengths[i]))
           i = i + 1
         }
@@ -119,15 +181,29 @@ effect fn generate(fixtures: &mut Fixtures) -> () ! Errors ? &mut Allocator | &m
   run fixtures.add("ttc-huge-count", b"ttcf\x00\x01\x00\x00\xff\xff\xff\xff")
   run fixtures.add("ttc-empty", b"ttcf\x00\x01\x00\x00\x00\x00\x00\x00")
 }
-effect fn perform(fixtures: &mut Fixtures) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+
+effect fn perform(fixtures: &mut Fixtures) -> ()
+  ! Errors
+  ? &mut HostInput | &mut Allocator | &mut FileSystem {
   run generate(&mut fixtures)
   run fixtures.compare("", "", 5.0, "")
 }
-pub effect fn checkCoreFixtures() -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+
+pub effect fn checkCoreFixtures() -> ()
+  ! Errors
+  ? &mut HostInput | &mut Allocator | &mut FileSystem {
   let mut fixtures = run Fixtures.make("font-core-fixtures-", ".ttf")
   let result = run Effect.result(perform(&mut fixtures))
   run fixtures.cleanup()
-  match move result { Result<(), Errors>.Success { .. } => {} Result<(), Errors>.Failure { error } => { fail move error } }
+  match move result {
+    Result<(), Errors>.Success { .. } => {}
+    Result<(), Errors>.Failure { error } => {
+      fail move error
+    }
+  }
 }
 
-struct Boundary { offset: usize, length: usize }
+struct Boundary {
+  offset: usize,
+  length: usize
+}

@@ -4,7 +4,7 @@ import silk.system.filesystem { FileError }
 import silk.system.host_input { HostInputError }
 //! Callback regressions from upstream tests/font_funcs.rs, scaling.rs and advances.rs.
 import font { ShaperData, ConfiguredShaper, FontFuncs, NominalGlyphs, Advances }
-import shape { shapeWithFeatures, ShapeError }
+import shape { shapeWithFeatures }
 import buffer { Buffer, Glyph }
 import direction { Direction }
 import generated_fixtures as Fixtures

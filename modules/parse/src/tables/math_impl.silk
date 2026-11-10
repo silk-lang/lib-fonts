@@ -84,7 +84,7 @@ impl<'a> MathGlyphInfo<'a> {
     if let Option<CoverageTable<'a>>.Some { value } = move mathOptional(
       MathGlyphInfo.extendedShapeCoverage(self),
     ) {
-      if let Option<u32>.Some { value: index } = move CoverageTable.get(&value, glyph) {
+      if let Option<u32>.Some { .. } = move CoverageTable.get(&value, glyph) {
         return true
       }
     }

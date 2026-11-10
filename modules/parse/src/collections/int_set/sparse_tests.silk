@@ -2,14 +2,12 @@
 // Ports of all upstream sparse-bit-set tests, including exact encodings.
 import collections.int_set {
   IntSet,
-  IntSetIter,
   DecodingError,
   DecodedSparseSet,
   BranchFactor,
   toSparseBitSetWithBf
 }
 import silk.collections.list { List }
-import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.testing.testing { Testing, AssertionError }
 import silk.mem.allocator { Allocator, OutOfMemoryError }
@@ -86,7 +84,7 @@ effect fn rejected<'a>(data: &'a [u8], bias: u32, maximum: u32, limit: u32, expe
     maximum,
     limit,
   ) {
-    Result<DecodedSparseSet<'a>, DecodingError>.Failure { error } => true
+    Result<DecodedSparseSet<'a>, DecodingError>.Failure { .. } => true
     _ => false
   }
   run Testing.expect(failed == expected, "bounded size or malformed rejection")

@@ -12,7 +12,6 @@ import tables.math {
   MathKernInfo,
   MathKernCorner,
   MathKern,
-  MathKernEntry,
   MathKernEntryIter,
   MathVariants,
   StretchAxis,

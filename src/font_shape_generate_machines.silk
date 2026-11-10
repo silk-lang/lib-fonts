@@ -16,54 +16,108 @@ import silk.num.u64
 import silk.num.u32
 import silk.num.usize
 
-struct Arm<'a> { key: string<'a>, content: string<'a>, conditional: bool }
-struct Table { name: String, values: List<u64> }
-struct Program { id: u64, bytes: Bytes }
-struct Pair { script: u64, first: u64, second: u64 }
+struct Arm<'a> {
+  key: string<'a>,
+  content: string<'a>,
+  conditional: bool
+}
+
+struct Table {
+  name: String,
+  values: List<u64>
+}
+
+struct Program {
+  id: u64,
+  bytes: Bytes
+}
+
+struct Pair {
+  script: u64,
+  first: u64,
+  second: u64
+}
+
 impl Order for Pair {
   fn compare(left: &Pair, right: &Pair) -> Ordering {
-    if left.script < right.script { return Ordering.Less }
-    if left.script > right.script { return Ordering.Greater }
-    if left.first < right.first { return Ordering.Less }
-    if left.first > right.first { return Ordering.Greater }
-    if left.second < right.second { return Ordering.Less }
-    if left.second > right.second { return Ordering.Greater }
+    if left.script < right.script {
+      return Ordering.Less
+    }
+    if left.script > right.script {
+      return Ordering.Greater
+    }
+    if left.first < right.first {
+      return Ordering.Less
+    }
+    if left.first > right.first {
+      return Ordering.Greater
+    }
+    if left.second < right.second {
+      return Ordering.Less
+    }
+    if left.second > right.second {
+      return Ordering.Greater
+    }
     return Ordering.Equal
   }
 }
-effect fn arms<'a>(text: string<'a>) -> List<Arm<'a>> ! TaskError | OutOfMemoryError ? &mut Allocator {
-  let pattern = run Effect.catch<RegexError>(Regex.compile("([\\w\\s|]+)\\s*=>\\s*(match\\s*\\(act\\)\\s*)?\\{"), G.regexFailure)
+
+effect fn arms<'a>(text: string<'a>) -> List<Arm<'a>>
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
+  let pattern = run Effect.catch<RegexError>(
+    Regex.compile("([\\w\\s|]+)\\s*=>\\s*(match\\s*\\(act\\)\\s*)?\\{"),
+    G.regexFailure,
+  )
   let mut result = List<Arm<'a>>.make()
   let mut pos: usize = 0
   while pos < String.byteLength(text) {
-    let found = run Effect.catch<RegexError>(Regex.find(&pattern, String.slice(text, pos, String.byteLength(text) - pos)), G.regexFailure)
+    let found = run Effect.catch<RegexError>(
+      Regex.find(&pattern, String.slice(text, pos, String.byteLength(text) - pos)),
+      G.regexFailure,
+    )
     match move found {
-      Option<Match<'a>>.None => { break }
+      Option<Match<'a>>.None => {
+        break
+      }
       Option<Match<'a>>.Some { value } => {
         let content = run G.body(text, pos + Match.end(&value) - 1)
         let key = Match.group(&value, 1) |> Option<string>.unwrapOr("")
         let condition = Match.group(&value, 2)
         let conditional = Option<string>.isSome(&condition)
-        run List<Arm<'a>>.append(&mut result, Arm<'a> { key: String.trim(key), content: content.text, conditional: conditional })
+        run List<Arm<'a>>.append(
+          &mut result,
+          Arm<'a> { key: String.trim(key), content: content.text, conditional: conditional },
+        )
         pos = content.end
       }
     }
   }
   return move result
 }
-effect fn actionCode(text: string, kinds: &[Named]) -> Bytes ! TaskError | OutOfMemoryError ? &mut Allocator {
-  let matches = run G.hits("te\\s*=\\s*p\\s*\\+\\s*1;|te\\s*=\\s*p;|p\\s*=\\s*p\\s*-\\s*1;|p\\s*=\\s*\\(te\\)\\s*-\\s*1;|act\\s*=\\s*(\\d+);|found_syllable!\\(SyllableType::(\\w+)\\)", text)
+
+effect fn actionCode(text: string, kinds: &[Named]) -> Bytes
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
+  let matches = run G.hits(
+    "te\\s*=\\s*p\\s*\\+\\s*1;|te\\s*=\\s*p;|p\\s*=\\s*p\\s*-\\s*1;|p\\s*=\\s*\\(te\\)\\s*-\\s*1;|act\\s*=\\s*(\\d+);|found_syllable!\\(SyllableType::(\\w+)\\)",
+    text,
+  )
   let rows = List<Hit>.asSlice(&matches)
   let mut instructions = Bytes.make()
   let mut i: usize = 0
   while i < rows.length {
     let token = run G.replace(G.group(&rows[i], 0), "\\s+", "")
     let v = String.view(&token)
-    if v == "te=p+1;" { run Bytes.append(&mut instructions, &[1, 0]) }
-    else if v == "te=p;" { run Bytes.append(&mut instructions, &[2, 0]) }
-    else if v == "p=p-1;" { run Bytes.append(&mut instructions, &[3, 0]) }
-    else if v == "p=(te)-1;" { run Bytes.append(&mut instructions, &[4, 0]) }
-    else if G.group(&rows[i], 1) != "" {
+    if v == "te=p+1;" {
+      run Bytes.append(&mut instructions, &[1, 0])
+    } else if v == "te=p;" {
+      run Bytes.append(&mut instructions, &[2, 0])
+    } else if v == "p=p-1;" {
+      run Bytes.append(&mut instructions, &[3, 0])
+    } else if v == "p=(te)-1;" {
+      run Bytes.append(&mut instructions, &[4, 0])
+    } else if G.group(&rows[i], 1) != "" {
       run G.integer(&mut instructions, 5, 1)
       run G.integer(&mut instructions, run G.number(G.group(&rows[i], 1)), 1)
     } else {
@@ -76,7 +130,9 @@ effect fn actionCode(text: string, kinds: &[Named]) -> Bytes ! TaskError | OutOf
   let mut fused = Bytes.make()
   i = 0
   while i < code.length {
-    if i + 5 < code.length && code[i] == 2 && code[i + 1] == 0 && code[i + 2] == 3 && code[i + 3] == 0 && code[i + 4] == 6 {
+    if i + 5 < code.length && code[i] == 2 && code[i + 1] == 0 && code[i + 2] == 3
+      && code[i + 3] == 0
+      && code[i + 4] == 6 {
       run Bytes.append(&mut fused, &[8, code[i + 5]])
       i = i + 6
     } else if i + 3 < code.length && code[i] == 4 && code[i + 1] == 0 && code[i + 2] == 6 {
@@ -89,31 +145,56 @@ effect fn actionCode(text: string, kinds: &[Named]) -> Bytes ! TaskError | OutOf
   }
   return move fused
 }
-effect fn values<'a>(tables: &'a [Table], name: string) -> &'a [u64] ! TaskError | OutOfMemoryError ? &mut Allocator {
+
+effect fn values<'a>(tables: &'a [Table], name: string) -> &'a [u64]
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
   let mut i: usize = 0
   while i < tables.length {
-    if String.view(&tables[i].name) == name { return List<u64>.asSlice(&tables[i].values) }
+    if String.view(&tables[i].name) == name {
+      return List<u64>.asSlice(&tables[i].values)
+    }
     i = i + 1
   }
   return run Task.abort("missing Ragel transition table")
 }
+
 fn codeFor<'a>(programs: &'a [Program], id: u64) -> &'a [u8] {
   let mut i: usize = 0
   while i < programs.length {
-    if programs[i].id == id { return Bytes.asSlice(&programs[i].bytes) }
+    if programs[i].id == id {
+      return Bytes.asSlice(&programs[i].bytes)
+    }
     i = i + 1
   }
   return b""
 }
-effect fn namedFunction(out: &mut String, name: string, suffix: string, bytes: &[u8]) -> () ! OutOfMemoryError ? &mut Allocator {
+
+effect fn namedFunction(out: &mut String, name: string, suffix: string, bytes: &[u8]) -> ()
+  ! OutOfMemoryError
+  ? &mut Allocator {
   let mut function = run String.copy(name)
   run String.append(&mut function, suffix)
   run G.byteFunction(&mut out, String.view(&function), bytes)
 }
+
 fn target(state: usize, froms: &[u64], tos: &[u64]) -> u64 {
-  return usize.toU64(state) | (if tos[state] != 0 { u32.toU64(0x8000) } else { u32.toU64(0) }) | (if froms[state] != 0 { u32.toU64(0x4000) } else { u32.toU64(0) })
+  return usize.toU64(state)
+    | (if tos[state] != 0 {
+      u32.toU64(0x8000)
+    } else {
+      u32.toU64(0)
+    })
+    | (if froms[state] != 0 {
+      u32.toU64(0x4000)
+    } else {
+      u32.toU64(0)
+    })
 }
-effect fn machine(root: &Path, out: &mut String, name: string) -> () ! TaskError | FileError | OutOfMemoryError ? &mut Allocator | &mut FileSystem {
+
+effect fn machine(root: &Path, out: &mut String, name: string) -> ()
+  ! TaskError | FileError | OutOfMemoryError
+  ? &mut Allocator | &mut FileSystem {
   let mut path = run String.copy("ot/shaper/")
   run String.append(&mut path, name)
   run String.append(&mut path, "_machine.rs")
@@ -134,7 +215,10 @@ effect fn machine(root: &Path, out: &mut String, name: string) -> () ! TaskError
     let mut fullName = run String.copy(String.view(&prefix))
     run String.append(&mut fullName, key)
     let tableText = run G.array(src, String.view(&fullName))
-    run List<Table>.append(&mut allTables, Table { name: run String.copy(key), values: run G.numbers(String.view(&tableText)) })
+    run List<Table>.append(
+      &mut allTables,
+      Table { name: run String.copy(key), values: run G.numbers(String.view(&tableText)) },
+    )
     i = i + 1
   }
   let tables = List<Table>.asSlice(&allTables)
@@ -150,7 +234,10 @@ effect fn machine(root: &Path, out: &mut String, name: string) -> () ! TaskError
   let mut allKinds = List<Named>.make()
   i = 0
   while i < kindRows.length {
-    run List<Named>.append(&mut allKinds, Named { name: run String.copy(G.group(&kindRows[i], 1)), value: usize.toU64(i) })
+    run List<Named>.append(
+      &mut allKinds,
+      Named { name: run String.copy(G.group(&kindRows[i], 1)), value: usize.toU64(i) },
+    )
     i = i + 1
   }
   let kinds = List<Named>.asSlice(&allKinds)
@@ -160,8 +247,19 @@ effect fn machine(root: &Path, out: &mut String, name: string) -> () ! TaskError
   let transitionStart = run G.index(src, String.view(&targetMarker))
   let mut actionMarker = run String.copy("match (")
   run String.append(&mut actionMarker, String.view(&prefix))
-  run String.append(&mut actionMarker, if name == "khmer" { "actions[(_acts)" } else { "cond_actions" })
-  let actionStart = transitionStart + run G.index(String.slice(src, transitionStart, String.byteLength(src) - transitionStart), String.view(&actionMarker))
+  run String.append(
+    &mut actionMarker,
+    if name == "khmer" {
+      "actions[(_acts)"
+    } else {
+      "cond_actions"
+    },
+  )
+  let actionStart = transitionStart
+    + run G.index(
+      String.slice(src, transitionStart, String.byteLength(src) - transitionStart),
+      String.view(&actionMarker),
+    )
   let actionBody = run G.body(src, actionStart)
   let actionArms = run arms(actionBody.text)
   let actions = List<Arm>.asSlice(&actionArms)
@@ -184,8 +282,13 @@ effect fn machine(root: &Path, out: &mut String, name: string) -> () ! TaskError
           }
           j = j + 1
         }
-      } else { code = run actionCode(actions[i].content, kinds) }
-      run List<Program>.append(&mut codes, Program { id: run G.number(actions[i].key), bytes: move code })
+      } else {
+        code = run actionCode(actions[i].content, kinds)
+      }
+      run List<Program>.append(
+        &mut codes,
+        Program { id: run G.number(actions[i].key), bytes: move code },
+      )
     }
     i = i + 1
   }
@@ -198,7 +301,11 @@ effect fn machine(root: &Path, out: &mut String, name: string) -> () ! TaskError
   let mut offsets = List<u64>.make()
   let maximum = orderedIds[orderedIds.length - 1]
   run List<u64>.appendRepeated(&mut offsets, 0, u64.toUsize(maximum + 1))
-  let khmerActions = if name == "khmer" { run values(tables, "actions") } else { &[] }
+  let khmerActions = if name == "khmer" {
+    run values(tables, "actions")
+  } else {
+    &[]
+  }
   i = 0
   while i < orderedIds.length {
     let id = orderedIds[i]
@@ -212,7 +319,9 @@ effect fn machine(root: &Path, out: &mut String, name: string) -> () ! TaskError
           run Bytes.append(&mut programs, codeFor(List<Program>.asSlice(&codes), khmerActions[j]))
           j = j + 1
         }
-      } else { run Bytes.append(&mut programs, codeFor(List<Program>.asSlice(&codes), id)) }
+      } else {
+        run Bytes.append(&mut programs, codeFor(List<Program>.asSlice(&codes), id))
+      }
       run G.integer(&mut programs, 0, 1)
     }
     i = i + 1
@@ -229,8 +338,16 @@ effect fn machine(root: &Path, out: &mut String, name: string) -> () ! TaskError
     let tos = List<u64>.asMutSlice(&mut toValues)
     i = 0
     while i < states {
-      froms[i] = if khmerActions[u64.toUsize(froms[i])] != 0 { 1 } else { 0 }
-      tos[i] = if khmerActions[u64.toUsize(tos[i])] != 0 { 1 } else { 0 }
+      froms[i] = if khmerActions[u64.toUsize(froms[i])] != 0 {
+        1
+      } else {
+        0
+      }
+      tos[i] = if khmerActions[u64.toUsize(tos[i])] != 0 {
+        1
+      } else {
+        0
+      }
       i = i + 1
     }
   }
@@ -239,12 +356,36 @@ effect fn machine(root: &Path, out: &mut String, name: string) -> () ! TaskError
   let keys = run values(tables, "trans_keys")
   let indexOffsets = run values(tables, "index_offsets")
   let targets = run values(tables, "cond_targs")
-  let keyOffsets = if name == "khmer" { run values(tables, "key_offsets") } else { &[] }
-  let singles = if name == "khmer" { run values(tables, "single_lengths") } else { &[] }
-  let ranges = if name == "khmer" { run values(tables, "range_lengths") } else { &[] }
-  let classes = if name != "khmer" { run values(tables, "char_class") } else { &[] }
-  let defaults = if name != "khmer" { run values(tables, "index_defaults") } else { &[] }
-  let indices = if name != "khmer" { run values(tables, "indices") } else { &[] }
+  let keyOffsets = if name == "khmer" {
+    run values(tables, "key_offsets")
+  } else {
+    &[]
+  }
+  let singles = if name == "khmer" {
+    run values(tables, "single_lengths")
+  } else {
+    &[]
+  }
+  let ranges = if name == "khmer" {
+    run values(tables, "range_lengths")
+  } else {
+    &[]
+  }
+  let classes = if name != "khmer" {
+    run values(tables, "char_class")
+  } else {
+    &[]
+  }
+  let defaults = if name != "khmer" {
+    run values(tables, "index_defaults")
+  } else {
+    &[]
+  }
+  let indices = if name != "khmer" {
+    run values(tables, "indices")
+  } else {
+    &[]
+  }
   let programOffsets = List<u64>.asSlice(&offsets)
   let mut matrix = run Bytes.makeWithCapacity(states * 60 * 4)
   let mut state: usize = 0
@@ -254,8 +395,11 @@ effect fn machine(root: &Path, out: &mut String, name: string) -> () ! TaskError
       let mut trans: usize = 0
       let mut absent = false
       if category == 59 {
-        if eof[state] == 0 { absent = true }
-        else { trans = u64.toUsize(eof[state] - 1) }
+        if eof[state] == 0 {
+          absent = true
+        } else {
+          trans = u64.toUsize(eof[state] - 1)
+        }
       } else if name == "khmer" {
         let mut key = u64.toUsize(keyOffsets[state])
         trans = u64.toUsize(indexOffsets[state])
@@ -283,17 +427,29 @@ effect fn machine(root: &Path, out: &mut String, name: string) -> () ! TaskError
             }
             k = k + 1
           }
-          if !found { trans = trans + rangeCount }
+          if !found {
+            trans = trans + rangeCount
+          }
         }
       } else {
-        let bias: u64 = if name == "indic" || name == "myanmar" { 1 } else { 0 }
-        let maximum: u64 = if name == "use" { 56 } else { 57 }
+        let bias: u64 = if name == "indic" || name == "myanmar" {
+          1
+        } else {
+          0
+        }
+        let maximum: u64 = if name == "use" {
+          56
+        } else {
+          57
+        }
         trans = u64.toUsize(defaults[state])
         if bias <= category && category <= maximum && state * 2 + 1 < keys.length {
           let ic = classes[u64.toUsize(category - bias)]
           let lo = keys[state * 2]
           let hi = keys[state * 2 + 1]
-          if lo <= ic && ic <= hi { trans = u64.toUsize(indices[u64.toUsize(indexOffsets[state] + ic - lo)]) }
+          if lo <= ic && ic <= hi {
+            trans = u64.toUsize(indices[u64.toUsize(indexOffsets[state] + ic - lo)])
+          }
         }
       }
       if absent {
@@ -310,19 +466,37 @@ effect fn machine(root: &Path, out: &mut String, name: string) -> () ! TaskError
   let mut broken: u64 = 255
   i = 0
   while i < kinds.length {
-    if String.view(&kinds[i].name) == "BrokenCluster" { broken = kinds[i].value }
+    if String.view(&kinds[i].name) == "BrokenCluster" {
+      broken = kinds[i].value
+    }
     i = i + 1
   }
   let mut header = Bytes.make()
   run G.packed(&mut header, &[start, broken], 2)
   i = 0
   while i < froms.length {
-    run G.integer(&mut header, if froms[i] != 0 { 1 } else { 0 }, 1)
+    run G.integer(
+      &mut header,
+      if froms[i] != 0 {
+        1
+      } else {
+        0
+      },
+      1,
+    )
     i = i + 1
   }
   i = 0
   while i < tos.length {
-    run G.integer(&mut header, if tos[i] != 0 { 1 } else { 0 }, 1)
+    run G.integer(
+      &mut header,
+      if tos[i] != 0 {
+        1
+      } else {
+        0
+      },
+      1,
+    )
     i = i + 1
   }
   run namedFunction(&mut out, name, "States", Bytes.asSlice(&header))
@@ -330,15 +504,22 @@ effect fn machine(root: &Path, out: &mut String, name: string) -> () ! TaskError
   run namedFunction(&mut out, name, "Actions", Bytes.asSlice(&programs))
 }
 
-pub effect fn generateShapingMachines(root: &Path) -> () ! TaskError | FileError | OutOfMemoryError ? &mut Allocator | &mut FileSystem {
-  let mut out = run String.copy("// THIS FILE IS AUTOGENERATED by silk task generate-shaping-machines. DO NOT EDIT.\n// From pinned Harfrust/HarfBuzz shaping data, MIT licensed.\n")
+pub effect fn generateShapingMachines(root: &Path) -> ()
+  ! TaskError | FileError | OutOfMemoryError
+  ? &mut Allocator | &mut FileSystem {
+  let mut out = run String.copy(
+    "// THIS FILE IS AUTOGENERATED by silk task generate-shaping-machines. DO NOT EDIT.\n// From pinned Harfrust/HarfBuzz shaping data, MIT licensed.\n",
+  )
   let indic = run G.source(root, "ot/shaper/indic_table.rs")
   let indicSource = run G.source(root, "ot/shaper/indic.rs")
   let constants = run G.constants(String.view(&indicSource))
   let aliasMatches = run G.hits("use (\\w+)\\s+as (\\w+);", String.view(&indic))
   let aliases = List<Hit>.asSlice(&aliasMatches)
   let indicArray = run G.array(String.view(&indic), "indic_values")
-  let valueMatches = run G.hits("indic_combine_categories\\((\\w+),\\s*(\\w+)\\)", String.view(&indicArray))
+  let valueMatches = run G.hits(
+    "indic_combine_categories\\((\\w+),\\s*(\\w+)\\)",
+    String.view(&indicArray),
+  )
   let rows = List<Hit>.asSlice(&valueMatches)
   let mut data = Bytes.make()
   let mut i: usize = 0
@@ -368,11 +549,17 @@ pub effect fn generateShapingMachines(root: &Path) -> () ! TaskError | FileError
     let mut j: usize = 0
     while j < names.length {
       run String.append(&mut substituted, String.slice(String.view(&text), at, names[j].start - at))
-      run G.decimal(&mut substituted, run G.lookup(List<Named>.asSlice(&useConstants), G.group(&names[j], 0)))
+      run G.decimal(
+        &mut substituted,
+        run G.lookup(List<Named>.asSlice(&useConstants), G.group(&names[j], 0)),
+      )
       at = names[j].end
       j = j + 1
     }
-    run String.append(&mut substituted, String.slice(String.view(&text), at, String.ownedByteLength(&text) - at))
+    run String.append(
+      &mut substituted,
+      String.slice(String.view(&text), at, String.ownedByteLength(&text) - at),
+    )
     let values = run G.numbers(String.view(&substituted))
     Bytes.clear(&mut data)
     run G.packed(&mut data, List<u64>.asSlice(&values), i + 1)
@@ -388,6 +575,7 @@ pub effect fn generateShapingMachines(root: &Path) -> () ! TaskError | FileError
   let scriptNames = run G.scripts(root)
   let scripts = List<Tag>.asSlice(&scriptNames)
   let shapers = run G.source(root, "ot/shaper/mod.rs")
+
   // The original generator used Python's str.split(marker, 1)[0], which keeps the whole tail
   // when the marker is absent; the pinned harfrust source wraps this arm, so it is absent.
   let tail = run G.after(String.view(&shapers), "// Unicode-2.0 additions")
@@ -407,14 +595,20 @@ pub effect fn generateShapingMachines(root: &Path) -> () ! TaskError | FileError
   run constraints(root, &mut out, scripts)
   run G.save(root, "modules/shape/src/generated_machines.silk", String.view(&out))
 }
-effect fn aliasValue(aliases: &[Hit<'_>], constants: &[Named], alias: string) -> u64 ! TaskError | OutOfMemoryError ? &mut Allocator {
+
+effect fn aliasValue(aliases: &[Hit<'_>], constants: &[Named], alias: string) -> u64
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
   let mut i = aliases.length
   while i > 0 {
     i = i - 1
-    if G.group(&aliases[i], 2) == alias { return run G.lookup(constants, G.group(&aliases[i], 1)) }
+    if G.group(&aliases[i], 2) == alias {
+      return run G.lookup(constants, G.group(&aliases[i], 1))
+    }
   }
   return run Task.abort("unknown Indic category alias")
 }
+
 fn tagNumber(tag: string) -> u64 {
   let bytes = String.utf8Bytes(tag)
   let mut value: u64 = 0
@@ -425,7 +619,10 @@ fn tagNumber(tag: string) -> u64 {
   }
   return value
 }
-effect fn hexNumbers(text: string, pattern: string, group: usize) -> List<u64> ! TaskError | OutOfMemoryError ? &mut Allocator {
+
+effect fn hexNumbers(text: string, pattern: string, group: usize) -> List<u64>
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
   let found = run G.hits(pattern, text)
   let rows = List<Hit>.asSlice(&found)
   let mut result = List<u64>.make()
@@ -436,23 +633,40 @@ effect fn hexNumbers(text: string, pattern: string, group: usize) -> List<u64> !
   }
   return move result
 }
-effect fn constraints(root: &Path, out: &mut String, scripts: &[Tag]) -> () ! TaskError | FileError | OutOfMemoryError ? &mut Allocator | &mut FileSystem {
+
+effect fn constraints(root: &Path, out: &mut String, scripts: &[Tag]) -> ()
+  ! TaskError | FileError | OutOfMemoryError
+  ? &mut Allocator | &mut FileSystem {
   let source = run G.source(root, "ot/shaper/vowel_constraints.rs")
   let src = String.view(&source)
   let scriptMatches = run G.hits("Some\\(Script::(\\w+)\\) =>", src)
   let scriptRows = List<Hit>.asSlice(&scriptMatches)
   let mut pairs = List<Pair>.make()
-  let outerPattern = run Effect.catch<RegexError>(Regex.compile("((?:0x[0-9A-Fa-f]+\\s*\\|?\\s*)+) =>\\s*(match cur_glyph\\(buffer, 1\\))?"), G.regexFailure)
+  let outerPattern = run Effect.catch<RegexError>(
+    Regex.compile("((?:0x[0-9A-Fa-f]+\\s*\\|?\\s*)+) =>\\s*(match cur_glyph\\(buffer, 1\\))?"),
+    G.regexFailure,
+  )
   let mut i: usize = 0
   while i < scriptRows.length {
     let content = run G.body(src, scriptRows[i].end)
-    if let Option<usize>.Some { value } = move String.find(content.text, "match cur_glyph(buffer, 0)") {
+    if let Option<usize>.Some { value } = move String.find(
+      content.text,
+      "match cur_glyph(buffer, 0)",
+    ) {
       let cursor = run G.body(content.text, value + String.byteLength("match cur_glyph(buffer, 0)"))
       let mut pos: usize = 0
       while pos < String.byteLength(cursor.text) {
-        let found = run Effect.catch<RegexError>(Regex.find(&outerPattern, String.slice(cursor.text, pos, String.byteLength(cursor.text) - pos)), G.regexFailure)
+        let found = run Effect.catch<RegexError>(
+          Regex.find(
+            &outerPattern,
+            String.slice(cursor.text, pos, String.byteLength(cursor.text) - pos),
+          ),
+          G.regexFailure,
+        )
         match move found {
-          Option<Match>.None => { break }
+          Option<Match>.None => {
+            break
+          }
           Option<Match>.Some { value: matched } => {
             let branch = run G.body(cursor.text, pos + Match.end(&matched))
             let firstText = Match.group(&matched, 1) |> Option<string>.unwrapOr("")
@@ -462,7 +676,10 @@ effect fn constraints(root: &Path, out: &mut String, scripts: &[Tag]) -> () ! Ta
             let conditional = Option<string>.isSome(&condition)
             let mut secondValues = List<u64>.make()
             if conditional {
-              let matches = run G.hits("((?:0x[0-9A-Fa-f]+\\s*\\|?\\s*)+) =>\\s*\\{\\s*matched = true;", branch.text)
+              let matches = run G.hits(
+                "((?:0x[0-9A-Fa-f]+\\s*\\|?\\s*)+) =>\\s*\\{\\s*matched = true;",
+                branch.text,
+              )
               let seconds = List<Hit>.asSlice(&matches)
               let mut j: usize = 0
               while j < seconds.length {
@@ -471,7 +688,11 @@ effect fn constraints(root: &Path, out: &mut String, scripts: &[Tag]) -> () ! Ta
                 j = j + 1
               }
             } else {
-              secondValues = run hexNumbers(branch.text, "matched = (0x\\w+) == cur_glyph\\(buffer, 1\\)", 1)
+              secondValues = run hexNumbers(
+                branch.text,
+                "matched = (0x\\w+) == cur_glyph\\(buffer, 1\\)",
+                1,
+              )
             }
             let seconds = List<u64>.asSlice(&secondValues)
             let script = tagNumber(run G.tag(scripts, G.group(&scriptRows[i], 1)))
@@ -479,7 +700,10 @@ effect fn constraints(root: &Path, out: &mut String, scripts: &[Tag]) -> () ! Ta
             while a < firsts.length {
               let mut b: usize = 0
               while b < seconds.length {
-                run List<Pair>.append(&mut pairs, Pair { script: script, first: firsts[a], second: seconds[b] })
+                run List<Pair>.append(
+                  &mut pairs,
+                  Pair { script: script, first: firsts[a], second: seconds[b] },
+                )
                 b = b + 1
               }
               a = a + 1

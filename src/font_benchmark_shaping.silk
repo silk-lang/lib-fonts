@@ -33,11 +33,19 @@ pub effect fn findProgram(name: string) -> String
   let mut at: usize = 0
   while at <= bytes.length {
     let mut end = at
-    while end < bytes.length && bytes[end] != 58 { end = end + 1 }
+    while end < bytes.length && bytes[end] != 58 {
+      end = end + 1
+    }
     let entry = Slice.view<u8>(bytes, at, end - at)
-    let directory = if entry.length > 0 && entry[0] == 47 { run Path.fromBytes(entry) } else { run Path.resolveBytes(&root, entry) }
+    let directory = if entry.length > 0 && entry[0] == 47 {
+      run Path.fromBytes(entry)
+    } else {
+      run Path.resolveBytes(&root, entry)
+    }
     let candidate = run Path.join(&directory, name)
-    if run FileSystem.exists(&candidate) { return run Corpus.pathText(&candidate) }
+    if run FileSystem.exists(&candidate) {
+      return run Corpus.pathText(&candidate)
+    }
     at = end + 1
   }
   run Task.abort("cannot find required native benchmark tool on PATH")
@@ -47,7 +55,9 @@ fn instructions(bytes: &[u8]) -> f64 {
   let mut at: usize = 0
   while at < bytes.length {
     let mut end = at
-    while end < bytes.length && bytes[end] != 10 { end = end + 1 }
+    while end < bytes.length && bytes[end] != 10 {
+      end = end + 1
+    }
     let line = Slice.view<u8>(bytes, at, end - at)
     if line.length > 9 && Process.equal(Slice.view<u8>(line, 0, 9), b"summary: ") {
       let mut index: usize = 9
@@ -56,14 +66,25 @@ fn instructions(bytes: &[u8]) -> f64 {
         number = number * 10.0 + u8.toF64(line[index] - 48)
         index = index + 1
       }
-      if index > 9 { return number }
+      if index > 9 {
+        return number
+      }
     }
     at = end + 1
   }
   return -1.0
 }
 
-effect fn measure(binary: string, font: string, text: string, iterations: string, samples: usize, callgrind: bool, index: usize, twin: string) -> f64
+effect fn measure(
+  binary: string,
+  font: string,
+  text: string,
+  iterations: string,
+  samples: usize,
+  callgrind: bool,
+  index: usize,
+  twin: string,
+) -> f64
   ! TaskError | FileError | HostInputError | OutOfMemoryError
   ? &mut Allocator | &mut HostInput | &mut FileSystem {
   if callgrind {
@@ -78,11 +99,27 @@ effect fn measure(binary: string, font: string, text: string, iterations: string
     let mut argument = run Bytes.copy(b"--callgrind-out-file=")
     run Bytes.append(&mut argument, Path.rawBytes(&outputPath))
     let option = run Corpus.utf8(Bytes.asSlice(&argument))
-    let result = run Process.execute(String.view(&valgrind), &["--tool=callgrind", String.view(&option), "--quiet", binary, "--bench", font, text, iterations], 600.0, true)
+    let result = run Process.execute(
+      String.view(&valgrind),
+      &[
+        "--tool=callgrind",
+        String.view(&option),
+        "--quiet",
+        binary,
+        "--bench",
+        font,
+        text,
+        iterations,
+      ],
+      600.0,
+      true,
+    )
     run Process.requireSuccess(&result)
     let contents = run FileSystem.readFile(&outputPath)
     let count = instructions(Bytes.asSlice(&contents))
-    if count < 0.0 { run Task.abort("callgrind output has no instruction summary") }
+    if count < 0.0 {
+      run Task.abort("callgrind output has no instruction summary")
+    }
     return count
   }
   let mut times = List<f64>.make()
@@ -95,14 +132,25 @@ effect fn measure(binary: string, font: string, text: string, iterations: string
   }
   run times.sort()
   let values = times.asSlice()
-  if samples % 2 == 1 { return values[samples / 2] }
+  if samples % 2 == 1 {
+    return values[samples / 2]
+  }
   return (values[samples / 2 - 1] + values[samples / 2]) / 2.0
 }
 
-pub effect fn benchShaping(silk: string, rust: string, iterations: usize, samples: usize, filter: string, callgrind: bool) -> ()
+pub effect fn benchShaping(
+  silk: string,
+  rust: string,
+  iterations: usize,
+  samples: usize,
+  filter: string,
+  callgrind: bool,
+) -> ()
   ! TaskError | FileError | HostInputError | OutOfMemoryError | WriterError
   ? &mut Allocator | &mut HostInput | &mut FileSystem {
-  if iterations < 1 || iterations > 100000 || samples < 1 || samples > 100 { run Task.abort("iterations and samples must be positive and bounded") }
+  if iterations < 1 || iterations > 100000 || samples < 1 || samples > 100 {
+    run Task.abort("iterations and samples must be positive and bounded")
+  }
   let workloads = [
     BenchmarkCase { font: "Roboto-Regular.ttf", text: "en-thelittleprince.txt" },
     BenchmarkCase { font: "Roboto-Regular.ttf", text: "en-words.txt" },
@@ -110,7 +158,7 @@ pub effect fn benchShaping(silk: string, rust: string, iterations: usize, sample
     BenchmarkCase { font: "NotoNastaliqUrdu-Regular.ttf", text: "fa-words.txt" },
     BenchmarkCase { font: "NotoSansDevanagari-Regular.ttf", text: "hi-words.txt" },
     BenchmarkCase { font: "Amiri-Regular.ttf", text: "fa-thelittleprince.txt" },
-    BenchmarkCase { font: "SourceSerifVariable-Roman.ttf", text: "react-dom.txt" }
+    BenchmarkCase { font: "SourceSerifVariable-Roman.ttf", text: "react-dom.txt" },
   ]
   let iterationText = run Process.number(usize.toU64(iterations))
   let root = run Task.root()
@@ -132,35 +180,91 @@ pub effect fn benchShaping(silk: string, rust: string, iterations: usize, sample
       let textPath = run Path.join(&textRoot, row.text)
       let font = run Corpus.pathText(&fontPath)
       let text = run Corpus.pathText(&textPath)
-      let mut silkOutput = run Process.execute(silk, &["--bench", String.view(&font), String.view(&text), String.view(&iterationText)], 300.0, false)
+      let mut silkOutput = run Process.execute(
+        silk,
+        &["--bench", String.view(&font), String.view(&text), String.view(&iterationText)],
+        300.0,
+        false,
+      )
       run Process.requireSuccess(&silkOutput)
-      let mut rustOutput = run Process.execute(rust, &["--bench", String.view(&font), String.view(&text), String.view(&iterationText)], 300.0, false)
+      let mut rustOutput = run Process.execute(
+        rust,
+        &["--bench", String.view(&font), String.view(&text), String.view(&iterationText)],
+        300.0,
+        false,
+      )
       run Process.requireSuccess(&rustOutput)
       let left = run silkOutput.output.readAll()
       let right = run rustOutput.output.readAll()
       if !Process.equal(Process.trim(Bytes.asSlice(&left)), Process.trim(Bytes.asSlice(&right))) {
         let silkText = run Text.bytesRepr(Process.trim(left.asSlice()))
         let rustText = run Text.bytesRepr(Process.trim(right.asSlice()))
-        run Format.format("MISMATCH {label}: Silk {silk}, Rust {rust}\n", &.{ label: String.view(&label), silk: String.view(&silkText), rust: String.view(&rustText) }) |> Effect.provideMut<Writer>(&mut writer)
+        run Format.format(
+          "MISMATCH {label}: Silk {silk}, Rust {rust}\n",
+          &.{
+            label: String.view(&label),
+            silk: String.view(&silkText),
+            rust: String.view(&rustText),
+          },
+        )
+          |> Effect.provideMut<Writer>(&mut writer)
         failed = true
       }
-      let silkTime = run measure(silk, String.view(&font), String.view(&text), String.view(&iterationText), samples, callgrind, at, "silk")
-      let rustTime = run measure(rust, String.view(&font), String.view(&text), String.view(&iterationText), samples, callgrind, at, "rust")
+      let silkTime = run measure(
+        silk,
+        String.view(&font),
+        String.view(&text),
+        String.view(&iterationText),
+        samples,
+        callgrind,
+        at,
+        "silk",
+      )
+      let rustTime = run measure(
+        rust,
+        String.view(&font),
+        String.view(&text),
+        String.view(&iterationText),
+        samples,
+        callgrind,
+        at,
+        "rust",
+      )
       let ratio = silkTime / rustTime
       logs = logs + f64.log(ratio)
       count = count + 1
-      let unit = if callgrind { "Ir" } else { "seconds" }
+      let unit = if callgrind {
+        "Ir"
+      } else {
+        "seconds"
+      }
       let silkText = run Numbers.general(silkTime)
       let rustText = run Numbers.general(rustTime)
-      run Format.format("{label}: Silk {silk}, Rust {rust} {unit}; {ratio:.2}x\n", &.{ label: String.view(&label), silk: String.view(&silkText), rust: String.view(&rustText), unit: unit, ratio: ratio }) |> Effect.provideMut<Writer>(&mut writer)
+      run Format.format(
+        "{label}: Silk {silk}, Rust {rust} {unit}; {ratio:.2}x\n",
+        &.{
+          label: String.view(&label),
+          silk: String.view(&silkText),
+          rust: String.view(&rustText),
+          unit: unit,
+          ratio: ratio,
+        },
+      )
+        |> Effect.provideMut<Writer>(&mut writer)
     }
     at = at + 1
   }
   if count > 0 {
     let mean = f64.exp(logs / usize.toF64(count))
-    run Format.format("Geometric mean: {mean:.2}x\n", &.{ mean: mean }) |> Effect.provideMut<Writer>(&mut writer)
+    run Format.format("Geometric mean: {mean:.2}x\n", &.{ mean: mean })
+      |> Effect.provideMut<Writer>(&mut writer)
   }
-  if failed { run Task.abort("shaping benchmark checksums differ") }
+  if failed {
+    run Task.abort("shaping benchmark checksums differ")
+  }
 }
 
-struct BenchmarkCase { font: string<'static>, text: string<'static> }
+struct BenchmarkCase {
+  font: string<'static>,
+  text: string<'static>
+}

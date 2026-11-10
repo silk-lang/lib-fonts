@@ -157,7 +157,7 @@ impl<'a> VarcOutlines<'a> {
 
   pub fn covers(self: &Self, glyph: GlyphId) -> bool {
     return match move CoverageTable.get(&self.coverage, glyph) {
-      Option<u32>.Some { value } => true
+      Option<u32>.Some { .. } => true
       _ => false
     }
   }
@@ -384,7 +384,7 @@ impl<'a> VarcOutlines<'a> {
         let mut delta = [0.0]
         let result = run Effect.result(VarcOutlines.deltas(self, index, coords, &mut delta))
         return match move result {
-          Result<(), Error>.Success { value } => Result<f64, Error>.succeed(delta[0])
+          Result<(), Error>.Success { .. } => Result<f64, Error>.succeed(delta[0])
           Result<(), Error>.Failure { error } => Result<f64, Error>.failResult(error)
         }
       },
@@ -662,7 +662,7 @@ fn vmLimit<T>(result: Result<T, Error>) -> bool {
 
 fn vmError<T>(result: Result<T, Error>) -> bool {
   return match move result {
-    Result<T, Error>.Failure { error } => true
+    Result<T, Error>.Failure { .. } => true
     _ => false
   }
 }
@@ -919,7 +919,7 @@ effect fn vmAlloc<T>(result: Result<T, Error | OutOfMemoryError>) -> T
   return match move result {
     Result<T, Error | OutOfMemoryError>.Success { value } => move value
     Result<T, Error | OutOfMemoryError>.Failure { error } => match move error {
-      Error problem => {
+      Error _ => {
         run Testing.expect(false, "VARC operation succeeds")
         return Intrinsic.trap("assertion")
       }

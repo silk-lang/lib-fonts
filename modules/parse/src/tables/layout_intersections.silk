@@ -54,7 +54,7 @@ impl<'a> CoverageFormat1<'a> {
     ) {
       let mut iter = IntSet<GlyphId>.iter(glyphs)
       while let Option<GlyphId>.Some { value } = IntSetIter<GlyphId>.next(&mut iter) {
-        if let Option<u16>.Some { value: index } = CoverageFormat1<'a>.get(self, value) {
+        if let Option<u16>.Some { .. } = CoverageFormat1<'a>.get(self, value) {
           return true
         }
       }
@@ -82,7 +82,7 @@ impl<'a> CoverageFormat1<'a> {
     ) {
       let mut iter = IntSet<GlyphId>.iter(glyphs)
       while let Option<GlyphId>.Some { value } = IntSetIter<GlyphId>.next(&mut iter) {
-        if let Option<u16>.Some { value: index } = CoverageFormat1<'a>.get(self, value) {
+        if let Option<u16>.Some { .. } = CoverageFormat1<'a>.get(self, value) {
           drop run IntSet<GlyphId>.insert(&mut out, value)
         }
       }
@@ -110,7 +110,7 @@ impl<'a> CoverageFormat2<'a> {
     ) {
       let mut iter = IntSet<GlyphId>.iter(glyphs)
       while let Option<GlyphId>.Some { value } = IntSetIter<GlyphId>.next(&mut iter) {
-        if let Option<u16>.Some { value: index } = CoverageFormat2<'a>.get(self, value) {
+        if let Option<u16>.Some { .. } = CoverageFormat2<'a>.get(self, value) {
           return true
         }
       }
@@ -142,7 +142,7 @@ impl<'a> CoverageFormat2<'a> {
     ) {
       let mut iter = IntSet<GlyphId>.iter(glyphs)
       while let Option<GlyphId>.Some { value } = IntSetIter<GlyphId>.next(&mut iter) {
-        if let Option<u16>.Some { value: index } = CoverageFormat2<'a>.get(self, value) {
+        if let Option<u16>.Some { .. } = CoverageFormat2<'a>.get(self, value) {
           drop run IntSet<GlyphId>.insert(&mut out, value)
         }
       }
@@ -414,7 +414,7 @@ impl<'a> ClassDefFormat2<'a> {
         glyph = GlyphId.new(range.end)
         at = at + 1
       }
-      if let Option<GlyphId>.Some { value } = IntSet<GlyphId>.nextAfter(glyphs, glyph) {
+      if let Option<GlyphId>.Some { .. } = IntSet<GlyphId>.nextAfter(glyphs, glyph) {
         drop run IntSet<u16>.insert(&mut out, 0)
       }
     }
@@ -540,7 +540,7 @@ impl<'a> ClassDefFormat2<'a> {
         at = at + 1
       }
       if hasPrevious {
-        if let Option<GlyphId>.Some { value } = IntSet<GlyphId>.nextAfter(glyphs, previous) {
+        if let Option<GlyphId>.Some { .. } = IntSet<GlyphId>.nextAfter(glyphs, previous) {
           return true
         }
       }

@@ -1,7 +1,7 @@
 //! Resolve OpenType feature ranges into Apple's per-chain feature flags.
 import generated_unicode as Data
 import feature { Feature }
-import font { ConfiguredShaper, FontFuncs, Shaper, table }
+import font { ConfiguredShaper, FontFuncs, table }
 import language { Language }
 import view { View, offset }
 import font_types.lib { Tag }

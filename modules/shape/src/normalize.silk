@@ -1,7 +1,7 @@
 //! Font-aware canonical decomposition, mark ordering and recomposition.
 import trace
-import buffer { Buffer, Glyph, ClusterLevel, reverseRange }
-import font { ConfiguredShaper, FontFuncs, NominalGlyphs, ShaperData }
+import buffer { Buffer, Glyph, reverseRange }
+import font { ConfiguredShaper, FontFuncs, NominalGlyphs }
 import direction { Direction }
 import unicode
 import arabic
@@ -151,7 +151,7 @@ pub effect fn normalize<F: FontFuncs>(
           let mut selector = next
           selector.info.glyphId = ConfiguredShaper.glyphOrNotdef(font, next.codepoint)
           selector.selectorFallback = true
-          if let Option<u32>.Some { value } = &buffer.notFoundVariationSelectorGlyph {
+          if let Option<u32>.Some { .. } = &buffer.notFoundVariationSelectorGlyph {
             selector.ignorable = false
           }
           run List<Glyph>.append(&mut output, base)

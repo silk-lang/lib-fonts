@@ -2,14 +2,13 @@
 // Source: pinned resources/codegen_inputs; generator: modules/parse/tools/font-codegen-silk.
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 import font_data { FontData }
-import read { ReadError, FontRead, FontReadAt, ComputeSize, Format, computeSize, readAtWithArgs }
+import read { ReadError, FontRead, FontReadAt, ComputeSize, Format, computeSize }
 import table_provider { TopLevelTable }
-import array { ScalarArray, ComputedArray, VarLenArray }
+import array { ScalarArray, ComputedArray }
 import offset { resolve, resolveWithArgs, resolveNullableWithArgs }
-import offset_array { ArrayOfOffsets, ArrayOfNullableOffsets }
-import read_args { ReadArgs2, ReadArgs3 }
+import offset_array { ArrayOfOffsets }
 import table_ref { ByteRange, MinByteRange }
-import generated_support { scalarOr, recordArray, varLenArray, varLenBytes, signedCount }
+import generated_support { scalarOr, recordArray }
 import font_types.lib {
   Scalar,
   FixedSize,
@@ -19,20 +18,12 @@ import font_types.lib {
   Tag,
   Fixed,
   F2Dot14,
-  F4Dot12,
-  F6Dot10,
   FWord,
   UfWord,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
   Uint24,
-  Int24,
   GlyphId,
   GlyphId16,
   GlyphId24,
-  NameId,
-  Offset16,
   Offset24,
   Offset32,
   Nullable
@@ -40,18 +31,10 @@ import font_types.lib {
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.core.ownership { Copy }
-import silk.core.equal { Equal }
-import silk.core.order { Order, Ordering }
-import silk.text.format { Debug, Formatter }
-import silk.io.writer { Writer, WriterError }
-import silk.core.ops { BitAnd, BitOr, BitXor, Not, Subtract }
 import silk.num.usize
 import silk.num.u8
 import silk.num.u16
 import silk.num.u32
-import silk.num.u64
-import silk.num.i16
-import silk.num.i32
 import generated_variations { DeltaSetIndexMap, ItemVariationStore }
 
 /// [COLR (Color)](https://learn.microsoft.com/en-us/typography/opentype/spec/colr#colr-header) table
@@ -87,77 +70,40 @@ impl<'a> Colr<'a> {
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let numBaseGlyphRecordsValue = scalarOr<u16>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[2].end = end
-    let baseGlyphRecordsOffsetValue = scalarOr<Nullable<Offset32>>(
-      data,
-      ranges[2].start,
-      Nullable<Offset32>.default(),
-    )
     ranges[3].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[3].end = end
-    let layerRecordsOffsetValue = scalarOr<Nullable<Offset32>>(
-      data,
-      ranges[3].start,
-      Nullable<Offset32>.default(),
-    )
     ranges[4].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[4].end = end
-    let numLayerRecordsValue = scalarOr<u16>(data, ranges[4].start, 0)
     ranges[5].start = end
     if versionValue >= 1 {
       end = usize.saturatingAdd(end, 4)
     }
     ranges[5].end = end
-    let baseGlyphListOffsetValue = scalarOr<Nullable<Offset32>>(
-      data,
-      ranges[5].start,
-      Nullable<Offset32>.default(),
-    )
     ranges[6].start = end
     if versionValue >= 1 {
       end = usize.saturatingAdd(end, 4)
     }
     ranges[6].end = end
-    let layerListOffsetValue = scalarOr<Nullable<Offset32>>(
-      data,
-      ranges[6].start,
-      Nullable<Offset32>.default(),
-    )
     ranges[7].start = end
     if versionValue >= 1 {
       end = usize.saturatingAdd(end, 4)
     }
     ranges[7].end = end
-    let clipListOffsetValue = scalarOr<Nullable<Offset32>>(
-      data,
-      ranges[7].start,
-      Nullable<Offset32>.default(),
-    )
     ranges[8].start = end
     if versionValue >= 1 {
       end = usize.saturatingAdd(end, 4)
     }
     ranges[8].end = end
-    let varIndexMapOffsetValue = scalarOr<Nullable<Offset32>>(
-      data,
-      ranges[8].start,
-      Nullable<Offset32>.default(),
-    )
     ranges[9].start = end
     if versionValue >= 1 {
       end = usize.saturatingAdd(end, 4)
     }
     ranges[9].end = end
-    let itemVariationStoreOffsetValue = scalarOr<Nullable<Offset32>>(
-      data,
-      ranges[9].start,
-      Nullable<Offset32>.default(),
-    )
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -173,7 +119,7 @@ impl<'a> Colr<'a> {
   pub fn version(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -185,7 +131,7 @@ impl<'a> Colr<'a> {
   pub fn numBaseGlyphRecords(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -200,7 +146,7 @@ impl<'a> Colr<'a> {
       self._fieldRanges[2].start,
     ) {
       Result<Nullable<Offset32>, ReadError>.Success { value } => value
-      Result<Nullable<Offset32>, ReadError>.Failure { error } => Nullable<Offset32>.default()
+      Result<Nullable<Offset32>, ReadError>.Failure { .. } => Nullable<Offset32>.default()
     }
   }
 
@@ -226,7 +172,7 @@ impl<'a> Colr<'a> {
       self._fieldRanges[3].start,
     ) {
       Result<Nullable<Offset32>, ReadError>.Success { value } => value
-      Result<Nullable<Offset32>, ReadError>.Failure { error } => Nullable<Offset32>.default()
+      Result<Nullable<Offset32>, ReadError>.Failure { .. } => Nullable<Offset32>.default()
     }
   }
 
@@ -247,7 +193,7 @@ impl<'a> Colr<'a> {
   pub fn numLayerRecords(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[4].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -267,7 +213,7 @@ impl<'a> Colr<'a> {
       Result<Nullable<Offset32>, ReadError>.Success { value } => Option<Nullable<Offset32>>.some(
         value,
       )
-      Result<Nullable<Offset32>, ReadError>.Failure { error } => Option<Nullable<Offset32>>.None
+      Result<Nullable<Offset32>, ReadError>.Failure { .. } => Option<Nullable<Offset32>>.None
     }
   }
 
@@ -297,7 +243,7 @@ impl<'a> Colr<'a> {
       Result<Nullable<Offset32>, ReadError>.Success { value } => Option<Nullable<Offset32>>.some(
         value,
       )
-      Result<Nullable<Offset32>, ReadError>.Failure { error } => Option<Nullable<Offset32>>.None
+      Result<Nullable<Offset32>, ReadError>.Failure { .. } => Option<Nullable<Offset32>>.None
     }
   }
 
@@ -327,7 +273,7 @@ impl<'a> Colr<'a> {
       Result<Nullable<Offset32>, ReadError>.Success { value } => Option<Nullable<Offset32>>.some(
         value,
       )
-      Result<Nullable<Offset32>, ReadError>.Failure { error } => Option<Nullable<Offset32>>.None
+      Result<Nullable<Offset32>, ReadError>.Failure { .. } => Option<Nullable<Offset32>>.None
     }
   }
 
@@ -357,7 +303,7 @@ impl<'a> Colr<'a> {
       Result<Nullable<Offset32>, ReadError>.Success { value } => Option<Nullable<Offset32>>.some(
         value,
       )
-      Result<Nullable<Offset32>, ReadError>.Failure { error } => Option<Nullable<Offset32>>.None
+      Result<Nullable<Offset32>, ReadError>.Failure { .. } => Option<Nullable<Offset32>>.None
     }
   }
 
@@ -387,7 +333,7 @@ impl<'a> Colr<'a> {
       Result<Nullable<Offset32>, ReadError>.Success { value } => Option<Nullable<Offset32>>.some(
         value,
       )
-      Result<Nullable<Offset32>, ReadError>.Failure { error } => Option<Nullable<Offset32>>.None
+      Result<Nullable<Offset32>, ReadError>.Failure { .. } => Option<Nullable<Offset32>>.None
     }
   }
 
@@ -459,7 +405,7 @@ impl<'a> BaseGlyph<'a> {
   pub fn glyphId(self: &Self) -> GlyphId16 {
     return match move FontData<'a>.readAt<GlyphId16>(&self._fontData, (self.position + 0)) {
       Result<GlyphId16, ReadError>.Success { value } => value
-      Result<GlyphId16, ReadError>.Failure { error } => GlyphId16.new(0)
+      Result<GlyphId16, ReadError>.Failure { .. } => GlyphId16.new(0)
     }
   }
 
@@ -467,7 +413,7 @@ impl<'a> BaseGlyph<'a> {
   pub fn firstLayerIndex(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 2)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -475,7 +421,7 @@ impl<'a> BaseGlyph<'a> {
   pub fn numLayers(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 4)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 }
@@ -522,7 +468,7 @@ impl<'a> Layer<'a> {
   pub fn glyphId(self: &Self) -> GlyphId16 {
     return match move FontData<'a>.readAt<GlyphId16>(&self._fontData, (self.position + 0)) {
       Result<GlyphId16, ReadError>.Success { value } => value
-      Result<GlyphId16, ReadError>.Failure { error } => GlyphId16.new(0)
+      Result<GlyphId16, ReadError>.Failure { .. } => GlyphId16.new(0)
     }
   }
 
@@ -530,7 +476,7 @@ impl<'a> Layer<'a> {
   pub fn paletteIndex(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 2)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 }
@@ -599,7 +545,7 @@ impl<'a> BaseGlyphList<'a> {
   pub fn numBaseGlyphPaintRecords(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[0].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -614,9 +560,11 @@ impl<'a> BaseGlyphList<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ComputedArray<'a, (), BaseGlyphPaint<'a>>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, (), BaseGlyphPaint<'a>>, ReadError>.Failure {
-        error
-      } => ComputedArray<'a, (), BaseGlyphPaint<'a>>.empty(())
+      Result<ComputedArray<'a, (), BaseGlyphPaint<'a>>, ReadError>.Failure { .. } => ComputedArray<
+        'a,
+        (),
+        BaseGlyphPaint<'a>
+      >.empty(())
     }
   }
 
@@ -668,7 +616,7 @@ impl<'a> BaseGlyphPaint<'a> {
   pub fn glyphId(self: &Self) -> GlyphId16 {
     return match move FontData<'a>.readAt<GlyphId16>(&self._fontData, (self.position + 0)) {
       Result<GlyphId16, ReadError>.Success { value } => value
-      Result<GlyphId16, ReadError>.Failure { error } => GlyphId16.new(0)
+      Result<GlyphId16, ReadError>.Failure { .. } => GlyphId16.new(0)
     }
   }
 
@@ -676,7 +624,7 @@ impl<'a> BaseGlyphPaint<'a> {
   pub fn paintOffset(self: &Self) -> Offset32 {
     return match move FontData<'a>.readAt<Offset32>(&self._fontData, (self.position + 2)) {
       Result<Offset32, ReadError>.Success { value } => value
-      Result<Offset32, ReadError>.Failure { error } => Offset32.new(0)
+      Result<Offset32, ReadError>.Failure { .. } => Offset32.new(0)
     }
   }
 
@@ -747,7 +695,7 @@ impl<'a> LayerList<'a> {
   pub fn numLayers(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[0].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -763,9 +711,7 @@ impl<'a> LayerList<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, Offset32>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset32>, ReadError>.Failure { error } => ScalarArray<
-        Offset32
-      >.empty()
+      Result<ScalarArray<'a, Offset32>, ReadError>.Failure { .. } => ScalarArray<Offset32>.empty()
     }
   }
 
@@ -830,7 +776,6 @@ impl<'a> ClipList<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[1].end = end
@@ -849,7 +794,7 @@ impl<'a> ClipList<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -861,7 +806,7 @@ impl<'a> ClipList<'a> {
   pub fn numClips(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[1].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -877,7 +822,7 @@ impl<'a> ClipList<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ComputedArray<'a, (), Clip<'a>>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, (), Clip<'a>>, ReadError>.Failure { error } => ComputedArray<
+      Result<ComputedArray<'a, (), Clip<'a>>, ReadError>.Failure { .. } => ComputedArray<
         'a,
         (),
         Clip<'a>
@@ -933,7 +878,7 @@ impl<'a> Clip<'a> {
   pub fn startGlyphId(self: &Self) -> GlyphId16 {
     return match move FontData<'a>.readAt<GlyphId16>(&self._fontData, (self.position + 0)) {
       Result<GlyphId16, ReadError>.Success { value } => value
-      Result<GlyphId16, ReadError>.Failure { error } => GlyphId16.new(0)
+      Result<GlyphId16, ReadError>.Failure { .. } => GlyphId16.new(0)
     }
   }
 
@@ -941,7 +886,7 @@ impl<'a> Clip<'a> {
   pub fn endGlyphId(self: &Self) -> GlyphId16 {
     return match move FontData<'a>.readAt<GlyphId16>(&self._fontData, (self.position + 2)) {
       Result<GlyphId16, ReadError>.Success { value } => value
-      Result<GlyphId16, ReadError>.Failure { error } => GlyphId16.new(0)
+      Result<GlyphId16, ReadError>.Failure { .. } => GlyphId16.new(0)
     }
   }
 
@@ -949,7 +894,7 @@ impl<'a> Clip<'a> {
   pub fn clipBoxOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, (self.position + 4)) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -1131,23 +1076,18 @@ impl<'a> ClipBoxFormat1<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let xMinValue = scalarOr<FWord>(data, ranges[1].start, FWord.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let yMinValue = scalarOr<FWord>(data, ranges[2].start, FWord.new(0))
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let xMaxValue = scalarOr<FWord>(data, ranges[3].start, FWord.new(0))
     ranges[4].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[4].end = end
-    let yMaxValue = scalarOr<FWord>(data, ranges[4].start, FWord.new(0))
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -1159,7 +1099,7 @@ impl<'a> ClipBoxFormat1<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1171,7 +1111,7 @@ impl<'a> ClipBoxFormat1<'a> {
   pub fn xMin(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[1].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -1183,7 +1123,7 @@ impl<'a> ClipBoxFormat1<'a> {
   pub fn yMin(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[2].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -1195,7 +1135,7 @@ impl<'a> ClipBoxFormat1<'a> {
   pub fn xMax(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[3].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -1207,7 +1147,7 @@ impl<'a> ClipBoxFormat1<'a> {
   pub fn yMax(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[4].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -1263,27 +1203,21 @@ impl<'a> ClipBoxFormat2<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let xMinValue = scalarOr<FWord>(data, ranges[1].start, FWord.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let yMinValue = scalarOr<FWord>(data, ranges[2].start, FWord.new(0))
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let xMaxValue = scalarOr<FWord>(data, ranges[3].start, FWord.new(0))
     ranges[4].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[4].end = end
-    let yMaxValue = scalarOr<FWord>(data, ranges[4].start, FWord.new(0))
     ranges[5].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[5].end = end
-    let varIndexBaseValue = scalarOr<u32>(data, ranges[5].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -1295,7 +1229,7 @@ impl<'a> ClipBoxFormat2<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1307,7 +1241,7 @@ impl<'a> ClipBoxFormat2<'a> {
   pub fn xMin(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[1].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -1319,7 +1253,7 @@ impl<'a> ClipBoxFormat2<'a> {
   pub fn yMin(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[2].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -1331,7 +1265,7 @@ impl<'a> ClipBoxFormat2<'a> {
   pub fn xMax(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[3].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -1343,7 +1277,7 @@ impl<'a> ClipBoxFormat2<'a> {
   pub fn yMax(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[4].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -1355,7 +1289,7 @@ impl<'a> ClipBoxFormat2<'a> {
   pub fn varIndexBase(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[5].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1413,7 +1347,7 @@ impl<'a> ColorIndex<'a> {
   pub fn paletteIndex(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 0)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1421,7 +1355,7 @@ impl<'a> ColorIndex<'a> {
   pub fn alpha(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, (self.position + 2)) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 }
@@ -1468,7 +1402,7 @@ impl<'a> VarColorIndex<'a> {
   pub fn paletteIndex(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 0)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1476,7 +1410,7 @@ impl<'a> VarColorIndex<'a> {
   pub fn alpha(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, (self.position + 2)) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -1484,7 +1418,7 @@ impl<'a> VarColorIndex<'a> {
   pub fn varIndexBase(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, (self.position + 4)) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 }
@@ -1531,7 +1465,7 @@ impl<'a> ColorStop<'a> {
   pub fn stopOffset(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, (self.position + 0)) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -1539,7 +1473,7 @@ impl<'a> ColorStop<'a> {
   pub fn paletteIndex(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 2)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1547,7 +1481,7 @@ impl<'a> ColorStop<'a> {
   pub fn alpha(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, (self.position + 4)) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 }
@@ -1594,7 +1528,7 @@ impl<'a> VarColorStop<'a> {
   pub fn stopOffset(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, (self.position + 0)) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -1602,7 +1536,7 @@ impl<'a> VarColorStop<'a> {
   pub fn paletteIndex(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 2)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1610,7 +1544,7 @@ impl<'a> VarColorStop<'a> {
   pub fn alpha(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, (self.position + 4)) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -1618,7 +1552,7 @@ impl<'a> VarColorStop<'a> {
   pub fn varIndexBase(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, (self.position + 6)) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 }
@@ -1670,7 +1604,6 @@ impl<'a> ColorLine<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let extendValue = scalarOr<Extend>(data, ranges[0].start, Extend.Pad)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
@@ -1689,7 +1622,7 @@ impl<'a> ColorLine<'a> {
   pub fn extend(self: &Self) -> Extend {
     return match move FontData<'a>.readAt<Extend>(&self._fontData, self._fieldRanges[0].start) {
       Result<Extend, ReadError>.Success { value } => value
-      Result<Extend, ReadError>.Failure { error } => Extend.Pad
+      Result<Extend, ReadError>.Failure { .. } => Extend.Pad
     }
   }
 
@@ -1701,7 +1634,7 @@ impl<'a> ColorLine<'a> {
   pub fn numStops(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1716,7 +1649,7 @@ impl<'a> ColorLine<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ComputedArray<'a, (), ColorStop<'a>>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, (), ColorStop<'a>>, ReadError>.Failure { error } => ComputedArray<
+      Result<ComputedArray<'a, (), ColorStop<'a>>, ReadError>.Failure { .. } => ComputedArray<
         'a,
         (),
         ColorStop<'a>
@@ -1777,7 +1710,6 @@ impl<'a> VarColorLine<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let extendValue = scalarOr<Extend>(data, ranges[0].start, Extend.Pad)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
@@ -1796,7 +1728,7 @@ impl<'a> VarColorLine<'a> {
   pub fn extend(self: &Self) -> Extend {
     return match move FontData<'a>.readAt<Extend>(&self._fontData, self._fieldRanges[0].start) {
       Result<Extend, ReadError>.Success { value } => value
-      Result<Extend, ReadError>.Failure { error } => Extend.Pad
+      Result<Extend, ReadError>.Failure { .. } => Extend.Pad
     }
   }
 
@@ -1808,7 +1740,7 @@ impl<'a> VarColorLine<'a> {
   pub fn numStops(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1824,7 +1756,7 @@ impl<'a> VarColorLine<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ComputedArray<'a, (), VarColorStop<'a>>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, (), VarColorStop<'a>>, ReadError>.Failure { error } => ComputedArray<
+      Result<ComputedArray<'a, (), VarColorStop<'a>>, ReadError>.Failure { .. } => ComputedArray<
         'a,
         (),
         VarColorStop<'a>
@@ -2548,15 +2480,12 @@ impl<'a> PaintColrLayers<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[1].end = end
-    let numLayersValue = scalarOr<u8>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[2].end = end
-    let firstLayerIndexValue = scalarOr<u32>(data, ranges[2].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -2568,7 +2497,7 @@ impl<'a> PaintColrLayers<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2580,7 +2509,7 @@ impl<'a> PaintColrLayers<'a> {
   pub fn numLayers(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[1].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2592,7 +2521,7 @@ impl<'a> PaintColrLayers<'a> {
   pub fn firstLayerIndex(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[2].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2648,15 +2577,12 @@ impl<'a> PaintSolid<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let paletteIndexValue = scalarOr<u16>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let alphaValue = scalarOr<F2Dot14>(data, ranges[2].start, F2Dot14.zero())
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -2668,7 +2594,7 @@ impl<'a> PaintSolid<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2680,7 +2606,7 @@ impl<'a> PaintSolid<'a> {
   pub fn paletteIndex(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2692,7 +2618,7 @@ impl<'a> PaintSolid<'a> {
   pub fn alpha(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[2].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -2748,19 +2674,15 @@ impl<'a> PaintVarSolid<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let paletteIndexValue = scalarOr<u16>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let alphaValue = scalarOr<F2Dot14>(data, ranges[2].start, F2Dot14.zero())
     ranges[3].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[3].end = end
-    let varIndexBaseValue = scalarOr<u32>(data, ranges[3].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -2772,7 +2694,7 @@ impl<'a> PaintVarSolid<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2784,7 +2706,7 @@ impl<'a> PaintVarSolid<'a> {
   pub fn paletteIndex(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2796,7 +2718,7 @@ impl<'a> PaintVarSolid<'a> {
   pub fn alpha(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[2].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -2808,7 +2730,7 @@ impl<'a> PaintVarSolid<'a> {
   pub fn varIndexBase(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[3].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2864,39 +2786,27 @@ impl<'a> PaintLinearGradient<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let colorLineOffsetValue = scalarOr<Offset24>(
-      data,
-      ranges[1].start,
-      Offset24.new(Uint24.new(0)),
-    )
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let x0Value = scalarOr<FWord>(data, ranges[2].start, FWord.new(0))
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let y0Value = scalarOr<FWord>(data, ranges[3].start, FWord.new(0))
     ranges[4].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[4].end = end
-    let x1Value = scalarOr<FWord>(data, ranges[4].start, FWord.new(0))
     ranges[5].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[5].end = end
-    let y1Value = scalarOr<FWord>(data, ranges[5].start, FWord.new(0))
     ranges[6].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[6].end = end
-    let x2Value = scalarOr<FWord>(data, ranges[6].start, FWord.new(0))
     ranges[7].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[7].end = end
-    let y2Value = scalarOr<FWord>(data, ranges[7].start, FWord.new(0))
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -2908,7 +2818,7 @@ impl<'a> PaintLinearGradient<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2920,7 +2830,7 @@ impl<'a> PaintLinearGradient<'a> {
   pub fn colorLineOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -2937,7 +2847,7 @@ impl<'a> PaintLinearGradient<'a> {
   pub fn x0(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[2].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -2949,7 +2859,7 @@ impl<'a> PaintLinearGradient<'a> {
   pub fn y0(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[3].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -2961,7 +2871,7 @@ impl<'a> PaintLinearGradient<'a> {
   pub fn x1(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[4].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -2973,7 +2883,7 @@ impl<'a> PaintLinearGradient<'a> {
   pub fn y1(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[5].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -2985,7 +2895,7 @@ impl<'a> PaintLinearGradient<'a> {
   pub fn x2(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[6].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -2997,7 +2907,7 @@ impl<'a> PaintLinearGradient<'a> {
   pub fn y2(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[7].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -3053,43 +2963,30 @@ impl<'a> PaintVarLinearGradient<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let colorLineOffsetValue = scalarOr<Offset24>(
-      data,
-      ranges[1].start,
-      Offset24.new(Uint24.new(0)),
-    )
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let x0Value = scalarOr<FWord>(data, ranges[2].start, FWord.new(0))
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let y0Value = scalarOr<FWord>(data, ranges[3].start, FWord.new(0))
     ranges[4].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[4].end = end
-    let x1Value = scalarOr<FWord>(data, ranges[4].start, FWord.new(0))
     ranges[5].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[5].end = end
-    let y1Value = scalarOr<FWord>(data, ranges[5].start, FWord.new(0))
     ranges[6].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[6].end = end
-    let x2Value = scalarOr<FWord>(data, ranges[6].start, FWord.new(0))
     ranges[7].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[7].end = end
-    let y2Value = scalarOr<FWord>(data, ranges[7].start, FWord.new(0))
     ranges[8].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[8].end = end
-    let varIndexBaseValue = scalarOr<u32>(data, ranges[8].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -3101,7 +2998,7 @@ impl<'a> PaintVarLinearGradient<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3113,7 +3010,7 @@ impl<'a> PaintVarLinearGradient<'a> {
   pub fn colorLineOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -3131,7 +3028,7 @@ impl<'a> PaintVarLinearGradient<'a> {
   pub fn x0(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[2].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -3144,7 +3041,7 @@ impl<'a> PaintVarLinearGradient<'a> {
   pub fn y0(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[3].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -3157,7 +3054,7 @@ impl<'a> PaintVarLinearGradient<'a> {
   pub fn x1(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[4].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -3170,7 +3067,7 @@ impl<'a> PaintVarLinearGradient<'a> {
   pub fn y1(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[5].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -3183,7 +3080,7 @@ impl<'a> PaintVarLinearGradient<'a> {
   pub fn x2(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[6].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -3196,7 +3093,7 @@ impl<'a> PaintVarLinearGradient<'a> {
   pub fn y2(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[7].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -3208,7 +3105,7 @@ impl<'a> PaintVarLinearGradient<'a> {
   pub fn varIndexBase(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[8].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3264,39 +3161,27 @@ impl<'a> PaintRadialGradient<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let colorLineOffsetValue = scalarOr<Offset24>(
-      data,
-      ranges[1].start,
-      Offset24.new(Uint24.new(0)),
-    )
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let x0Value = scalarOr<FWord>(data, ranges[2].start, FWord.new(0))
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let y0Value = scalarOr<FWord>(data, ranges[3].start, FWord.new(0))
     ranges[4].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[4].end = end
-    let radius0Value = scalarOr<UfWord>(data, ranges[4].start, UfWord.new(0))
     ranges[5].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[5].end = end
-    let x1Value = scalarOr<FWord>(data, ranges[5].start, FWord.new(0))
     ranges[6].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[6].end = end
-    let y1Value = scalarOr<FWord>(data, ranges[6].start, FWord.new(0))
     ranges[7].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[7].end = end
-    let radius1Value = scalarOr<UfWord>(data, ranges[7].start, UfWord.new(0))
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -3308,7 +3193,7 @@ impl<'a> PaintRadialGradient<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3320,7 +3205,7 @@ impl<'a> PaintRadialGradient<'a> {
   pub fn colorLineOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -3337,7 +3222,7 @@ impl<'a> PaintRadialGradient<'a> {
   pub fn x0(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[2].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -3349,7 +3234,7 @@ impl<'a> PaintRadialGradient<'a> {
   pub fn y0(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[3].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -3361,7 +3246,7 @@ impl<'a> PaintRadialGradient<'a> {
   pub fn radius0(self: &Self) -> UfWord {
     return match move FontData<'a>.readAt<UfWord>(&self._fontData, self._fieldRanges[4].start) {
       Result<UfWord, ReadError>.Success { value } => value
-      Result<UfWord, ReadError>.Failure { error } => UfWord.new(0)
+      Result<UfWord, ReadError>.Failure { .. } => UfWord.new(0)
     }
   }
 
@@ -3373,7 +3258,7 @@ impl<'a> PaintRadialGradient<'a> {
   pub fn x1(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[5].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -3385,7 +3270,7 @@ impl<'a> PaintRadialGradient<'a> {
   pub fn y1(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[6].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -3397,7 +3282,7 @@ impl<'a> PaintRadialGradient<'a> {
   pub fn radius1(self: &Self) -> UfWord {
     return match move FontData<'a>.readAt<UfWord>(&self._fontData, self._fieldRanges[7].start) {
       Result<UfWord, ReadError>.Success { value } => value
-      Result<UfWord, ReadError>.Failure { error } => UfWord.new(0)
+      Result<UfWord, ReadError>.Failure { .. } => UfWord.new(0)
     }
   }
 
@@ -3453,43 +3338,30 @@ impl<'a> PaintVarRadialGradient<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let colorLineOffsetValue = scalarOr<Offset24>(
-      data,
-      ranges[1].start,
-      Offset24.new(Uint24.new(0)),
-    )
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let x0Value = scalarOr<FWord>(data, ranges[2].start, FWord.new(0))
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let y0Value = scalarOr<FWord>(data, ranges[3].start, FWord.new(0))
     ranges[4].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[4].end = end
-    let radius0Value = scalarOr<UfWord>(data, ranges[4].start, UfWord.new(0))
     ranges[5].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[5].end = end
-    let x1Value = scalarOr<FWord>(data, ranges[5].start, FWord.new(0))
     ranges[6].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[6].end = end
-    let y1Value = scalarOr<FWord>(data, ranges[6].start, FWord.new(0))
     ranges[7].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[7].end = end
-    let radius1Value = scalarOr<UfWord>(data, ranges[7].start, UfWord.new(0))
     ranges[8].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[8].end = end
-    let varIndexBaseValue = scalarOr<u32>(data, ranges[8].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -3501,7 +3373,7 @@ impl<'a> PaintVarRadialGradient<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3513,7 +3385,7 @@ impl<'a> PaintVarRadialGradient<'a> {
   pub fn colorLineOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -3531,7 +3403,7 @@ impl<'a> PaintVarRadialGradient<'a> {
   pub fn x0(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[2].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -3544,7 +3416,7 @@ impl<'a> PaintVarRadialGradient<'a> {
   pub fn y0(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[3].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -3556,7 +3428,7 @@ impl<'a> PaintVarRadialGradient<'a> {
   pub fn radius0(self: &Self) -> UfWord {
     return match move FontData<'a>.readAt<UfWord>(&self._fontData, self._fieldRanges[4].start) {
       Result<UfWord, ReadError>.Success { value } => value
-      Result<UfWord, ReadError>.Failure { error } => UfWord.new(0)
+      Result<UfWord, ReadError>.Failure { .. } => UfWord.new(0)
     }
   }
 
@@ -3569,7 +3441,7 @@ impl<'a> PaintVarRadialGradient<'a> {
   pub fn x1(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[5].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -3582,7 +3454,7 @@ impl<'a> PaintVarRadialGradient<'a> {
   pub fn y1(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[6].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -3594,7 +3466,7 @@ impl<'a> PaintVarRadialGradient<'a> {
   pub fn radius1(self: &Self) -> UfWord {
     return match move FontData<'a>.readAt<UfWord>(&self._fontData, self._fieldRanges[7].start) {
       Result<UfWord, ReadError>.Success { value } => value
-      Result<UfWord, ReadError>.Failure { error } => UfWord.new(0)
+      Result<UfWord, ReadError>.Failure { .. } => UfWord.new(0)
     }
   }
 
@@ -3606,7 +3478,7 @@ impl<'a> PaintVarRadialGradient<'a> {
   pub fn varIndexBase(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[8].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3662,31 +3534,21 @@ impl<'a> PaintSweepGradient<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let colorLineOffsetValue = scalarOr<Offset24>(
-      data,
-      ranges[1].start,
-      Offset24.new(Uint24.new(0)),
-    )
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let centerXValue = scalarOr<FWord>(data, ranges[2].start, FWord.new(0))
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let centerYValue = scalarOr<FWord>(data, ranges[3].start, FWord.new(0))
     ranges[4].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[4].end = end
-    let startAngleValue = scalarOr<F2Dot14>(data, ranges[4].start, F2Dot14.zero())
     ranges[5].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[5].end = end
-    let endAngleValue = scalarOr<F2Dot14>(data, ranges[5].start, F2Dot14.zero())
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -3698,7 +3560,7 @@ impl<'a> PaintSweepGradient<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3710,7 +3572,7 @@ impl<'a> PaintSweepGradient<'a> {
   pub fn colorLineOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -3727,7 +3589,7 @@ impl<'a> PaintSweepGradient<'a> {
   pub fn centerX(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[2].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -3739,7 +3601,7 @@ impl<'a> PaintSweepGradient<'a> {
   pub fn centerY(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[3].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -3752,7 +3614,7 @@ impl<'a> PaintSweepGradient<'a> {
   pub fn startAngle(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[4].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -3765,7 +3627,7 @@ impl<'a> PaintSweepGradient<'a> {
   pub fn endAngle(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[5].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -3821,35 +3683,24 @@ impl<'a> PaintVarSweepGradient<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let colorLineOffsetValue = scalarOr<Offset24>(
-      data,
-      ranges[1].start,
-      Offset24.new(Uint24.new(0)),
-    )
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let centerXValue = scalarOr<FWord>(data, ranges[2].start, FWord.new(0))
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let centerYValue = scalarOr<FWord>(data, ranges[3].start, FWord.new(0))
     ranges[4].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[4].end = end
-    let startAngleValue = scalarOr<F2Dot14>(data, ranges[4].start, F2Dot14.zero())
     ranges[5].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[5].end = end
-    let endAngleValue = scalarOr<F2Dot14>(data, ranges[5].start, F2Dot14.zero())
     ranges[6].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[6].end = end
-    let varIndexBaseValue = scalarOr<u32>(data, ranges[6].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -3861,7 +3712,7 @@ impl<'a> PaintVarSweepGradient<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3873,7 +3724,7 @@ impl<'a> PaintVarSweepGradient<'a> {
   pub fn colorLineOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -3890,7 +3741,7 @@ impl<'a> PaintVarSweepGradient<'a> {
   pub fn centerX(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[2].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -3902,7 +3753,7 @@ impl<'a> PaintVarSweepGradient<'a> {
   pub fn centerY(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[3].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -3916,7 +3767,7 @@ impl<'a> PaintVarSweepGradient<'a> {
   pub fn startAngle(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[4].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -3930,7 +3781,7 @@ impl<'a> PaintVarSweepGradient<'a> {
   pub fn endAngle(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[5].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -3942,7 +3793,7 @@ impl<'a> PaintVarSweepGradient<'a> {
   pub fn varIndexBase(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[6].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3998,15 +3849,12 @@ impl<'a> PaintGlyph<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let paintOffsetValue = scalarOr<Offset24>(data, ranges[1].start, Offset24.new(Uint24.new(0)))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let glyphIdValue = scalarOr<GlyphId16>(data, ranges[2].start, GlyphId16.new(0))
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -4018,7 +3866,7 @@ impl<'a> PaintGlyph<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -4030,7 +3878,7 @@ impl<'a> PaintGlyph<'a> {
   pub fn paintOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -4047,7 +3895,7 @@ impl<'a> PaintGlyph<'a> {
   pub fn glyphId(self: &Self) -> GlyphId16 {
     return match move FontData<'a>.readAt<GlyphId16>(&self._fontData, self._fieldRanges[2].start) {
       Result<GlyphId16, ReadError>.Success { value } => value
-      Result<GlyphId16, ReadError>.Failure { error } => GlyphId16.new(0)
+      Result<GlyphId16, ReadError>.Failure { .. } => GlyphId16.new(0)
     }
   }
 
@@ -4103,15 +3951,12 @@ impl<'a> PaintGlyph2<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let paintOffsetValue = scalarOr<Offset24>(data, ranges[1].start, Offset24.new(Uint24.new(0)))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[2].end = end
-    let glyphIdValue = scalarOr<GlyphId24>(data, ranges[2].start, GlyphId24.new(0))
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -4123,7 +3968,7 @@ impl<'a> PaintGlyph2<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -4135,7 +3980,7 @@ impl<'a> PaintGlyph2<'a> {
   pub fn paintOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -4152,7 +3997,7 @@ impl<'a> PaintGlyph2<'a> {
   pub fn glyphId(self: &Self) -> GlyphId24 {
     return match move FontData<'a>.readAt<GlyphId24>(&self._fontData, self._fieldRanges[2].start) {
       Result<GlyphId24, ReadError>.Success { value } => value
-      Result<GlyphId24, ReadError>.Failure { error } => GlyphId24.new(0)
+      Result<GlyphId24, ReadError>.Failure { .. } => GlyphId24.new(0)
     }
   }
 
@@ -4208,11 +4053,9 @@ impl<'a> PaintColrGlyph<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let glyphIdValue = scalarOr<GlyphId16>(data, ranges[1].start, GlyphId16.new(0))
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -4224,7 +4067,7 @@ impl<'a> PaintColrGlyph<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -4236,7 +4079,7 @@ impl<'a> PaintColrGlyph<'a> {
   pub fn glyphId(self: &Self) -> GlyphId16 {
     return match move FontData<'a>.readAt<GlyphId16>(&self._fontData, self._fieldRanges[1].start) {
       Result<GlyphId16, ReadError>.Success { value } => value
-      Result<GlyphId16, ReadError>.Failure { error } => GlyphId16.new(0)
+      Result<GlyphId16, ReadError>.Failure { .. } => GlyphId16.new(0)
     }
   }
 
@@ -4292,19 +4135,12 @@ impl<'a> PaintTransform<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let paintOffsetValue = scalarOr<Offset24>(data, ranges[1].start, Offset24.new(Uint24.new(0)))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[2].end = end
-    let transformOffsetValue = scalarOr<Offset24>(
-      data,
-      ranges[2].start,
-      Offset24.new(Uint24.new(0)),
-    )
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -4316,7 +4152,7 @@ impl<'a> PaintTransform<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -4328,7 +4164,7 @@ impl<'a> PaintTransform<'a> {
   pub fn paintOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -4345,7 +4181,7 @@ impl<'a> PaintTransform<'a> {
   pub fn transformOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[2].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -4406,19 +4242,12 @@ impl<'a> PaintVarTransform<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let paintOffsetValue = scalarOr<Offset24>(data, ranges[1].start, Offset24.new(Uint24.new(0)))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[2].end = end
-    let transformOffsetValue = scalarOr<Offset24>(
-      data,
-      ranges[2].start,
-      Offset24.new(Uint24.new(0)),
-    )
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -4430,7 +4259,7 @@ impl<'a> PaintVarTransform<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -4442,7 +4271,7 @@ impl<'a> PaintVarTransform<'a> {
   pub fn paintOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -4459,7 +4288,7 @@ impl<'a> PaintVarTransform<'a> {
   pub fn transformOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[2].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -4527,27 +4356,21 @@ impl<'a> Affine2x3<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[0].end = end
-    let xxValue = scalarOr<Fixed>(data, ranges[0].start, Fixed.zero())
     ranges[1].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[1].end = end
-    let yxValue = scalarOr<Fixed>(data, ranges[1].start, Fixed.zero())
     ranges[2].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[2].end = end
-    let xyValue = scalarOr<Fixed>(data, ranges[2].start, Fixed.zero())
     ranges[3].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[3].end = end
-    let yyValue = scalarOr<Fixed>(data, ranges[3].start, Fixed.zero())
     ranges[4].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[4].end = end
-    let dxValue = scalarOr<Fixed>(data, ranges[4].start, Fixed.zero())
     ranges[5].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[5].end = end
-    let dyValue = scalarOr<Fixed>(data, ranges[5].start, Fixed.zero())
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -4559,7 +4382,7 @@ impl<'a> Affine2x3<'a> {
   pub fn xx(self: &Self) -> Fixed {
     return match move FontData<'a>.readAt<Fixed>(&self._fontData, self._fieldRanges[0].start) {
       Result<Fixed, ReadError>.Success { value } => value
-      Result<Fixed, ReadError>.Failure { error } => Fixed.zero()
+      Result<Fixed, ReadError>.Failure { .. } => Fixed.zero()
     }
   }
 
@@ -4571,7 +4394,7 @@ impl<'a> Affine2x3<'a> {
   pub fn yx(self: &Self) -> Fixed {
     return match move FontData<'a>.readAt<Fixed>(&self._fontData, self._fieldRanges[1].start) {
       Result<Fixed, ReadError>.Success { value } => value
-      Result<Fixed, ReadError>.Failure { error } => Fixed.zero()
+      Result<Fixed, ReadError>.Failure { .. } => Fixed.zero()
     }
   }
 
@@ -4583,7 +4406,7 @@ impl<'a> Affine2x3<'a> {
   pub fn xy(self: &Self) -> Fixed {
     return match move FontData<'a>.readAt<Fixed>(&self._fontData, self._fieldRanges[2].start) {
       Result<Fixed, ReadError>.Success { value } => value
-      Result<Fixed, ReadError>.Failure { error } => Fixed.zero()
+      Result<Fixed, ReadError>.Failure { .. } => Fixed.zero()
     }
   }
 
@@ -4595,7 +4418,7 @@ impl<'a> Affine2x3<'a> {
   pub fn yy(self: &Self) -> Fixed {
     return match move FontData<'a>.readAt<Fixed>(&self._fontData, self._fieldRanges[3].start) {
       Result<Fixed, ReadError>.Success { value } => value
-      Result<Fixed, ReadError>.Failure { error } => Fixed.zero()
+      Result<Fixed, ReadError>.Failure { .. } => Fixed.zero()
     }
   }
 
@@ -4607,7 +4430,7 @@ impl<'a> Affine2x3<'a> {
   pub fn dx(self: &Self) -> Fixed {
     return match move FontData<'a>.readAt<Fixed>(&self._fontData, self._fieldRanges[4].start) {
       Result<Fixed, ReadError>.Success { value } => value
-      Result<Fixed, ReadError>.Failure { error } => Fixed.zero()
+      Result<Fixed, ReadError>.Failure { .. } => Fixed.zero()
     }
   }
 
@@ -4619,7 +4442,7 @@ impl<'a> Affine2x3<'a> {
   pub fn dy(self: &Self) -> Fixed {
     return match move FontData<'a>.readAt<Fixed>(&self._fontData, self._fieldRanges[5].start) {
       Result<Fixed, ReadError>.Success { value } => value
-      Result<Fixed, ReadError>.Failure { error } => Fixed.zero()
+      Result<Fixed, ReadError>.Failure { .. } => Fixed.zero()
     }
   }
 
@@ -4676,31 +4499,24 @@ impl<'a> VarAffine2x3<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[0].end = end
-    let xxValue = scalarOr<Fixed>(data, ranges[0].start, Fixed.zero())
     ranges[1].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[1].end = end
-    let yxValue = scalarOr<Fixed>(data, ranges[1].start, Fixed.zero())
     ranges[2].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[2].end = end
-    let xyValue = scalarOr<Fixed>(data, ranges[2].start, Fixed.zero())
     ranges[3].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[3].end = end
-    let yyValue = scalarOr<Fixed>(data, ranges[3].start, Fixed.zero())
     ranges[4].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[4].end = end
-    let dxValue = scalarOr<Fixed>(data, ranges[4].start, Fixed.zero())
     ranges[5].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[5].end = end
-    let dyValue = scalarOr<Fixed>(data, ranges[5].start, Fixed.zero())
     ranges[6].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[6].end = end
-    let varIndexBaseValue = scalarOr<u32>(data, ranges[6].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -4713,7 +4529,7 @@ impl<'a> VarAffine2x3<'a> {
   pub fn xx(self: &Self) -> Fixed {
     return match move FontData<'a>.readAt<Fixed>(&self._fontData, self._fieldRanges[0].start) {
       Result<Fixed, ReadError>.Success { value } => value
-      Result<Fixed, ReadError>.Failure { error } => Fixed.zero()
+      Result<Fixed, ReadError>.Failure { .. } => Fixed.zero()
     }
   }
 
@@ -4726,7 +4542,7 @@ impl<'a> VarAffine2x3<'a> {
   pub fn yx(self: &Self) -> Fixed {
     return match move FontData<'a>.readAt<Fixed>(&self._fontData, self._fieldRanges[1].start) {
       Result<Fixed, ReadError>.Success { value } => value
-      Result<Fixed, ReadError>.Failure { error } => Fixed.zero()
+      Result<Fixed, ReadError>.Failure { .. } => Fixed.zero()
     }
   }
 
@@ -4739,7 +4555,7 @@ impl<'a> VarAffine2x3<'a> {
   pub fn xy(self: &Self) -> Fixed {
     return match move FontData<'a>.readAt<Fixed>(&self._fontData, self._fieldRanges[2].start) {
       Result<Fixed, ReadError>.Success { value } => value
-      Result<Fixed, ReadError>.Failure { error } => Fixed.zero()
+      Result<Fixed, ReadError>.Failure { .. } => Fixed.zero()
     }
   }
 
@@ -4752,7 +4568,7 @@ impl<'a> VarAffine2x3<'a> {
   pub fn yy(self: &Self) -> Fixed {
     return match move FontData<'a>.readAt<Fixed>(&self._fontData, self._fieldRanges[3].start) {
       Result<Fixed, ReadError>.Success { value } => value
-      Result<Fixed, ReadError>.Failure { error } => Fixed.zero()
+      Result<Fixed, ReadError>.Failure { .. } => Fixed.zero()
     }
   }
 
@@ -4764,7 +4580,7 @@ impl<'a> VarAffine2x3<'a> {
   pub fn dx(self: &Self) -> Fixed {
     return match move FontData<'a>.readAt<Fixed>(&self._fontData, self._fieldRanges[4].start) {
       Result<Fixed, ReadError>.Success { value } => value
-      Result<Fixed, ReadError>.Failure { error } => Fixed.zero()
+      Result<Fixed, ReadError>.Failure { .. } => Fixed.zero()
     }
   }
 
@@ -4776,7 +4592,7 @@ impl<'a> VarAffine2x3<'a> {
   pub fn dy(self: &Self) -> Fixed {
     return match move FontData<'a>.readAt<Fixed>(&self._fontData, self._fieldRanges[5].start) {
       Result<Fixed, ReadError>.Success { value } => value
-      Result<Fixed, ReadError>.Failure { error } => Fixed.zero()
+      Result<Fixed, ReadError>.Failure { .. } => Fixed.zero()
     }
   }
 
@@ -4788,7 +4604,7 @@ impl<'a> VarAffine2x3<'a> {
   pub fn varIndexBase(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[6].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -4838,19 +4654,15 @@ impl<'a> PaintTranslate<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let paintOffsetValue = scalarOr<Offset24>(data, ranges[1].start, Offset24.new(Uint24.new(0)))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let dxValue = scalarOr<FWord>(data, ranges[2].start, FWord.new(0))
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let dyValue = scalarOr<FWord>(data, ranges[3].start, FWord.new(0))
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -4862,7 +4674,7 @@ impl<'a> PaintTranslate<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -4874,7 +4686,7 @@ impl<'a> PaintTranslate<'a> {
   pub fn paintOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -4891,7 +4703,7 @@ impl<'a> PaintTranslate<'a> {
   pub fn dx(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[2].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -4903,7 +4715,7 @@ impl<'a> PaintTranslate<'a> {
   pub fn dy(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[3].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -4959,23 +4771,18 @@ impl<'a> PaintVarTranslate<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let paintOffsetValue = scalarOr<Offset24>(data, ranges[1].start, Offset24.new(Uint24.new(0)))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let dxValue = scalarOr<FWord>(data, ranges[2].start, FWord.new(0))
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let dyValue = scalarOr<FWord>(data, ranges[3].start, FWord.new(0))
     ranges[4].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[4].end = end
-    let varIndexBaseValue = scalarOr<u32>(data, ranges[4].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -4987,7 +4794,7 @@ impl<'a> PaintVarTranslate<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -4999,7 +4806,7 @@ impl<'a> PaintVarTranslate<'a> {
   pub fn paintOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -5016,7 +4823,7 @@ impl<'a> PaintVarTranslate<'a> {
   pub fn dx(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[2].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -5028,7 +4835,7 @@ impl<'a> PaintVarTranslate<'a> {
   pub fn dy(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[3].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -5040,7 +4847,7 @@ impl<'a> PaintVarTranslate<'a> {
   pub fn varIndexBase(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[4].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -5096,19 +4903,15 @@ impl<'a> PaintScale<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let paintOffsetValue = scalarOr<Offset24>(data, ranges[1].start, Offset24.new(Uint24.new(0)))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let scaleXValue = scalarOr<F2Dot14>(data, ranges[2].start, F2Dot14.zero())
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let scaleYValue = scalarOr<F2Dot14>(data, ranges[3].start, F2Dot14.zero())
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -5120,7 +4923,7 @@ impl<'a> PaintScale<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -5132,7 +4935,7 @@ impl<'a> PaintScale<'a> {
   pub fn paintOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -5149,7 +4952,7 @@ impl<'a> PaintScale<'a> {
   pub fn scaleX(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[2].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -5161,7 +4964,7 @@ impl<'a> PaintScale<'a> {
   pub fn scaleY(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[3].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -5217,23 +5020,18 @@ impl<'a> PaintVarScale<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let paintOffsetValue = scalarOr<Offset24>(data, ranges[1].start, Offset24.new(Uint24.new(0)))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let scaleXValue = scalarOr<F2Dot14>(data, ranges[2].start, F2Dot14.zero())
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let scaleYValue = scalarOr<F2Dot14>(data, ranges[3].start, F2Dot14.zero())
     ranges[4].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[4].end = end
-    let varIndexBaseValue = scalarOr<u32>(data, ranges[4].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -5245,7 +5043,7 @@ impl<'a> PaintVarScale<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -5257,7 +5055,7 @@ impl<'a> PaintVarScale<'a> {
   pub fn paintOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -5275,7 +5073,7 @@ impl<'a> PaintVarScale<'a> {
   pub fn scaleX(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[2].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -5288,7 +5086,7 @@ impl<'a> PaintVarScale<'a> {
   pub fn scaleY(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[3].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -5300,7 +5098,7 @@ impl<'a> PaintVarScale<'a> {
   pub fn varIndexBase(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[4].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -5356,27 +5154,21 @@ impl<'a> PaintScaleAroundCenter<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let paintOffsetValue = scalarOr<Offset24>(data, ranges[1].start, Offset24.new(Uint24.new(0)))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let scaleXValue = scalarOr<F2Dot14>(data, ranges[2].start, F2Dot14.zero())
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let scaleYValue = scalarOr<F2Dot14>(data, ranges[3].start, F2Dot14.zero())
     ranges[4].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[4].end = end
-    let centerXValue = scalarOr<FWord>(data, ranges[4].start, FWord.new(0))
     ranges[5].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[5].end = end
-    let centerYValue = scalarOr<FWord>(data, ranges[5].start, FWord.new(0))
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -5388,7 +5180,7 @@ impl<'a> PaintScaleAroundCenter<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -5400,7 +5192,7 @@ impl<'a> PaintScaleAroundCenter<'a> {
   pub fn paintOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -5417,7 +5209,7 @@ impl<'a> PaintScaleAroundCenter<'a> {
   pub fn scaleX(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[2].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -5429,7 +5221,7 @@ impl<'a> PaintScaleAroundCenter<'a> {
   pub fn scaleY(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[3].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -5441,7 +5233,7 @@ impl<'a> PaintScaleAroundCenter<'a> {
   pub fn centerX(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[4].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -5453,7 +5245,7 @@ impl<'a> PaintScaleAroundCenter<'a> {
   pub fn centerY(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[5].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -5509,31 +5301,24 @@ impl<'a> PaintVarScaleAroundCenter<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let paintOffsetValue = scalarOr<Offset24>(data, ranges[1].start, Offset24.new(Uint24.new(0)))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let scaleXValue = scalarOr<F2Dot14>(data, ranges[2].start, F2Dot14.zero())
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let scaleYValue = scalarOr<F2Dot14>(data, ranges[3].start, F2Dot14.zero())
     ranges[4].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[4].end = end
-    let centerXValue = scalarOr<FWord>(data, ranges[4].start, FWord.new(0))
     ranges[5].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[5].end = end
-    let centerYValue = scalarOr<FWord>(data, ranges[5].start, FWord.new(0))
     ranges[6].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[6].end = end
-    let varIndexBaseValue = scalarOr<u32>(data, ranges[6].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -5545,7 +5330,7 @@ impl<'a> PaintVarScaleAroundCenter<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -5557,7 +5342,7 @@ impl<'a> PaintVarScaleAroundCenter<'a> {
   pub fn paintOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -5575,7 +5360,7 @@ impl<'a> PaintVarScaleAroundCenter<'a> {
   pub fn scaleX(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[2].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -5588,7 +5373,7 @@ impl<'a> PaintVarScaleAroundCenter<'a> {
   pub fn scaleY(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[3].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -5601,7 +5386,7 @@ impl<'a> PaintVarScaleAroundCenter<'a> {
   pub fn centerX(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[4].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -5614,7 +5399,7 @@ impl<'a> PaintVarScaleAroundCenter<'a> {
   pub fn centerY(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[5].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -5626,7 +5411,7 @@ impl<'a> PaintVarScaleAroundCenter<'a> {
   pub fn varIndexBase(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[6].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -5682,15 +5467,12 @@ impl<'a> PaintScaleUniform<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let paintOffsetValue = scalarOr<Offset24>(data, ranges[1].start, Offset24.new(Uint24.new(0)))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let scaleValue = scalarOr<F2Dot14>(data, ranges[2].start, F2Dot14.zero())
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -5702,7 +5484,7 @@ impl<'a> PaintScaleUniform<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -5714,7 +5496,7 @@ impl<'a> PaintScaleUniform<'a> {
   pub fn paintOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -5731,7 +5513,7 @@ impl<'a> PaintScaleUniform<'a> {
   pub fn scale(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[2].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -5787,19 +5569,15 @@ impl<'a> PaintVarScaleUniform<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let paintOffsetValue = scalarOr<Offset24>(data, ranges[1].start, Offset24.new(Uint24.new(0)))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let scaleValue = scalarOr<F2Dot14>(data, ranges[2].start, F2Dot14.zero())
     ranges[3].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[3].end = end
-    let varIndexBaseValue = scalarOr<u32>(data, ranges[3].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -5811,7 +5589,7 @@ impl<'a> PaintVarScaleUniform<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -5823,7 +5601,7 @@ impl<'a> PaintVarScaleUniform<'a> {
   pub fn paintOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -5841,7 +5619,7 @@ impl<'a> PaintVarScaleUniform<'a> {
   pub fn scale(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[2].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -5853,7 +5631,7 @@ impl<'a> PaintVarScaleUniform<'a> {
   pub fn varIndexBase(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[3].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -5909,23 +5687,18 @@ impl<'a> PaintScaleUniformAroundCenter<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let paintOffsetValue = scalarOr<Offset24>(data, ranges[1].start, Offset24.new(Uint24.new(0)))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let scaleValue = scalarOr<F2Dot14>(data, ranges[2].start, F2Dot14.zero())
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let centerXValue = scalarOr<FWord>(data, ranges[3].start, FWord.new(0))
     ranges[4].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[4].end = end
-    let centerYValue = scalarOr<FWord>(data, ranges[4].start, FWord.new(0))
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -5937,7 +5710,7 @@ impl<'a> PaintScaleUniformAroundCenter<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -5949,7 +5722,7 @@ impl<'a> PaintScaleUniformAroundCenter<'a> {
   pub fn paintOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -5966,7 +5739,7 @@ impl<'a> PaintScaleUniformAroundCenter<'a> {
   pub fn scale(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[2].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -5978,7 +5751,7 @@ impl<'a> PaintScaleUniformAroundCenter<'a> {
   pub fn centerX(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[3].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -5990,7 +5763,7 @@ impl<'a> PaintScaleUniformAroundCenter<'a> {
   pub fn centerY(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[4].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -6046,27 +5819,21 @@ impl<'a> PaintVarScaleUniformAroundCenter<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let paintOffsetValue = scalarOr<Offset24>(data, ranges[1].start, Offset24.new(Uint24.new(0)))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let scaleValue = scalarOr<F2Dot14>(data, ranges[2].start, F2Dot14.zero())
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let centerXValue = scalarOr<FWord>(data, ranges[3].start, FWord.new(0))
     ranges[4].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[4].end = end
-    let centerYValue = scalarOr<FWord>(data, ranges[4].start, FWord.new(0))
     ranges[5].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[5].end = end
-    let varIndexBaseValue = scalarOr<u32>(data, ranges[5].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -6078,7 +5845,7 @@ impl<'a> PaintVarScaleUniformAroundCenter<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6090,7 +5857,7 @@ impl<'a> PaintVarScaleUniformAroundCenter<'a> {
   pub fn paintOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -6108,7 +5875,7 @@ impl<'a> PaintVarScaleUniformAroundCenter<'a> {
   pub fn scale(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[2].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -6121,7 +5888,7 @@ impl<'a> PaintVarScaleUniformAroundCenter<'a> {
   pub fn centerX(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[3].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -6134,7 +5901,7 @@ impl<'a> PaintVarScaleUniformAroundCenter<'a> {
   pub fn centerY(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[4].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -6146,7 +5913,7 @@ impl<'a> PaintVarScaleUniformAroundCenter<'a> {
   pub fn varIndexBase(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[5].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6202,15 +5969,12 @@ impl<'a> PaintRotate<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let paintOffsetValue = scalarOr<Offset24>(data, ranges[1].start, Offset24.new(Uint24.new(0)))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let angleValue = scalarOr<F2Dot14>(data, ranges[2].start, F2Dot14.zero())
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -6222,7 +5986,7 @@ impl<'a> PaintRotate<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6234,7 +5998,7 @@ impl<'a> PaintRotate<'a> {
   pub fn paintOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -6252,7 +6016,7 @@ impl<'a> PaintRotate<'a> {
   pub fn angle(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[2].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -6308,19 +6072,15 @@ impl<'a> PaintVarRotate<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let paintOffsetValue = scalarOr<Offset24>(data, ranges[1].start, Offset24.new(Uint24.new(0)))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let angleValue = scalarOr<F2Dot14>(data, ranges[2].start, F2Dot14.zero())
     ranges[3].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[3].end = end
-    let varIndexBaseValue = scalarOr<u32>(data, ranges[3].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -6332,7 +6092,7 @@ impl<'a> PaintVarRotate<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6344,7 +6104,7 @@ impl<'a> PaintVarRotate<'a> {
   pub fn paintOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -6362,7 +6122,7 @@ impl<'a> PaintVarRotate<'a> {
   pub fn angle(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[2].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -6374,7 +6134,7 @@ impl<'a> PaintVarRotate<'a> {
   pub fn varIndexBase(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[3].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6430,23 +6190,18 @@ impl<'a> PaintRotateAroundCenter<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let paintOffsetValue = scalarOr<Offset24>(data, ranges[1].start, Offset24.new(Uint24.new(0)))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let angleValue = scalarOr<F2Dot14>(data, ranges[2].start, F2Dot14.zero())
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let centerXValue = scalarOr<FWord>(data, ranges[3].start, FWord.new(0))
     ranges[4].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[4].end = end
-    let centerYValue = scalarOr<FWord>(data, ranges[4].start, FWord.new(0))
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -6458,7 +6213,7 @@ impl<'a> PaintRotateAroundCenter<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6470,7 +6225,7 @@ impl<'a> PaintRotateAroundCenter<'a> {
   pub fn paintOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -6488,7 +6243,7 @@ impl<'a> PaintRotateAroundCenter<'a> {
   pub fn angle(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[2].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -6500,7 +6255,7 @@ impl<'a> PaintRotateAroundCenter<'a> {
   pub fn centerX(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[3].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -6512,7 +6267,7 @@ impl<'a> PaintRotateAroundCenter<'a> {
   pub fn centerY(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[4].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -6568,27 +6323,21 @@ impl<'a> PaintVarRotateAroundCenter<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let paintOffsetValue = scalarOr<Offset24>(data, ranges[1].start, Offset24.new(Uint24.new(0)))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let angleValue = scalarOr<F2Dot14>(data, ranges[2].start, F2Dot14.zero())
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let centerXValue = scalarOr<FWord>(data, ranges[3].start, FWord.new(0))
     ranges[4].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[4].end = end
-    let centerYValue = scalarOr<FWord>(data, ranges[4].start, FWord.new(0))
     ranges[5].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[5].end = end
-    let varIndexBaseValue = scalarOr<u32>(data, ranges[5].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -6600,7 +6349,7 @@ impl<'a> PaintVarRotateAroundCenter<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6612,7 +6361,7 @@ impl<'a> PaintVarRotateAroundCenter<'a> {
   pub fn paintOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -6630,7 +6379,7 @@ impl<'a> PaintVarRotateAroundCenter<'a> {
   pub fn angle(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[2].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -6643,7 +6392,7 @@ impl<'a> PaintVarRotateAroundCenter<'a> {
   pub fn centerX(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[3].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -6656,7 +6405,7 @@ impl<'a> PaintVarRotateAroundCenter<'a> {
   pub fn centerY(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[4].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -6668,7 +6417,7 @@ impl<'a> PaintVarRotateAroundCenter<'a> {
   pub fn varIndexBase(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[5].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6724,19 +6473,15 @@ impl<'a> PaintSkew<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let paintOffsetValue = scalarOr<Offset24>(data, ranges[1].start, Offset24.new(Uint24.new(0)))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let xSkewAngleValue = scalarOr<F2Dot14>(data, ranges[2].start, F2Dot14.zero())
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let ySkewAngleValue = scalarOr<F2Dot14>(data, ranges[3].start, F2Dot14.zero())
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -6748,7 +6493,7 @@ impl<'a> PaintSkew<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6760,7 +6505,7 @@ impl<'a> PaintSkew<'a> {
   pub fn paintOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -6778,7 +6523,7 @@ impl<'a> PaintSkew<'a> {
   pub fn xSkewAngle(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[2].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -6791,7 +6536,7 @@ impl<'a> PaintSkew<'a> {
   pub fn ySkewAngle(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[3].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -6847,23 +6592,18 @@ impl<'a> PaintVarSkew<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let paintOffsetValue = scalarOr<Offset24>(data, ranges[1].start, Offset24.new(Uint24.new(0)))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let xSkewAngleValue = scalarOr<F2Dot14>(data, ranges[2].start, F2Dot14.zero())
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let ySkewAngleValue = scalarOr<F2Dot14>(data, ranges[3].start, F2Dot14.zero())
     ranges[4].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[4].end = end
-    let varIndexBaseValue = scalarOr<u32>(data, ranges[4].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -6875,7 +6615,7 @@ impl<'a> PaintVarSkew<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6887,7 +6627,7 @@ impl<'a> PaintVarSkew<'a> {
   pub fn paintOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -6906,7 +6646,7 @@ impl<'a> PaintVarSkew<'a> {
   pub fn xSkewAngle(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[2].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -6920,7 +6660,7 @@ impl<'a> PaintVarSkew<'a> {
   pub fn ySkewAngle(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[3].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -6932,7 +6672,7 @@ impl<'a> PaintVarSkew<'a> {
   pub fn varIndexBase(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[4].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6988,27 +6728,21 @@ impl<'a> PaintSkewAroundCenter<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let paintOffsetValue = scalarOr<Offset24>(data, ranges[1].start, Offset24.new(Uint24.new(0)))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let xSkewAngleValue = scalarOr<F2Dot14>(data, ranges[2].start, F2Dot14.zero())
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let ySkewAngleValue = scalarOr<F2Dot14>(data, ranges[3].start, F2Dot14.zero())
     ranges[4].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[4].end = end
-    let centerXValue = scalarOr<FWord>(data, ranges[4].start, FWord.new(0))
     ranges[5].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[5].end = end
-    let centerYValue = scalarOr<FWord>(data, ranges[5].start, FWord.new(0))
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -7020,7 +6754,7 @@ impl<'a> PaintSkewAroundCenter<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -7032,7 +6766,7 @@ impl<'a> PaintSkewAroundCenter<'a> {
   pub fn paintOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -7050,7 +6784,7 @@ impl<'a> PaintSkewAroundCenter<'a> {
   pub fn xSkewAngle(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[2].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -7063,7 +6797,7 @@ impl<'a> PaintSkewAroundCenter<'a> {
   pub fn ySkewAngle(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[3].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -7075,7 +6809,7 @@ impl<'a> PaintSkewAroundCenter<'a> {
   pub fn centerX(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[4].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -7087,7 +6821,7 @@ impl<'a> PaintSkewAroundCenter<'a> {
   pub fn centerY(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[5].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -7143,31 +6877,24 @@ impl<'a> PaintVarSkewAroundCenter<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let paintOffsetValue = scalarOr<Offset24>(data, ranges[1].start, Offset24.new(Uint24.new(0)))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let xSkewAngleValue = scalarOr<F2Dot14>(data, ranges[2].start, F2Dot14.zero())
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let ySkewAngleValue = scalarOr<F2Dot14>(data, ranges[3].start, F2Dot14.zero())
     ranges[4].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[4].end = end
-    let centerXValue = scalarOr<FWord>(data, ranges[4].start, FWord.new(0))
     ranges[5].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[5].end = end
-    let centerYValue = scalarOr<FWord>(data, ranges[5].start, FWord.new(0))
     ranges[6].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[6].end = end
-    let varIndexBaseValue = scalarOr<u32>(data, ranges[6].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -7179,7 +6906,7 @@ impl<'a> PaintVarSkewAroundCenter<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -7191,7 +6918,7 @@ impl<'a> PaintVarSkewAroundCenter<'a> {
   pub fn paintOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -7210,7 +6937,7 @@ impl<'a> PaintVarSkewAroundCenter<'a> {
   pub fn xSkewAngle(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[2].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -7224,7 +6951,7 @@ impl<'a> PaintVarSkewAroundCenter<'a> {
   pub fn ySkewAngle(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[3].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -7237,7 +6964,7 @@ impl<'a> PaintVarSkewAroundCenter<'a> {
   pub fn centerX(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[4].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -7250,7 +6977,7 @@ impl<'a> PaintVarSkewAroundCenter<'a> {
   pub fn centerY(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[5].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -7262,7 +6989,7 @@ impl<'a> PaintVarSkewAroundCenter<'a> {
   pub fn varIndexBase(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[6].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -7318,27 +7045,15 @@ impl<'a> PaintComposite<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let sourcePaintOffsetValue = scalarOr<Offset24>(
-      data,
-      ranges[1].start,
-      Offset24.new(Uint24.new(0)),
-    )
     ranges[2].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[2].end = end
-    let compositeModeValue = scalarOr<CompositeMode>(data, ranges[2].start, CompositeMode.SrcOver)
     ranges[3].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[3].end = end
-    let backdropPaintOffsetValue = scalarOr<Offset24>(
-      data,
-      ranges[3].start,
-      Offset24.new(Uint24.new(0)),
-    )
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -7350,7 +7065,7 @@ impl<'a> PaintComposite<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -7362,7 +7077,7 @@ impl<'a> PaintComposite<'a> {
   pub fn sourcePaintOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -7382,7 +7097,7 @@ impl<'a> PaintComposite<'a> {
       self._fieldRanges[2].start,
     ) {
       Result<CompositeMode, ReadError>.Success { value } => value
-      Result<CompositeMode, ReadError>.Failure { error } => CompositeMode.SrcOver
+      Result<CompositeMode, ReadError>.Failure { .. } => CompositeMode.SrcOver
     }
   }
 
@@ -7394,7 +7109,7 @@ impl<'a> PaintComposite<'a> {
   pub fn backdropPaintOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[3].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 

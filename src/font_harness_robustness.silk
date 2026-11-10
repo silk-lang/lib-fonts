@@ -23,11 +23,21 @@ import font_harness_random { Random }
 import font_harness_fixtures as F
 import font_generate_support as G
 
-struct Input { name: String, data: Bytes }
-effect fn ignored(error: FileError | OutOfMemoryError) -> () {}
-effect fn cleanup(path: &Path) -> () ? &mut Allocator | &mut FileSystem { run Effect.catchAll(FileSystem.removeDirectoryRecursively(path), ignored) }
+struct Input {
+  name: String,
+  data: Bytes
+}
 
-effect fn inspect(binary: string, font: string, timeout: f64) -> () ! Errors ? &mut HostInput | &mut Allocator {
+effect fn ignored(error: FileError | OutOfMemoryError) -> () {}
+
+effect fn cleanup(path: &Path) -> ()
+  ? &mut Allocator | &mut FileSystem {
+  run Effect.catchAll(FileSystem.removeDirectoryRecursively(path), ignored)
+}
+
+effect fn inspect(binary: string, font: string, timeout: f64) -> ()
+  ! Errors
+  ? &mut HostInput | &mut Allocator {
   let mut result = run Process.execute(binary, &[font], timeout, false)
   if result.timedOut {
     let mut message = run Bytes.copy(b"timed out after ")
@@ -46,15 +56,29 @@ effect fn inspect(binary: string, font: string, timeout: f64) -> () ! Errors ? &
   }
   let _info = run Dump.inspect(&mut result.output)
 }
-effect fn checkIn(binary: string, name: string, data: &[u8], timeout: f64, failures: string, directory: &Path) -> Bytes
-  ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+
+effect fn checkIn(
+  binary: string,
+  name: string,
+  data: &[u8],
+  timeout: f64,
+  failures: string,
+  directory: &Path,
+) -> Bytes
+  ! Errors
+  ? &mut HostInput | &mut Allocator | &mut FileSystem {
   let font = run Path.join(directory, "input.font")
   run FileSystem.writeFile(&font, data)
   let text = run Corpus.pathText(&font)
   match move run Effect.result(inspect(binary, String.view(&text), timeout)) {
-    Result<(), Errors>.Success { .. } => { return Bytes.make() }
+    Result<(), Errors>.Success { .. } => {
+      return Bytes.make()
+    }
     Result<(), Errors>.Failure { error } => {
-      let message = match move error { TaskError failure => move failure.message _ => run String.copy("process or dump inspection failed") }
+      let message = match move error {
+        TaskError failure => move failure.message
+        _ => run String.copy("process or dump inspection failed")
+      }
       let hash = run Dump.sha(data)
       let failureDirectory = run Corpus.resolve(failures)
       let destination = run Path.join(&failureDirectory, String.view(&hash))
@@ -74,20 +98,46 @@ effect fn checkIn(binary: string, name: string, data: &[u8], timeout: f64, failu
     }
   }
 }
-pub effect fn check(binary: string, name: string, data: &[u8], timeout: f64, failures: string) -> Bytes
-  ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+
+pub effect fn check(
+  binary: string,
+  name: string,
+  data: &[u8],
+  timeout: f64,
+  failures: string,
+) -> Bytes
+  ! Errors
+  ? &mut HostInput | &mut Allocator | &mut FileSystem {
   let parent = run Path.make("/tmp")
   let temporary = run FileSystem.createTemporaryDirectory(&parent, b"read-fonts-robustness-")
-  return run Effect.ensuring(checkIn(binary, name, data, timeout, failures, &temporary), cleanup(&temporary))
+  return run Effect.ensuring(
+    checkIn(binary, name, data, timeout, failures, &temporary),
+    cleanup(&temporary),
+  )
 }
-effect fn worker(binary: string, name: string, data: &[u8], timeout: f64, failures: string) -> Bytes ! Errors ? &mut Allocator {
+
+effect fn worker(binary: string, name: string, data: &[u8], timeout: f64, failures: string) -> Bytes
+  ! Errors
+  ? &mut Allocator {
   let snapshot = run unsafe NativeHostInput.environmentSnapshot()
   let mut inputs = OsHostInput.make(move snapshot)
   let mut files = run MachineFileSystem.make()
-  return run check(binary, name, data, timeout, failures) |> Effect.provideMut<HostInput>(&mut inputs) |> Effect.provideMut<FileSystem>(&mut files)
+  return run check(binary, name, data, timeout, failures)
+    |> Effect.provideMut<HostInput>(&mut inputs)
+    |> Effect.provideMut<FileSystem>(&mut files)
 }
-pub effect fn checkRobustness(fonts: string, silk: string, perFont: usize, seed: i64, timeout: f64, jobs: usize, failures: string) -> ()
-  ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+
+pub effect fn checkRobustness(
+  fonts: string,
+  silk: string,
+  perFont: usize,
+  seed: i64,
+  timeout: f64,
+  jobs: usize,
+  failures: string,
+) -> ()
+  ! Errors
+  ? &mut HostInput | &mut Allocator | &mut FileSystem {
   let corpus = run Corpus.load(fonts)
   let binary = run Harness.silkBinary(silk)
   let workers = run Harness.jobs(jobs)
@@ -109,6 +159,7 @@ pub effect fn checkRobustness(fonts: string, silk: string, perFont: usize, seed:
       let selected = run random.sample(recipes.length(), F.minimum(perFont, recipes.length()))
       let indices = selected.asSlice()
       let variants = recipes.asSlice()
+
       // Original clean input precedes the sampled mutations for each font.
       let mut k: usize = 0
       while k < indices.length {
@@ -117,7 +168,11 @@ pub effect fn checkRobustness(fonts: string, silk: string, perFont: usize, seed:
         let mut label = run String.copy(name)
         run String.append(&mut label, " ")
         run String.append(&mut label, run G.text(json.asSlice()))
-        run inputs.append(Option<Input>.some(Input { name: move label, data: run Malformed.changed(data.asSlice(), recipe) }))
+        run inputs.append(
+          Option<Input>.some(
+            Input { name: move label, data: run Malformed.changed(data.asSlice(), recipe) },
+          ),
+        )
         k = k + 1
       }
     }
@@ -139,26 +194,59 @@ pub effect fn checkRobustness(fonts: string, silk: string, perFont: usize, seed:
       at = at + 1
       let binary = run String.copy(String.view(&binary))
       let failures = run String.copy(failures)
-      let handle = match move run Effect.result(NativeThread.spawn(fn() -> Result<Bytes, Errors> {
-        let ownedBinary = move binary
-        let ownedInput = move input
-        let ownedFailures = move failures
-        let mut allocator = Allocator.systemAllocatorProvider()
-        return run Effect.result(worker(String.view(&ownedBinary), String.view(&ownedInput.name), ownedInput.data.asSlice(), timeout, String.view(&ownedFailures))) |> Effect.provideMut<Allocator>(&mut allocator)
-      })) {
-        Result<JoinHandle<Result<Bytes, Errors>>, SpawnError | OutOfMemoryError>.Success { value } => move value
-        Result<JoinHandle<Result<Bytes, Errors>>, SpawnError | OutOfMemoryError>.Failure { .. } => run Task.abort("cannot start robustness worker")
+      let handle = match move run Effect.result(
+        NativeThread.spawn(
+          fn() -> Result<Bytes, Errors> {
+            let ownedBinary = move binary
+            let ownedInput = move input
+            let ownedFailures = move failures
+            let mut allocator = Allocator.systemAllocatorProvider()
+            return run Effect.result(
+              worker(
+                String.view(&ownedBinary),
+                String.view(&ownedInput.name),
+                ownedInput.data.asSlice(),
+                timeout,
+                String.view(&ownedFailures),
+              ),
+            )
+              |> Effect.provideMut<Allocator>(&mut allocator)
+          },
+        ),
+      ) {
+        Result<JoinHandle<Result<Bytes, Errors>>, SpawnError | OutOfMemoryError>.Success {
+          value
+        } => move value
+        Result<JoinHandle<Result<Bytes, Errors>>, SpawnError | OutOfMemoryError>.Failure {
+          ..
+        } => run Task.abort("cannot start robustness worker")
       }
       run handles.append(move handle)
       started = started + 1
     }
     while handles.length() > 0 {
       let handle = handles.remove(0)
-      let failure = match move handle.join() { Result<Bytes, Errors>.Success { value } => move value Result<Bytes, Errors>.Failure { error } => { fail move error } }
-      if failure.length() > 0 { failed = failed + 1  run Process.print(b"FAIL ")  run Process.print(failure.asSlice())  run Process.print(b"\n") }
+      let failure = match move handle.join() {
+        Result<Bytes, Errors>.Success { value } => move value
+        Result<Bytes, Errors>.Failure { error } => {
+          fail move error
+        }
+      }
+      if failure.length() > 0 {
+        failed = failed + 1
+        run Process.print(b"FAIL ")
+        run Process.print(failure.asSlice())
+        run Process.print(b"\n")
+      }
     }
   }
-  let mut summary = run Bytes.copy(if failed > 0 { b"FAIL: " } else { b"OK: " })
+  let mut summary = run Bytes.copy(
+    if failed > 0 {
+      b"FAIL: "
+    } else {
+      b"OK: "
+    },
+  )
   run Corpus.appendNumber(&mut summary, total - failed)
   run summary.append(b"/")
   run Corpus.appendNumber(&mut summary, total)
@@ -168,5 +256,7 @@ pub effect fn checkRobustness(fonts: string, silk: string, perFont: usize, seed:
   run Corpus.appendNumber(&mut summary, perFont)
   run summary.append(b" corrupted variants each)\n")
   run Process.print(summary.asSlice())
-  if failed > 0 { run Task.abort("robustness campaign failed") }
+  if failed > 0 {
+    run Task.abort("robustness campaign failed")
+  }
 }

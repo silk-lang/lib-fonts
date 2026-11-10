@@ -80,7 +80,7 @@ impl<'a> CharIter<'a> {
         self.pos = self.pos + 2
         return Option<u16>.some(value)
       }
-      Result<u16, ReadError>.Failure { error } => Option<u16>.None
+      Result<u16, ReadError>.Failure { .. } => Option<u16>.None
     }
   }
 
@@ -90,7 +90,7 @@ impl<'a> CharIter<'a> {
         self.pos = self.pos + 1
         return Option<u8>.some(value)
       }
-      Result<u8, ReadError>.Failure { error } => Option<u8>.None
+      Result<u8, ReadError>.Failure { .. } => Option<u8>.None
     }
   }
 

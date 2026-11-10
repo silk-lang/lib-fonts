@@ -81,7 +81,7 @@ pub effect fn execute(base: &Path, fontPath: string, textPath: string, repeatTex
         run List<ShapePlan>.append(&mut plans, move plan)
       }
       let options = ShapeOptions.forPlan(&List<ShapePlan>.asSlice(&plans)[index], &[])
-      if let Result<(), ShapeError>.Failure { error } = move run shape(
+      if let Result<(), ShapeError>.Failure { .. } = move run shape(
         &shaper,
         &mut buffer,
         move options,

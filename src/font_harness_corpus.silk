@@ -24,32 +24,51 @@ static if Intrinsic.targetOperatingSystem() == "windows" {
   import silk.platform.native.file { NativeFile, NativeFileError }
   unsafe extern "C" fn fopen(path: ?[*]const u8, mode: ?[*]const u8) -> ?*mut u8
 }
+
 unsafe extern "C" fn fread(bytes: ?[*]mut u8, size: usize, count: usize, file: *mut u8) -> usize
+
 unsafe extern "C" fn fclose(file: *mut u8) -> i32
 
-pub struct Corpus { pub fonts: List<String>, pub inventory: Bytes, pub excluded: usize }
+pub struct Corpus {
+  pub fonts: List<String>,
+  pub inventory: Bytes,
+  pub excluded: usize
+}
 
-pub effect fn utf8(bytes: &[u8]) -> String ! TaskError | OutOfMemoryError ? &mut Allocator {
+pub effect fn utf8(bytes: &[u8]) -> String
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
   match String.fromUtf8(bytes) {
-    Result<string, InvalidUtf8>.Success { value } => { return run String.copy(value) }
+    Result<string, InvalidUtf8>.Success { value } => {
+      return run String.copy(value)
+    }
     Result<string, InvalidUtf8>.Failure { .. } => run Task.abort("expected UTF-8 text")
   }
 }
 
-pub effect fn pathText(path: &Path) -> String ! TaskError | OutOfMemoryError ? &mut Allocator {
+pub effect fn pathText(path: &Path) -> String
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
   return run utf8(Path.rawBytes(path))
 }
 
-pub effect fn resolve(value: string) -> Path ! TaskError | HostInputError | FileError | OutOfMemoryError ? &mut HostInput | &mut Allocator {
+pub effect fn resolve(value: string) -> Path
+  ! TaskError | HostInputError | FileError | OutOfMemoryError
+  ? &mut HostInput | &mut Allocator {
   let root = run Task.root()
-  static if Intrinsic.targetOperatingSystem() == "windows" { return run WindowsPath.resolve(&root, value) }
-  else {
-    if String.startsWith(value, "/") { return run Path.make(value) }
+  static if Intrinsic.targetOperatingSystem() == "windows" {
+    return run WindowsPath.resolve(&root, value)
+  } else {
+    if String.startsWith(value, "/") {
+      return run Path.make(value)
+    }
     return run Path.resolve(&root, value)
   }
 }
 
-pub effect fn absolute(value: string) -> String ! TaskError | HostInputError | FileError | OutOfMemoryError ? &mut HostInput | &mut Allocator {
+pub effect fn absolute(value: string) -> String
+  ! TaskError | HostInputError | FileError | OutOfMemoryError
+  ? &mut HostInput | &mut Allocator {
   let path = run resolve(value)
   static if Intrinsic.targetOperatingSystem() == "windows" {
     let canonical = match move run WindowsHostPath.canonicalBytes(Path.rawBytes(&path)) {
@@ -59,7 +78,9 @@ pub effect fn absolute(value: string) -> String ! TaskError | HostInputError | F
     return run utf8(canonical.asSlice())
   } else {
     let mut buffer: [u8; 4096] = [0; 4096]
-    let count = match move run Effect.result(NativeFile.realPath(Path.rawBytes(&path), &mut buffer)) {
+    let count = match move run Effect.result(
+      NativeFile.realPath(Path.rawBytes(&path), &mut buffer),
+    ) {
       Result<usize, NativeFileError>.Success { value: length } => length
       Result<usize, NativeFileError>.Failure { .. } => run Task.abort("cannot resolve font path")
     }
@@ -70,36 +91,48 @@ pub effect fn absolute(value: string) -> String ! TaskError | HostInputError | F
 pub fn display<'a>(root: &'a Path, path: &'a String) -> string<'a> {
   let base = Path.rawBytes(root)
   let bytes = String.utf8Bytes(String.view(path))
-  if bytes.length > base.length && Process.equal(Slice.view<u8>(bytes, 0, base.length), base) && bytes[base.length] == 47 {
-    return unsafe String.fromUtf8Unchecked(Slice.view<u8>(bytes, base.length + 1, bytes.length - base.length - 1))
+  if bytes.length > base.length && Process.equal(Slice.view<u8>(bytes, 0, base.length), base)
+    && bytes[base.length] == 47 {
+    return unsafe String.fromUtf8Unchecked(
+      Slice.view<u8>(bytes, base.length + 1, bytes.length - base.length - 1),
+    )
   }
   return String.view(path)
 }
 
-pub effect fn quote(output: &mut Bytes, text: string) -> () ! OutOfMemoryError ? &mut Allocator {
+pub effect fn quote(output: &mut Bytes, text: string) -> ()
+  ! OutOfMemoryError
+  ? &mut Allocator {
   run Bytes.append(&mut output, b"\"")
   let bytes = String.utf8Bytes(text)
   let hex = b"0123456789abcdef"
   let mut at: usize = 0
   while at < bytes.length {
     let c = bytes[at]
-    if c == 34 || c == 92 { run Bytes.append(&mut output, b"\\") }
+    if c == 34 || c == 92 {
+      run Bytes.append(&mut output, b"\\")
+    }
     if c < 32 {
       let escape: [u8; 6] = [92, 117, 48, 48, hex[u8.toUsize(c / 16)], hex[u8.toUsize(c % 16)]]
       run Bytes.append(&mut output, &escape)
-    } else { run Bytes.append(&mut output, Slice.view<u8>(bytes, at, 1)) }
+    } else {
+      run Bytes.append(&mut output, Slice.view<u8>(bytes, at, 1))
+    }
     at = at + 1
   }
   run Bytes.append(&mut output, b"\"")
 }
 
-pub effect fn appendNumber(output: &mut Bytes, count: usize) -> () ! OutOfMemoryError ? &mut Allocator {
+pub effect fn appendNumber(output: &mut Bytes, count: usize) -> ()
+  ! OutOfMemoryError
+  ? &mut Allocator {
   let text = run Process.number(usize.toU64(count))
   run Bytes.append(&mut output, String.utf8Bytes(String.view(&text)))
 }
 
 pub effect fn save(name: string, contents: &[u8]) -> ()
-  ! TaskError | HostInputError | FileError | OutOfMemoryError ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  ! TaskError | HostInputError | FileError | OutOfMemoryError
+  ? &mut HostInput | &mut Allocator | &mut FileSystem {
   let path = run resolve(name)
   run FileSystem.writeFileWithParents(&path, contents)
 }
@@ -115,18 +148,26 @@ fn suffixFont(path: string) -> bool {
       let mut k: usize = 0
       while k < suffix.length {
         let mut c = bytes[bytes.length - suffix.length + k]
-        if c >= 65 && c <= 90 { c = c + 32 }
-        if c != suffix[k] { matches = false }
+        if c >= 65 && c <= 90 {
+          c = c + 32
+        }
+        if c != suffix[k] {
+          matches = false
+        }
         k = k + 1
       }
-      if matches { return true }
+      if matches {
+        return true
+      }
     }
     at = at + 1
   }
   return false
 }
 
-effect fn hasMagic(path: &Path) -> bool ! TaskError | OutOfMemoryError ? &mut Allocator {
+effect fn hasMagic(path: &Path) -> bool
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
   let raw = run openRead(path)
   let handle = match Pointer.nonNullMut(raw) {
     Option<*mut u8>.Some { value } => value
@@ -135,10 +176,15 @@ effect fn hasMagic(path: &Path) -> bool ! TaskError | OutOfMemoryError ? &mut Al
   let mut magic: [u8; 4] = [0; 4]
   let count = unsafe fread(Pointer.fromMutSlice(&mut magic), 1, 4, handle)
   let _closed = unsafe fclose(handle)
-  return count == 4 && (Process.equal(&magic, b"\x00\x01\x00\x00") || Process.equal(&magic, b"OTTO") || Process.equal(&magic, b"true") || Process.equal(&magic, b"ttcf"))
+  return count == 4
+    && (Process.equal(&magic, b"\x00\x01\x00\x00") || Process.equal(&magic, b"OTTO")
+      || Process.equal(&magic, b"true")
+      || Process.equal(&magic, b"ttcf"))
 }
 
-effect fn openRead(path: &Path) -> ?*mut u8 ! TaskError | OutOfMemoryError ? &mut Allocator {
+effect fn openRead(path: &Path) -> ?*mut u8
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
   static if Intrinsic.targetOperatingSystem() == "windows" {
     let wide = match move run WindowsHostPath.wide(path) {
       Option<List<u16>>.Some { value } => move value
@@ -154,7 +200,8 @@ effect fn openRead(path: &Path) -> ?*mut u8 ! TaskError | OutOfMemoryError ? &mu
 }
 
 effect fn walk(directory: &Path, found: &mut List<String>, excluded: &mut List<String>) -> ()
-  ! TaskError | FileError | OutOfMemoryError ? &mut Allocator | &mut FileSystem {
+  ! TaskError | FileError | OutOfMemoryError
+  ? &mut Allocator | &mut FileSystem {
   let entries = run FileSystem.listDirectory(directory)
   let items = entries.asSlice()
   let mut at: usize = 0
@@ -167,10 +214,14 @@ effect fn walk(directory: &Path, found: &mut List<String>, excluded: &mut List<S
       if let FileInfo file = move info {
         drop file
         let name = run pathText(&entry.path)
+
         // Read the magic even for named containers, as the original discovery does.
         let magic = run hasMagic(&entry.path)
-        if suffixFont(String.view(&name)) || magic { run found.append(move name) }
-        else { run excluded.append(move name) }
+        if suffixFont(String.view(&name)) || magic {
+          run found.append(move name)
+        } else {
+          run excluded.append(move name)
+        }
       }
     }
     at = at + 1
@@ -192,7 +243,9 @@ pub effect fn load(listing: string) -> Corpus
     let mut start: usize = 0
     while start < bytes.length {
       let mut end = start
-      while end < bytes.length && bytes[end] != 10 && bytes[end] != 13 { end = end + 1 }
+      while end < bytes.length && bytes[end] != 10 && bytes[end] != 13 {
+        end = end + 1
+      }
       if end > start && bytes[start] != 35 {
         let line = unsafe String.fromUtf8Unchecked(Slice.view<u8>(bytes, start, end - start))
         let name = run absolute(line)
@@ -204,26 +257,41 @@ pub effect fn load(listing: string) -> Corpus
         let previous = fonts.asSlice()
         let mut at: usize = 0
         while at < previous.length {
-          if String.view(&previous[at]) == String.view(&name) { run Task.abort("font list contains duplicates") }
+          if String.view(&previous[at]) == String.view(&name) {
+            run Task.abort("font list contains duplicates")
+          }
           at = at + 1
         }
         run fonts.append(move name)
       }
       start = end + 1
     }
-    if fonts.length() == 0 { run Task.abort("font list is empty") }
+    if fonts.length() == 0 {
+      run Task.abort("font list is empty")
+    }
   } else {
-    let roots = ["modules/parse/upstream/font-test-data/test_data/ttf", "modules/parse/upstream/font-test-data/test_data/ttc", "modules/parse/upstream/font-test-data/test_data/extracted", "modules/shape/test-data/harfrust/harfrust/tests/fonts"]
+    let roots = [
+      "modules/parse/upstream/font-test-data/test_data/ttf",
+      "modules/parse/upstream/font-test-data/test_data/ttc",
+      "modules/parse/upstream/font-test-data/test_data/extracted",
+      "modules/shape/test-data/harfrust/harfrust/tests/fonts",
+    ]
     let mut at: usize = 0
     while at < roots.length {
       let directory = run Path.join(&root, roots[at])
-      if !run FileSystem.exists(&directory) { run Task.abort("missing corpus; run git submodule update --init --recursive") }
+      if !run FileSystem.exists(&directory) {
+        run Task.abort("missing corpus; run git submodule update --init --recursive")
+      }
       let mut found = List<String>.make()
       let mut excluded = List<String>.make()
       run walk(&directory, &mut found, &mut excluded)
-      if found.length() == 0 && at != 2 { run Task.abort("empty font corpus") }
+      if found.length() == 0 && at != 2 {
+        run Task.abort("empty font corpus")
+      }
       sortStrings(excluded.asMutSlice())
-      if at != 0 { run Bytes.append(&mut inventory, b",") }
+      if at != 0 {
+        run Bytes.append(&mut inventory, b",")
+      }
       run Bytes.append(&mut inventory, b"{\"root\":")
       run quote(&mut inventory, roots[at])
       run Bytes.append(&mut inventory, b",\"fonts\":")
@@ -232,13 +300,17 @@ pub effect fn load(listing: string) -> Corpus
       let exclusions = excluded.asSlice()
       let mut k: usize = 0
       while k < exclusions.length {
-        if k != 0 { run Bytes.append(&mut inventory, b",") }
+        if k != 0 {
+          run Bytes.append(&mut inventory, b",")
+        }
         run quote(&mut inventory, display(&root, &exclusions[k]))
         k = k + 1
       }
       excludedCount = excludedCount + excluded.length()
       run Bytes.append(&mut inventory, b"]}")
-      while let Option<String>.Some { value } = move found.pop() { run fonts.append(move value) }
+      while let Option<String>.Some { value } = move found.pop() {
+        run fonts.append(move value)
+      }
       at = at + 1
     }
     sortStrings(fonts.asMutSlice())
@@ -250,7 +322,9 @@ pub effect fn load(listing: string) -> Corpus
 pub effect fn fontList(fonts: string, output: string, report: string, timeout: f64) -> ()
   ! TaskError | FileError | HostInputError | OutOfMemoryError | WriterError
   ? &mut HostInput | &mut Allocator | &mut FileSystem {
-  if timeout <= 0.0 { run Task.abort("timeout must be positive") }
+  if timeout <= 0.0 {
+    run Task.abort("timeout must be positive")
+  }
   let corpus = run load(fonts)
   let root = run Task.root()
   let mut listing = Bytes.make()
@@ -261,8 +335,14 @@ pub effect fn fontList(fonts: string, output: string, report: string, timeout: f
     run Bytes.append(&mut listing, b"\n")
     at = at + 1
   }
-  if output == "" { run Process.print(Bytes.asSlice(&listing)) } else { run save(output, Bytes.asSlice(&listing)) }
-  if report != "" { run save(report, Bytes.asSlice(&corpus.inventory)) }
+  if output == "" {
+    run Process.print(Bytes.asSlice(&listing))
+  } else {
+    run save(output, Bytes.asSlice(&listing))
+  }
+  if report != "" {
+    run save(report, Bytes.asSlice(&corpus.inventory))
+  }
   let mut summary = Bytes.make()
   run appendNumber(&mut summary, entries.length)
   run Bytes.append(&mut summary, b" fonts; ")
@@ -272,7 +352,9 @@ pub effect fn fontList(fonts: string, output: string, report: string, timeout: f
 }
 
 fn swap(values: &mut [String], left: usize, right: usize) -> () {
-  if left == right { return }
+  if left == right {
+    return
+  }
   let first = Intrinsic.replace(values[left], String.make())
   let second = Intrinsic.replace(values[right], move first)
   values[left] = move second
@@ -282,8 +364,14 @@ fn sift(values: &mut [String], root: usize, size: usize) -> () {
   let mut parent = root
   while parent < size / 2 {
     let mut child = parent * 2 + 1
-    if child + 1 < size && Order.compare(&String.view(&values[child]), &String.view(&values[child + 1])) == Ordering.Less { child = child + 1 }
-    if Order.compare(&String.view(&values[parent]), &String.view(&values[child])) != Ordering.Less { return }
+    if child + 1 < size
+      && Order.compare(&String.view(&values[child]), &String.view(&values[child + 1]))
+        == Ordering.Less {
+      child = child + 1
+    }
+    if Order.compare(&String.view(&values[parent]), &String.view(&values[child])) != Ordering.Less {
+      return
+    }
     swap(&mut values, parent, child)
     parent = child
   }
@@ -292,7 +380,14 @@ fn sift(values: &mut [String], root: usize, size: usize) -> () {
 pub fn sortStrings(values: &mut [String]) -> () {
   let mut parent = values.length / 2
   let length = values.length
-  while parent > 0 { parent = parent - 1  sift(&mut values, parent, length) }
+  while parent > 0 {
+    parent = parent - 1
+    sift(&mut values, parent, length)
+  }
   let mut size = values.length
-  while size > 1 { size = size - 1  swap(&mut values, 0, size)  sift(&mut values, 0, size) }
+  while size > 1 {
+    size = size - 1
+    swap(&mut values, 0, size)
+    sift(&mut values, 0, size)
+  }
 }

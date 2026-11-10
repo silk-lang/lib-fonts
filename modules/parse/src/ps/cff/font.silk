@@ -26,7 +26,7 @@ import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.core.effect { Effect }
 import silk.core.ownership { Copy }
-import silk.text.string { String, InvalidUtf8 }
+import silk.text.string { String }
 import silk.collections.slice { Slice }
 import silk.num.usize
 import silk.num.u32
@@ -135,7 +135,7 @@ effect fn newImpl<'a>(data: &'a [u8], dict: &'a [u8], strings: Index<'a>, v2: bo
       }
     }
     match entry {
-      Entry.Ros { registry, ordering, supplement } => {
+      Entry.Ros { .. } => {
         hasRos = true
       }
       Entry.CharstringsOffset { value } => {
@@ -341,7 +341,7 @@ effect fn readUnhintedSubfont<'a, 'c>(
           break
         }
       }
-      Failed { error } => {
+      Failed { .. } => {
         continue
       }
     }
@@ -388,7 +388,7 @@ effect fn readHintedSubfont<'a, 'c>(
           break
         }
       }
-      Failed { error } => {
+      Failed { .. } => {
         continue
       }
     }
@@ -490,7 +490,7 @@ impl<'a> CffFontRef<'a> {
 
   pub fn isCid(self: &Self) -> bool {
     return match &self.topDict.kind {
-      CffFontKind<'a>.Cid { fdArray, fdSelect } => true
+      CffFontKind<'a>.Cid { .. } => true
       _ => false
     }
   }
@@ -509,7 +509,7 @@ impl<'a> CffFontRef<'a> {
 
   pub fn strings(self: &Self) -> Option<Index<'a>> {
     return match &self.topDict.kind {
-      CffFontKind<'a>.Sid { strings, privateDict } => Option<Index<'a>>.some(strings)
+      CffFontKind<'a>.Sid { strings, .. } => Option<Index<'a>>.some(strings)
       _ => Option<Index<'a>>.None
     }
   }
@@ -567,23 +567,23 @@ impl<'a> CffFontRef<'a> {
 
   pub fn numSubfonts(self: &Self) -> u16 {
     return match &self.topDict.kind {
-      CffFontKind<'a>.Sid { strings, privateDict } => 1
-      CffFontKind<'a>.Cid { fdArray, fdSelect } => u32.toU16(Index.count(&fdArray) & 65535)
-      CffFontKind<'a>.Cff2 { fdArray, fdSelect } => u32.toU16(Index.count(&fdArray) & 65535)
+      CffFontKind<'a>.Sid { .. } => 1
+      CffFontKind<'a>.Cid { fdArray, .. } => u32.toU16(Index.count(&fdArray) & 65535)
+      CffFontKind<'a>.Cff2 { fdArray, .. } => u32.toU16(Index.count(&fdArray) & 65535)
     }
   }
 
   pub fn subfontIndex(self: &Self, gid: GlyphId) -> Option<u16> {
     return match &self.topDict.kind {
-      CffFontKind<'a>.Sid { strings, privateDict } => Option<u16>.some(0)
-      CffFontKind<'a>.Cid { fdArray, fdSelect } => selectFont(&fdSelect, gid)
-      CffFontKind<'a>.Cff2 { fdArray, fdSelect } => selectFont(&fdSelect, gid)
+      CffFontKind<'a>.Sid { .. } => Option<u16>.some(0)
+      CffFontKind<'a>.Cid { fdSelect, .. } => selectFont(&fdSelect, gid)
+      CffFontKind<'a>.Cff2 { fdSelect, .. } => selectFont(&fdSelect, gid)
     }
   }
 
   pub fn sidPrivateDictRange(self: &Self) -> Option<ByteRange> {
     return match &self.topDict.kind {
-      CffFontKind<'a>.Sid { strings, privateDict } => Option<ByteRange>.some(privateDict)
+      CffFontKind<'a>.Sid { privateDict, .. } => Option<ByteRange>.some(privateDict)
       _ => Option<ByteRange>.None
     }
   }
@@ -663,14 +663,14 @@ fn selectFont<'a>(select: &Maybe<FdSelect<'a>>, gid: GlyphId) -> Option<u16> {
 effect fn fontDictFor<'a>(font: &CffFontRef<'a>, index: u16) -> FontDict
   ! Error {
   return match &font.topDict.kind {
-    CffFontKind<'a>.Sid { strings, privateDict } => FontDict {
+    CffFontKind<'a>.Sid { privateDict, .. } => FontDict {
       privateRange: privateDict,
       matrix: Option<ScaledFontMatrix>.None,
     }
-    CffFontKind<'a>.Cid { fdArray, fdSelect } => {
+    CffFontKind<'a>.Cid { fdArray, .. } => {
       return run readFontDict(run require(Index.get(&fdArray, u16.toUsize(index)), Error.Malformed))
     }
-    CffFontKind<'a>.Cff2 { fdArray, fdSelect } => {
+    CffFontKind<'a>.Cff2 { fdArray, .. } => {
       return run readFontDict(run require(Index.get(&fdArray, u16.toUsize(index)), Error.Malformed))
     }
   }
@@ -937,7 +937,6 @@ fn utf8<'a>(bytes: Option<&'a [u8]>) -> Option<string<'a>> {
 import ps.charstring {
   CffContext,
   CommandSink,
-  NullSink,
   ControlBoundsSink,
   NopFilterSink,
   TransformSink,

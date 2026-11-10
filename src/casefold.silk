@@ -20,27 +20,55 @@ import silk.text.format { Format }
 import silk.num.u8
 import silk.num.u32
 
-struct Source { pub url: String, pub resolved: String, pub sha256: String }
-struct Sources { pub folding: Source, pub license: Source }
-struct Lock { pub format: i32, pub unicode: String, pub license: String, pub sources: Sources }
-impl Schema for Source {}
-impl Schema for Sources {
-  static fn spec() -> Spec<Sources> { return Spec<Sources>.of() |> Spec<Sources>.strict }
+struct Source {
+  pub url: String,
+  pub resolved: String,
+  pub sha256: String
 }
+
+struct Sources {
+  pub folding: Source,
+  pub license: Source
+}
+
+struct Lock {
+  pub format: i32,
+  pub unicode: String,
+  pub license: String,
+  pub sources: Sources
+}
+
+impl Schema for Source {}
+
+impl Schema for Sources {
+  static fn spec() -> Spec<Sources> {
+    return Spec<Sources>.of() |> Spec<Sources>.strict
+  }
+}
+
 impl Schema for Lock {}
-struct Row { pub scalar: u32, pub mapped: [u32; 3] }
+
+struct Row {
+  pub scalar: u32,
+  pub mapped: [u32; 3]
+}
 
 const FOLDING: string = "https://www.unicode.org/Public/18.0.0/ucd/CaseFolding.txt"
+
 const LICENSE: string = "https://www.unicode.org/license.txt"
 
-effect fn text(bytes: &[u8]) -> string ! TaskError | OutOfMemoryError ? &mut Allocator {
+effect fn text(bytes: &[u8]) -> string
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
   return match move String.fromUtf8(bytes) {
     Result<string, InvalidUtf8>.Success { value } => value
     Result<string, InvalidUtf8>.Failure { .. } => run Task.abort("casefold source is not UTF-8")
   }
 }
 
-effect fn hex(bytes: &[u8]) -> String ! OutOfMemoryError ? &mut Allocator {
+effect fn hex(bytes: &[u8]) -> String
+  ! OutOfMemoryError
+  ? &mut Allocator {
   let digits = "0123456789abcdef"
   let mut out = run String.makeWithCapacity(bytes.length * 2)
   let mut at: usize = 0
@@ -57,7 +85,23 @@ effect fn download(root: &Path, record: &mut Source, destination: &Path) -> Byte
   ! TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError
   ? &mut HostInput | &mut Allocator | &mut ChildProcess | &mut FileSystem {
   let destinationText = run text(Path.rawBytes(destination))
-  let resolved = run font_generate_process.capture(root, "curl", &["--fail", "--silent", "--show-error", "--location", "--max-time", "90", "--output", destinationText, "--write-out", "%{url_effective}", String.view(&record.url)])
+  let resolved = run font_generate_process.capture(
+    root,
+    "curl",
+    &[
+      "--fail",
+      "--silent",
+      "--show-error",
+      "--location",
+      "--max-time",
+      "90",
+      "--output",
+      destinationText,
+      "--write-out",
+      "%{url_effective}",
+      String.view(&record.url),
+    ],
+  )
   record.resolved = run String.copy(run text(Bytes.asSlice(&resolved)))
   return run FileSystem.readFile(destination)
 }
@@ -83,8 +127,20 @@ effect fn source(record: &mut Source, update: bool, fetch: bool) -> Bytes
     let loaded = run Effect.result(download(&root, &mut record, &destination))
     run FileSystem.releaseIgnored(move temporary)
     body = match move loaded {
-      Result<Bytes, TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError>.Success { value } => move value
-      Result<Bytes, TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError>.Failure { error } => { fail move error }
+      Result<
+        Bytes,
+        TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError
+      >.Success {
+        value
+      } => move value
+      Result<
+        Bytes,
+        TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError
+      >.Failure {
+        error
+      } => {
+        fail move error
+      }
     }
     let digest = Sha256.hash(Bytes.asSlice(&body))
     record.sha256 = run hex(&digest)
@@ -93,12 +149,28 @@ effect fn source(record: &mut Source, update: bool, fetch: bool) -> Bytes
     if run FileSystem.exists(&location) {
       body = run FileSystem.readFile(&location)
     } else {
-      if !fetch { run Task.abort("missing cached casefold source; use --fetch to hydrate the locked cache") }
-      body = run font_generate_process.capture(&root, "curl", &["--fail", "--silent", "--show-error", "--location", "--max-time", "90", String.view(&record.resolved)])
+      if !fetch {
+        run Task.abort("missing cached casefold source; use --fetch to hydrate the locked cache")
+      }
+      body = run font_generate_process.capture(
+        &root,
+        "curl",
+        &[
+          "--fail",
+          "--silent",
+          "--show-error",
+          "--location",
+          "--max-time",
+          "90",
+          String.view(&record.resolved),
+        ],
+      )
     }
     let digest = Sha256.hash(Bytes.asSlice(&body))
     let actual = run hex(&digest)
-    if String.view(&actual) != String.view(&record.sha256) { run Task.abort("casefold pinned digest mismatch") }
+    if String.view(&actual) != String.view(&record.sha256) {
+      run Task.abort("casefold pinned digest mismatch")
+    }
   }
   let destination = run Path.join(&cache, String.view(&record.sha256))
   run saveChanged(&destination, Bytes.asSlice(&body))
@@ -106,7 +178,8 @@ effect fn source(record: &mut Source, update: bool, fetch: bool) -> Bytes
 }
 
 effect fn saveChanged(path: &Path, bytes: &[u8]) -> ()
-  ! FileError | OutOfMemoryError ? &mut FileSystem | &mut Allocator {
+  ! FileError | OutOfMemoryError
+  ? &mut FileSystem | &mut Allocator {
   if run FileSystem.exists(path) {
     let previous = run FileSystem.readFile(path)
     let old = Bytes.asSlice(&previous)
@@ -116,39 +189,60 @@ effect fn saveChanged(path: &Path, bytes: &[u8]) -> ()
       equal = old[at] == bytes[at]
       at = at + 1
     }
-    if equal { return }
+    if equal {
+      return
+    }
   }
   run FileSystem.writeFile(path, bytes)
 }
 
-effect fn scalar(value: string) -> u32 ! TaskError | OutOfMemoryError ? &mut Allocator {
+effect fn scalar(value: string) -> u32
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
   let bytes = String.utf8Bytes(value)
-  if bytes.length == 0 { run Task.abort("empty casefold scalar") }
+  if bytes.length == 0 {
+    run Task.abort("empty casefold scalar")
+  }
   let mut result: u32 = 0
   let mut at: usize = 0
   while at < bytes.length {
     let c = u8.toU32(bytes[at])
     let mut digit: u32 = 0
-    if c >= 48 && c <= 57 { digit = c - 48 }
-    else if c >= 65 && c <= 70 { digit = c - 55 }
-    else if c >= 97 && c <= 102 { digit = c - 87 }
-    else { run Task.abort("invalid casefold scalar") }
-    if result > 0xffffff / 16 { run Task.abort("casefold value does not fit three bytes") }
+    if c >= 48 && c <= 57 {
+      digit = c - 48
+    } else if c >= 65 && c <= 70 {
+      digit = c - 55
+    } else if c >= 97 && c <= 102 {
+      digit = c - 87
+    } else {
+      run Task.abort("invalid casefold scalar")
+    }
+    if result > 0xffffff / 16 {
+      run Task.abort("casefold value does not fit three bytes")
+    }
     result = result * 16 + digit
     at = at + 1
   }
-  if result > 0xffffff { run Task.abort("casefold value does not fit three bytes") }
+  if result > 0xffffff {
+    run Task.abort("casefold value does not fit three bytes")
+  }
   return result
 }
 
-effect fn rows(value: string) -> List<Row> ! TaskError | OutOfMemoryError ? &mut Allocator {
-  if !String.startsWith(value, "# CaseFolding-18.0.0.txt") { run Task.abort("case folding must match Unicode18.0.0") }
+effect fn rows(value: string) -> List<Row>
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
+  if !String.startsWith(value, "# CaseFolding-18.0.0.txt") {
+    run Task.abort("case folding must match Unicode18.0.0")
+  }
   let mut result = List<Row>.make()
   let mut lines = String.split(value, "\n")
   while true {
     let line = match move Split.next(&mut lines) {
       Option<string>.Some { value: found } => found
-      Option<string>.None => { break }
+      Option<string>.None => {
+        break
+      }
     }
     let mut comments = String.split(line, "#")
     let content = Split.next(&mut comments) |> Option<string>.unwrapOr("")
@@ -163,23 +257,33 @@ effect fn rows(value: string) -> List<Row> ! TaskError | OutOfMemoryError ? &mut
       while true {
         let word = match move Split.next(&mut words) {
           Option<string>.Some { value: found } => found
-          Option<string>.None => { break }
+          Option<string>.None => {
+            break
+          }
         }
         if word != "" {
-          if count == 3 { run Task.abort("full case folding maps to one to three scalars") }
+          if count == 3 {
+            run Task.abort("full case folding maps to one to three scalars")
+          }
           mapped[count] = run scalar(word)
           count = count + 1
         }
       }
-      if count == 0 { run Task.abort("full case folding maps to one to three scalars") }
+      if count == 0 {
+        run Task.abort("full case folding maps to one to three scalars")
+      }
       let cp = run scalar(key)
+
       // Unicode sources are sorted. Insert also handles reordered rows and replaces duplicates.
       let mut at: usize = 0
       let mut end = List<Row>.length(&result)
       while at < end {
         let middle = at + (end - at) / 2
-        if List<Row>.asSlice(&result)[middle].scalar < cp { at = middle + 1 }
-        else { end = middle }
+        if List<Row>.asSlice(&result)[middle].scalar < cp {
+          at = middle + 1
+        } else {
+          end = middle
+        }
       }
       if at < List<Row>.length(&result) && List<Row>.asSlice(&result)[at].scalar == cp {
         let rows = List<Row>.asMutSlice(&mut result)
@@ -192,22 +296,32 @@ effect fn rows(value: string) -> List<Row> ! TaskError | OutOfMemoryError ? &mut
   return move result
 }
 
-effect fn quoted(out: &mut String, value: string) -> () ! OutOfMemoryError ? &mut Allocator {
+effect fn quoted(out: &mut String, value: string) -> ()
+  ! OutOfMemoryError
+  ? &mut Allocator {
   run String.append(&mut out, "\"")
   let bytes = String.utf8Bytes(value)
   let mut at: usize = 0
   while at < bytes.length {
     let c = bytes[at]
-    if c == 34 { run String.append(&mut out, "\\\"") }
-    else if c == 92 { run String.append(&mut out, "\\\\") }
-    else if c < 32 {
+    if c == 34 {
+      run String.append(&mut out, "\\\"")
+    } else if c == 92 {
+      run String.append(&mut out, "\\\\")
+    } else if c < 32 {
       let encoded = run hex(&[c])
       run String.append(&mut out, "\\u00")
       run String.append(&mut out, String.view(&encoded))
     } else {
       // URLs and digests are UTF-8; append whole scalar rather than splitting its encoding.
       let mut length: usize = 1
-      if c >= 240 { length = 4 } else if c >= 224 { length = 3 } else if c >= 192 { length = 2 }
+      if c >= 240 {
+        length = 4
+      } else if c >= 224 {
+        length = 3
+      } else if c >= 192 {
+        length = 2
+      }
       run String.append(&mut out, String.slice(value, at, length))
       at = at + length - 1
     }
@@ -216,7 +330,9 @@ effect fn quoted(out: &mut String, value: string) -> () ! OutOfMemoryError ? &mu
   run String.append(&mut out, "\"")
 }
 
-effect fn recordJson(out: &mut String, record: &Source) -> () ! OutOfMemoryError ? &mut Allocator {
+effect fn recordJson(out: &mut String, record: &Source) -> ()
+  ! OutOfMemoryError
+  ? &mut Allocator {
   run String.append(&mut out, "{\n      \"url\": ")
   run quoted(&mut out, String.view(&record.url))
   run String.append(&mut out, ",\n      \"resolved\": ")
@@ -229,50 +345,87 @@ effect fn recordJson(out: &mut String, record: &Source) -> () ! OutOfMemoryError
 pub effect fn generate(fetch: bool, update: bool) -> ()
   ! TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError
   ? &mut HostInput | &mut Allocator | &mut ChildProcess | &mut FileSystem {
-  if fetch && update { run Task.abort("--fetch and --update are mutually exclusive") }
+  if fetch && update {
+    run Task.abort("--fetch and --update are mutually exclusive")
+  }
   let root = run Task.root()
   let lockPath = run Path.join(&root, "scripts/casefold.lock.json")
   let mut lock = if update {
-    Lock { format: 1, unicode: run String.copy("18.0.0"), license: run String.copy("Unicode-3.0"), sources: Sources {
-      folding: Source { url: run String.copy(FOLDING), resolved: String.make(), sha256: String.make() },
-      license: Source { url: run String.copy(LICENSE), resolved: String.make(), sha256: String.make() }
-    } }
+    Lock {
+      format: 1,
+      unicode: run String.copy("18.0.0"),
+      license: run String.copy("Unicode-3.0"),
+      sources: Sources {
+        folding: Source {
+          url: run String.copy(FOLDING),
+          resolved: String.make(),
+          sha256: String.make(),
+        },
+        license: Source {
+          url: run String.copy(LICENSE),
+          resolved: String.make(),
+          sha256: String.make(),
+        },
+      },
+    }
   } else {
     let data = run FileSystem.readFile(&lockPath)
     match move run Effect.result(SchemaJson.decode<Lock>(Bytes.asSlice(&data))) {
       Result<Lock, SchemaError | OutOfMemoryError>.Success { value } => move value
       Result<Lock, SchemaError | OutOfMemoryError>.Failure { error } => match move error {
         SchemaError { .. } => run Task.abort("invalid casefold lock")
-        OutOfMemoryError failure => { fail move failure }
+        OutOfMemoryError failure => {
+          fail move failure
+        }
       }
     }
   }
-  if lock.format != 1 || String.view(&lock.unicode) != "18.0.0" { run Task.abort("invalid casefold lock format or Unicode version") }
+  if lock.format != 1 || String.view(&lock.unicode) != "18.0.0" {
+    run Task.abort("invalid casefold lock format or Unicode version")
+  }
   let folding = run source(&mut lock.sources.folding, update, fetch)
   let license = run source(&mut lock.sources.license, update, fetch)
   let records = run rows(run text(Bytes.asSlice(&folding)))
-  let mut out = run String.copy("// Generated by silk task generate-casefold. DO NOT EDIT.\n// Unicode18.0.0 CaseFolding.txt, status C and F; source hashes: scripts/casefold.lock.json.\n")
+  let mut out = run String.copy(
+    "// Generated by silk task generate-casefold. DO NOT EDIT.\n// Unicode18.0.0 CaseFolding.txt, status C and F; source hashes: scripts/casefold.lock.json.\n",
+  )
   let licenseText = run text(Bytes.asSlice(&license))
   let licenseBytes = String.utf8Bytes(licenseText)
   let mut licenseEnd = licenseBytes.length
-  if licenseEnd > 0 && licenseBytes[licenseEnd - 1] == 10 { licenseEnd = licenseEnd - 1 }
+  if licenseEnd > 0 && licenseBytes[licenseEnd - 1] == 10 {
+    licenseEnd = licenseEnd - 1
+  }
   let mut lines = String.split(String.slice(licenseText, 0, licenseEnd), "\n")
   while true {
     let line = match move Split.next(&mut lines) {
       Option<string>.Some { value: found } => found
-      Option<string>.None => { break }
+      Option<string>.None => {
+        break
+      }
     }
     run String.append(&mut out, "// ")
     let lineBytes = String.utf8Bytes(line)
-    let length = if lineBytes.length > 0 && lineBytes[lineBytes.length - 1] == 13 { lineBytes.length - 1 } else { lineBytes.length }
+    let length = if lineBytes.length > 0 && lineBytes[lineBytes.length - 1] == 13 {
+      lineBytes.length - 1
+    } else {
+      lineBytes.length
+    }
     run String.append(&mut out, String.slice(line, 0, length))
     run String.append(&mut out, "\n")
   }
-  run String.append(&mut out, "import silk.num.u8\nimport silk.num.u32\n\nfn records() -> &'static [u8] {\n  return b\"")
+  run String.append(
+    &mut out,
+    "import silk.num.u8\nimport silk.num.u32\n\nfn records() -> &'static [u8] {\n  return b\"",
+  )
   let items = List<Row>.asSlice(&records)
   let mut index: usize = 0
   while index < items.length {
-    let values = [items[index].scalar, items[index].mapped[0], items[index].mapped[1], items[index].mapped[2]]
+    let values = [
+      items[index].scalar,
+      items[index].mapped[0],
+      items[index].mapped[1],
+      items[index].mapped[2],
+    ]
     let mut word: usize = 0
     while word < 4 {
       let mut value = values[word]
@@ -300,13 +453,19 @@ pub effect fn generate(fetch: bool, update: bool) -> ()
   let rendered = run Effect.result(formatSource(&staged, String.view(&out)))
   run FileSystem.releaseIgnored(move temporary)
   let output = match move rendered {
-    Result<Bytes, TaskError | FileError | HostInputError | OutOfMemoryError>.Success { value } => move value
-    Result<Bytes, TaskError | FileError | HostInputError | OutOfMemoryError>.Failure { error } => { fail move error }
+    Result<Bytes, TaskError | FileError | HostInputError | OutOfMemoryError>.Success {
+      value
+    } => move value
+    Result<Bytes, TaskError | FileError | HostInputError | OutOfMemoryError>.Failure { error } => {
+      fail move error
+    }
   }
   let outputPath = run Path.join(&root, "modules/faces/src/casefold_data.silk")
   run saveChanged(&outputPath, Bytes.asSlice(&output))
   if update {
-    let mut json = run String.copy("{\n  \"format\": 1,\n  \"unicode\": \"18.0.0\",\n  \"license\": \"Unicode-3.0\",\n  \"sources\": {\n    \"folding\": ")
+    let mut json = run String.copy(
+      "{\n  \"format\": 1,\n  \"unicode\": \"18.0.0\",\n  \"license\": \"Unicode-3.0\",\n  \"sources\": {\n    \"folding\": ",
+    )
     run recordJson(&mut json, &lock.sources.folding)
     run String.append(&mut json, ",\n    \"license\": ")
     run recordJson(&mut json, &lock.sources.license)
@@ -314,6 +473,9 @@ pub effect fn generate(fetch: bool, update: bool) -> ()
     run FileSystem.writeFile(&lockPath, String.utf8Bytes(String.view(&json)))
   }
   let mut stdout = StdoutWriter.make()
-  run Format.format("Materialized {count} case folding records\n", &.{ count: List<Row>.length(&records) })
+  run Format.format(
+    "Materialized {count} case folding records\n",
+    &.{ count: List<Row>.length(&records) },
+  )
     |> Effect.provideMut<Writer>(&mut stdout)
 }

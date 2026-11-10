@@ -12,19 +12,28 @@ import silk.text.string { String, InvalidUtf8 }
 import font_harness_process as Process
 
 pub const defaultShapeBinary: string = "build/llvm/x86_64-unknown-linux-gnu/release/font-shape-test-harness"
+
 const fonts: string = "modules/shape/test-data/harfrust/harfrust/tests/fonts/"
 
 effect fn ignored(error: FileError | OutOfMemoryError) -> () {}
 
-effect fn cleanup(path: &Path) -> () ? &mut FileSystem | &mut Allocator {
+effect fn cleanup(path: &Path) -> ()
+  ? &mut FileSystem | &mut Allocator {
   run Effect.catchAll(FileSystem.removeDirectoryRecursively(path), ignored)
 }
 
 fn starts(value: &[u8], prefix: &[u8]) -> bool {
-  return value.length >= prefix.length && Process.equal(Slice.view<u8>(value, 0, prefix.length), prefix)
+  return value.length >= prefix.length
+    && Process.equal(Slice.view<u8>(value, 0, prefix.length), prefix)
 }
 
-effect fn trace(binary: string, directory: &Path, font: string, text: string, features: bool) -> Bytes
+effect fn trace(
+  binary: string,
+  directory: &Path,
+  font: string,
+  text: string,
+  features: bool,
+) -> Bytes
   ! TaskError | FileError | HostInputError | OutOfMemoryError
   ? &mut HostInput | &mut Allocator | &mut FileSystem {
   let textFile = run Path.join(directory, "text.txt")
@@ -40,7 +49,12 @@ effect fn trace(binary: string, directory: &Path, font: string, text: string, fe
     Option<string>.None => run Task.abort("font path is not UTF-8")
   }
   let mut output = if features {
-    run Process.execute(binary, &[fontArg, String.view(&textArg), "--trace", "--features=test"], 30.0, false)
+    run Process.execute(
+      binary,
+      &[fontArg, String.view(&textArg), "--trace", "--features=test"],
+      30.0,
+      false,
+    )
   } else {
     run Process.execute(binary, &[fontArg, String.view(&textArg), "--trace"], 30.0, false)
   }
@@ -55,11 +69,16 @@ effect fn trace(binary: string, directory: &Path, font: string, text: string, fe
   let mut start: usize = 0
   while start < bytes.length {
     let mut end = start
-    while end < bytes.length && bytes[end] != 10 && bytes[end] != 13 { end = end + 1 }
+    while end < bytes.length && bytes[end] != 10 && bytes[end] != 13 {
+      end = end + 1
+    }
     let line = Slice.view<u8>(bytes, start, end - start)
     if starts(line, b"trace: ") {
       let mut stop: usize = 7
-      while stop < line.length && !starts(Slice.view<u8>(line, stop, line.length - stop), b"\tbuffer: ") { stop = stop + 1 }
+      while stop < line.length
+        && !starts(Slice.view<u8>(line, stop, line.length - stop), b"\tbuffer: ") {
+        stop = stop + 1
+      }
       run Bytes.append(&mut result, Slice.view<u8>(line, 7, stop - 7))
       run Bytes.append(&mut result, b"\n")
     }
@@ -68,12 +87,16 @@ effect fn trace(binary: string, directory: &Path, font: string, text: string, fe
   return move result
 }
 
-effect fn selected(messages: &[u8], kind: u8) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+effect fn selected(messages: &[u8], kind: u8) -> Bytes
+  ! OutOfMemoryError
+  ? &mut Allocator {
   let mut result = Bytes.make()
   let mut start: usize = 0
   while start < messages.length {
     let mut end = start
-    while end < messages.length && messages[end] != 10 { end = end + 1 }
+    while end < messages.length && messages[end] != 10 {
+      end = end + 1
+    }
     let line = Slice.view<u8>(messages, start, end - start)
     let include = if kind == 0 {
       Process.contains(line, b"kern") || Process.contains(line, b"subtable")
@@ -91,8 +114,12 @@ effect fn selected(messages: &[u8], kind: u8) -> Bytes ! OutOfMemoryError ? &mut
   return move result
 }
 
-effect fn require(condition: bool) -> () ! TaskError | OutOfMemoryError ? &mut Allocator {
-  if !condition { run Task.abort("shaping trace regression") }
+effect fn require(condition: bool) -> ()
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
+  if !condition {
+    run Task.abort("shaping trace regression")
+  }
 }
 
 effect fn traceCases(binary: string, directory: &Path) -> ()
@@ -100,26 +127,60 @@ effect fn traceCases(binary: string, directory: &Path) -> ()
   ? &mut HostInput | &mut Allocator | &mut FileSystem {
   let kern = run trace(binary, directory, "text-rendering-tests/TestKERNOne.otf", "uT", false)
   let messages = run selected(Bytes.asSlice(&kern), 0)
-  run require(Process.equal(Bytes.asSlice(&messages), b"start table kern\nstart subtable 0\nstart kern\nend kern\nend subtable 0\nend table kern\n"))
+  run require(
+    Process.equal(
+      Bytes.asSlice(&messages),
+      b"start table kern\nstart subtable 0\nstart kern\nend kern\nend subtable 0\nend table kern\n",
+    ),
+  )
   run require(Process.contains(Bytes.asSlice(&kern), b"start table GSUB script tag ''\n"))
   let mort = run trace(binary, directory, "text-rendering-tests/TestAATMort.ttf", "ABCEFGX", false)
-  run require(Process.contains(Bytes.asSlice(&mort), b"start table mort\n") && Process.contains(Bytes.asSlice(&mort), b"end table mort\n") && !Process.contains(Bytes.asSlice(&mort), b"morx"))
-  let lookup = run trace(binary, directory, "in-house/a59fd13f1525a91cbe529c882e93d9d1fbb80463.ttf", "AB", false)
-  run require(Process.contains(Bytes.asSlice(&lookup), b"start lookup 0 feature '    '\n") && Process.contains(Bytes.asSlice(&lookup), b"end lookup 0 feature '    '\n"))
-  let recursion = run trace(binary, directory, "aots/gsub_context1_simple_f1.otf", "\x00\x14\x15\x16\x00", true)
+  run require(
+    Process.contains(Bytes.asSlice(&mort), b"start table mort\n")
+      && Process.contains(Bytes.asSlice(&mort), b"end table mort\n")
+      && !Process.contains(Bytes.asSlice(&mort), b"morx"),
+  )
+  let lookup = run trace(
+    binary,
+    directory,
+    "in-house/a59fd13f1525a91cbe529c882e93d9d1fbb80463.ttf",
+    "AB",
+    false,
+  )
+  run require(
+    Process.contains(Bytes.asSlice(&lookup), b"start lookup 0 feature '    '\n")
+      && Process.contains(Bytes.asSlice(&lookup), b"end lookup 0 feature '    '\n"),
+  )
+  let recursion = run trace(
+    binary,
+    directory,
+    "aots/gsub_context1_simple_f1.otf",
+    "\x00\x14\x15\x16\x00",
+    true,
+  )
   let recursing = run selected(Bytes.asSlice(&recursion), 1)
-  run require(Process.equal(Bytes.asSlice(&recursing), b"start recursing to lookup 0 at 1\nend recursing to lookup 0\nstart recursing to lookup 0 at 2\nend recursing to lookup 0\nstart recursing to lookup 0 at 3\nend recursing to lookup 0\n"))
+  run require(
+    Process.equal(
+      Bytes.asSlice(&recursing),
+      b"start recursing to lookup 0 at 1\nend recursing to lookup 0\nstart recursing to lookup 0 at 2\nend recursing to lookup 0\nstart recursing to lookup 0 at 3\nend recursing to lookup 0\n",
+    ),
+  )
   let cases = [
     TraceCase { font: "../../benches/fonts/Roboto-Regular.ttf", text: "At" },
     TraceCase { font: "../../benches/fonts/Roboto-Regular.ttf", text: "AV" },
     TraceCase { font: "aots/gpos2_1_simple_f1.otf", text: "\x12\x13" },
-    TraceCase { font: "aots/gpos2_2_font1.otf", text: "\x12\x13" }
+    TraceCase { font: "aots/gpos2_2_font1.otf", text: "\x12\x13" },
   ]
   let mut at: usize = 0
   while at < cases.length {
     let result = run trace(binary, directory, cases[at].font, cases[at].text, true)
     let kerning = run selected(Bytes.asSlice(&result), 2)
-    run require(Process.equal(Bytes.asSlice(&kerning), b"try kerning glyphs at 0,1\nkerned glyphs at 0,1\ntried kerning glyphs at 0,1\n"))
+    run require(
+      Process.equal(
+        Bytes.asSlice(&kerning),
+        b"try kerning glyphs at 0,1\nkerned glyphs at 0,1\ntried kerning glyphs at 0,1\n",
+      ),
+    )
     at = at + 1
   }
   run Process.print(b"8 tracing integration cases passed\n")
@@ -133,4 +194,7 @@ pub effect fn checkShapingTrace(binary: string) -> ()
   run Effect.ensuring(traceCases(binary, &directory), cleanup(&directory))
 }
 
-struct TraceCase { font: string<'static>, text: string<'static> }
+struct TraceCase {
+  font: string<'static>,
+  text: string<'static>
+}

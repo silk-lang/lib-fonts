@@ -4,7 +4,6 @@ import database {
   Fonts,
   FaceStyle,
   Generic,
-  Face,
   Range,
   AXIS_WEIGHT,
   AXIS_WIDTH,
@@ -135,7 +134,7 @@ effect fn describesFaces() -> ()
   )
   run Testing.expect(
     match italic.oblique {
-      Option<Range>.Some { value } => false
+      Option<Range>.Some { .. } => false
       Option<Range>.None => true
     },
     "an italic face has no oblique angles",

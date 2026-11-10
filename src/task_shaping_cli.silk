@@ -12,7 +12,13 @@ import silk.text.string { String }
 pub union ShapingTasks {
   CompareShaping { pub silk: String, pub rust: String, pub filter: String },
   CheckShapingTrace { pub binary: String },
-  CheckShapingMalformed { pub binary: String, pub mutationsPerFont: usize, pub allFonts: bool, pub malformedTimeout: Seconds, pub failures: String },
+  CheckShapingMalformed {
+    pub binary: String,
+    pub mutationsPerFont: usize,
+    pub allFonts: bool,
+    pub malformedTimeout: Seconds,
+    pub failures: String
+  },
   CheckShaping { pub noBuild: bool },
 }
 
@@ -20,16 +26,40 @@ impl CommandLine for ShapingTasks {
   static fn command() -> Command<ShapingTasks> {
     return Command<ShapingTasks>.make("shaping-tasks", "Font library maintenance")
       |> Command.variant("CompareShaping", "Compare pinned shaping fixtures with Rust")
-      |> Command.option("silk", Opt.about("Silk shaping binary") |> Opt.default("build/llvm/x86_64-unknown-linux-gnu/release/font-shape-test-harness"))
-      |> Command.option("rust", Opt.about("Rust shaping binary") |> Opt.default("build/harfrust-rust/release/rust-hr-shape"))
+      |> Command.option(
+        "silk",
+        Opt.about("Silk shaping binary")
+          |> Opt.default("build/llvm/x86_64-unknown-linux-gnu/release/font-shape-test-harness"),
+      )
+      |> Command.option(
+        "rust",
+        Opt.about("Rust shaping binary")
+          |> Opt.default("build/harfrust-rust/release/rust-hr-shape"),
+      )
       |> Command.option("filter", Opt.about("Select case or workload names containing this text"))
       |> Command.variant("CheckShapingTrace", "Check native shaping trace regressions")
-      |> Command.option("binary", Opt.about("Native shaping binary") |> Opt.default("build/llvm/x86_64-unknown-linux-gnu/release/font-shape-test-harness"))
-      |> Command.variant("CheckShapingMalformed", "Check bounded malformed fonts and invalid CLI options")
+      |> Command.option(
+        "binary",
+        Opt.about("Native shaping binary")
+          |> Opt.default("build/llvm/x86_64-unknown-linux-gnu/release/font-shape-test-harness"),
+      )
+      |> Command.variant(
+        "CheckShapingMalformed",
+        "Check bounded malformed fonts and invalid CLI options",
+      )
       |> Command.option("mutationsPerFont", Opt.about("Mutations per font") |> Opt.default("8"))
       |> Command.option("allFonts", Opt.about("Use every pinned SFNT"))
-      |> Command.option("malformedTimeout", Opt.about("Seconds per case") |> Opt.long("timeout") |> Opt.default("10"))
-      |> Command.option("failures", Opt.about("Directory for failing inputs") |> Opt.default("build/shaping-malformed-failures"))
+      |> Command.option(
+        "malformedTimeout",
+        Opt.about("Seconds per case")
+          |> Opt.long("timeout")
+          |> Opt.default("10"),
+      )
+      |> Command.option(
+        "failures",
+        Opt.about("Directory for failing inputs")
+          |> Opt.default("build/shaping-malformed-failures"),
+      )
       |> Command.variant("CheckShaping", "Run the local shaping gate with sequential compiler runs")
       |> Command.option("noBuild", Opt.about("Reuse existing binaries"))
   }
@@ -40,12 +70,27 @@ impl TaskSet for ShapingTasks {
     ! TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError
     ? &mut HostInput | &mut Allocator | &mut ChildProcess | &mut FileSystem {
     let task = match move self {
-      ShapingTasks.CompareShaping { silk, rust, filter } => Tasks.CompareShaping { silk: move silk, rust: move rust, filter: move filter }
+      ShapingTasks.CompareShaping { silk, rust, filter } => Tasks.CompareShaping {
+        silk: move silk,
+        rust: move rust,
+        filter: move filter,
+      }
       ShapingTasks.CheckShapingTrace { binary } => Tasks.CheckShapingTrace { binary: move binary }
-      ShapingTasks.CheckShapingMalformed { binary, mutationsPerFont, allFonts, malformedTimeout, failures } => Tasks.CheckShapingMalformed { binary: move binary, mutationsPerFont: move mutationsPerFont, allFonts: move allFonts, malformedTimeout: malformedTimeout.value, failures: move failures }
+      ShapingTasks.CheckShapingMalformed {
+        binary,
+        mutationsPerFont,
+        allFonts,
+        malformedTimeout,
+        failures
+      } => Tasks.CheckShapingMalformed {
+        binary: move binary,
+        mutationsPerFont: move mutationsPerFont,
+        allFonts: move allFonts,
+        malformedTimeout: malformedTimeout.value,
+        failures: move failures,
+      }
       ShapingTasks.CheckShaping { noBuild } => Tasks.CheckShaping { noBuild: move noBuild }
     }
     run TaskSet.perform(move task)
   }
 }
-

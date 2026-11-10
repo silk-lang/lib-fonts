@@ -15,53 +15,20 @@ import read_fonts.tables.aat {
   StxHeader,
   RawWords
 }
-import read_fonts.lib {
-  FontData,
-  FontRead,
-  ReadError,
-  ScalarArray,
-  ComputedArray,
-  VarLenArray,
-  VarLenIter,
-  ReadArgs2,
-  ReadArgs3,
-  ArrayOfOffsets,
-  ArrayOfNullableOffsets
-}
-import font_types.lib {
-  Fixed,
-  F2Dot14,
-  FWord,
-  UfWord,
-  Tag,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
-  GlyphId16,
-  GlyphId24,
-  GlyphId,
-  NameId,
-  Nullable,
-  Offset16,
-  Offset24,
-  Offset32
-}
-import dump_support { DumpPath, DumpTable, scalar, absent, readError, versionBits, bytes }
+import read_fonts.lib { FontData, ReadError, ScalarArray, ComputedArray }
+import font_types.lib { Offset16, Offset32 }
+import dump_support { DumpPath, DumpTable, scalar, readError }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.io.writer { Writer, WriterError }
 import silk.num.u8
 import silk.num.u16
-import silk.num.u32
 import silk.num.u64
 import read_fonts.tables.aat { LookupU16, TypedLookup }
 
 pub effect fn dumpLookup<'a>(path: &mut DumpPath, value: Lookup<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -118,7 +85,6 @@ pub effect fn dumpLookup0<'a>(path: &mut DumpPath, value: Lookup0<'a>) -> ()
   ) {
     return
   }
-  let base = Lookup0<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = Lookup0<'a>.format(&value)
@@ -156,7 +122,6 @@ pub effect fn dumpLookup2<'a>(path: &mut DumpPath, value: Lookup2<'a>) -> ()
   ) {
     return
   }
-  let base = Lookup2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = Lookup2<'a>.format(&value)
@@ -293,7 +258,6 @@ pub effect fn dumpLookupSegment4<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -330,7 +294,6 @@ pub effect fn dumpLookup6<'a>(path: &mut DumpPath, value: Lookup6<'a>) -> ()
   ) {
     return
   }
-  let base = Lookup6<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = Lookup6<'a>.format(&value)
@@ -398,7 +361,6 @@ pub effect fn dumpLookup8<'a>(path: &mut DumpPath, value: Lookup8<'a>) -> ()
   ) {
     return
   }
-  let base = Lookup8<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = Lookup8<'a>.format(&value)
@@ -448,7 +410,6 @@ pub effect fn dumpLookup10<'a>(path: &mut DumpPath, value: Lookup10<'a>) -> ()
   ) {
     return
   }
-  let base = Lookup10<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = Lookup10<'a>.format(&value)
@@ -504,7 +465,6 @@ pub effect fn dumpStateHeader<'a>(path: &mut DumpPath, value: StateHeader<'a>) -
   ) {
     return
   }
-  let base = StateHeader<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "stateSize")
     let fieldValue = StateHeader<'a>.stateSize(&value)
@@ -585,7 +545,6 @@ pub effect fn dumpClassSubtable<'a>(path: &mut DumpPath, value: ClassSubtable<'a
   ) {
     return
   }
-  let base = ClassSubtable<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "firstGlyph")
     let fieldValue = ClassSubtable<'a>.firstGlyph(&value)
@@ -629,7 +588,6 @@ pub effect fn dumpRawBytes<'a>(path: &mut DumpPath, value: RawBytes<'a>) -> ()
   ) {
     return
   }
-  let base = RawBytes<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "data")
     let fieldValue = RawBytes<'a>.data(&value)
@@ -661,7 +619,6 @@ pub effect fn dumpStxHeader<'a>(path: &mut DumpPath, value: StxHeader<'a>) -> ()
   ) {
     return
   }
-  let base = StxHeader<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "nClasses")
     let fieldValue = StxHeader<'a>.nClasses(&value)
@@ -742,7 +699,6 @@ pub effect fn dumpRawWords<'a>(path: &mut DumpPath, value: RawWords<'a>) -> ()
   ) {
     return
   }
-  let base = RawWords<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "data")
     let fieldValue = RawWords<'a>.data(&value)

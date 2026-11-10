@@ -13,7 +13,6 @@ import harfrust.lib {
 }
 import read_fonts.lib { FontRef, ReadError }
 import silk.collections.bytes { Bytes }
-import silk.collections.list { List }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.mem.allocator { Allocator, OutOfMemoryError }
@@ -44,7 +43,7 @@ effect fn apply(
   }
   Buffer.guessSegmentProperties(&mut buffer)
   return match move run shape(&shaper, &mut buffer, features) {
-    Result<(), ShapeError>.Success { value } => true
+    Result<(), ShapeError>.Success { .. } => true
     _ => false
   }
 }

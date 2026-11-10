@@ -35,7 +35,7 @@ effect fn some<T>(option: Option<T>) -> T
 
 fn failed<T, E>(result: Result<T, E>) -> bool {
   return match move result {
-    Result<T, E>.Failure { error } => true
+    Result<T, E>.Failure { .. } => true
     _ => false
   }
 }

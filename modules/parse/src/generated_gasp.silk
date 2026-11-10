@@ -2,41 +2,12 @@
 // Source: pinned resources/codegen_inputs; generator: modules/parse/tools/font-codegen-silk.
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 import font_data { FontData }
-import read { ReadError, FontRead, FontReadAt, ComputeSize, Format, computeSize, readAtWithArgs }
+import read { ReadError, FontRead, FontReadAt, ComputeSize, computeSize }
 import table_provider { TopLevelTable }
-import array { ScalarArray, ComputedArray, VarLenArray }
-import offset { resolve, resolveWithArgs, resolveNullableWithArgs }
-import offset_array { ArrayOfOffsets, ArrayOfNullableOffsets }
-import read_args { ReadArgs2, ReadArgs3 }
+import array { ComputedArray }
 import table_ref { ByteRange, MinByteRange }
-import generated_support { scalarOr, recordArray, varLenArray, varLenBytes, signedCount }
-import font_types.lib {
-  Scalar,
-  FixedSize,
-  rawByteLen,
-  readScalar,
-  writeScalar,
-  Tag,
-  Fixed,
-  F2Dot14,
-  F4Dot12,
-  F6Dot10,
-  FWord,
-  UfWord,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
-  GlyphId,
-  GlyphId16,
-  GlyphId24,
-  NameId,
-  Offset16,
-  Offset24,
-  Offset32,
-  Nullable
-}
+import generated_support { scalarOr, recordArray }
+import font_types.lib { Scalar, FixedSize, rawByteLen, readScalar, writeScalar, Tag }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.core.ownership { Copy }
@@ -48,10 +19,6 @@ import silk.core.ops { BitAnd, BitOr, BitXor, Not, Subtract }
 import silk.num.usize
 import silk.num.u8
 import silk.num.u16
-import silk.num.u32
-import silk.num.u64
-import silk.num.i16
-import silk.num.i32
 
 /// [gasp](https://learn.microsoft.com/en-us/typography/opentype/spec/gasp#gasp-table-formats)
 pub struct Gasp<'a> {
@@ -82,7 +49,6 @@ impl<'a> Gasp<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let versionValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
@@ -105,7 +71,7 @@ impl<'a> Gasp<'a> {
   pub fn version(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -117,7 +83,7 @@ impl<'a> Gasp<'a> {
   pub fn numRanges(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -133,7 +99,7 @@ impl<'a> Gasp<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ComputedArray<'a, (), GaspRange<'a>>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, (), GaspRange<'a>>, ReadError>.Failure { error } => ComputedArray<
+      Result<ComputedArray<'a, (), GaspRange<'a>>, ReadError>.Failure { .. } => ComputedArray<
         'a,
         (),
         GaspRange<'a>
@@ -194,7 +160,7 @@ impl<'a> GaspRange<'a> {
   pub fn rangeMaxPpem(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 0)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -202,7 +168,7 @@ impl<'a> GaspRange<'a> {
   pub fn rangeGaspBehavior(self: &Self) -> GaspRangeBehavior {
     return match move FontData<'a>.readAt<GaspRangeBehavior>(&self._fontData, (self.position + 2)) {
       Result<GaspRangeBehavior, ReadError>.Success { value } => value
-      Result<GaspRangeBehavior, ReadError>.Failure { error } => GaspRangeBehavior.empty()
+      Result<GaspRangeBehavior, ReadError>.Failure { .. } => GaspRangeBehavior.empty()
     }
   }
 }

@@ -2,56 +2,19 @@
 // Source: pinned resources/codegen_inputs; generator: modules/parse/tools/font-codegen-silk.
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 import font_data { FontData }
-import read { ReadError, FontRead, FontReadAt, ComputeSize, Format, computeSize, readAtWithArgs }
+import read { ReadError, FontRead, FontReadAt, ComputeSize, Format, computeSize }
 import table_provider { TopLevelTable }
-import array { ScalarArray, ComputedArray, VarLenArray }
-import offset { resolve, resolveWithArgs, resolveNullableWithArgs }
-import offset_array { ArrayOfOffsets, ArrayOfNullableOffsets }
-import read_args { ReadArgs2, ReadArgs3 }
+import array { ScalarArray, ComputedArray }
 import table_ref { ByteRange, MinByteRange }
-import generated_support { scalarOr, recordArray, varLenArray, varLenBytes, signedCount }
-import font_types.lib {
-  Scalar,
-  FixedSize,
-  rawByteLen,
-  readScalar,
-  writeScalar,
-  Tag,
-  Fixed,
-  F2Dot14,
-  F4Dot12,
-  F6Dot10,
-  FWord,
-  UfWord,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
-  GlyphId,
-  GlyphId16,
-  GlyphId24,
-  NameId,
-  Offset16,
-  Offset24,
-  Offset32,
-  Nullable
-}
+import generated_support { scalarOr, recordArray }
+import font_types.lib { FixedSize, rawByteLen, Tag, GlyphId }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.core.ownership { Copy }
-import silk.core.equal { Equal }
-import silk.core.order { Order, Ordering }
-import silk.text.format { Debug, Formatter }
-import silk.io.writer { Writer, WriterError }
-import silk.core.ops { BitAnd, BitOr, BitXor, Not, Subtract }
 import silk.num.usize
 import silk.num.u8
 import silk.num.u16
 import silk.num.u32
-import silk.num.u64
-import silk.num.i16
-import silk.num.i32
 
 /// [Compact Font Format](https://learn.microsoft.com/en-us/typography/opentype/spec/cff) table header
 pub struct CffHeader<'a> {
@@ -82,11 +45,9 @@ impl<'a> CffHeader<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let majorValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[1].end = end
-    let minorValue = scalarOr<u8>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[2].end = end
@@ -94,7 +55,6 @@ impl<'a> CffHeader<'a> {
     ranges[3].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[3].end = end
-    let offSizeValue = scalarOr<u8>(data, ranges[3].start, 0)
     ranges[4].start = end
     end = usize.saturatingAdd(
       end,
@@ -115,7 +75,7 @@ impl<'a> CffHeader<'a> {
   pub fn major(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -127,7 +87,7 @@ impl<'a> CffHeader<'a> {
   pub fn minor(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[1].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -139,7 +99,7 @@ impl<'a> CffHeader<'a> {
   pub fn hdrSize(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[2].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -151,7 +111,7 @@ impl<'a> CffHeader<'a> {
   pub fn offSize(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[3].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -167,7 +127,7 @@ impl<'a> CffHeader<'a> {
       self._fieldRanges[4].end,
     ) {
       Result<ScalarArray<'a, u8>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, u8>, ReadError>.Failure { error } => ScalarArray<u8>.empty()
+      Result<ScalarArray<'a, u8>, ReadError>.Failure { .. } => ScalarArray<u8>.empty()
     }
   }
 
@@ -183,7 +143,7 @@ impl<'a> CffHeader<'a> {
       self._fieldRanges[5].end,
     ) {
       Result<ScalarArray<'a, u8>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, u8>, ReadError>.Failure { error } => ScalarArray<u8>.empty()
+      Result<ScalarArray<'a, u8>, ReadError>.Failure { .. } => ScalarArray<u8>.empty()
     }
   }
 
@@ -271,7 +231,7 @@ impl<'a> Index<'a> {
   pub fn count(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -283,7 +243,7 @@ impl<'a> Index<'a> {
   pub fn offSize(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[1].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -299,7 +259,7 @@ impl<'a> Index<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ScalarArray<'a, u8>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, u8>, ReadError>.Failure { error } => ScalarArray<u8>.empty()
+      Result<ScalarArray<'a, u8>, ReadError>.Failure { .. } => ScalarArray<u8>.empty()
     }
   }
 
@@ -315,7 +275,7 @@ impl<'a> Index<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, u8>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, u8>, ReadError>.Failure { error } => ScalarArray<u8>.empty()
+      Result<ScalarArray<'a, u8>, ReadError>.Failure { .. } => ScalarArray<u8>.empty()
     }
   }
 
@@ -482,7 +442,6 @@ impl<'a> FdSelectFormat0<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, (usize.saturatingSubtract(FontData.len(&data), end) / 1 * 1))
     ranges[1].end = end
@@ -497,7 +456,7 @@ impl<'a> FdSelectFormat0<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -513,7 +472,7 @@ impl<'a> FdSelectFormat0<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, u8>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, u8>, ReadError>.Failure { error } => ScalarArray<u8>.empty()
+      Result<ScalarArray<'a, u8>, ReadError>.Failure { .. } => ScalarArray<u8>.empty()
     }
   }
 
@@ -569,7 +528,6 @@ impl<'a> FdSelectFormat3<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
@@ -580,7 +538,6 @@ impl<'a> FdSelectFormat3<'a> {
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let sentinelValue = scalarOr<u16>(data, ranges[3].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -592,7 +549,7 @@ impl<'a> FdSelectFormat3<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -604,7 +561,7 @@ impl<'a> FdSelectFormat3<'a> {
   pub fn nRanges(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -620,9 +577,11 @@ impl<'a> FdSelectFormat3<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ComputedArray<'a, (), FdSelectRange3<'a>>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, (), FdSelectRange3<'a>>, ReadError>.Failure {
-        error
-      } => ComputedArray<'a, (), FdSelectRange3<'a>>.empty(())
+      Result<ComputedArray<'a, (), FdSelectRange3<'a>>, ReadError>.Failure { .. } => ComputedArray<
+        'a,
+        (),
+        FdSelectRange3<'a>
+      >.empty(())
     }
   }
 
@@ -634,7 +593,7 @@ impl<'a> FdSelectFormat3<'a> {
   pub fn sentinel(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[3].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -692,7 +651,7 @@ impl<'a> FdSelectRange3<'a> {
   pub fn first(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 0)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -700,7 +659,7 @@ impl<'a> FdSelectRange3<'a> {
   pub fn fd(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, (self.position + 2)) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 }
@@ -745,7 +704,6 @@ impl<'a> FdSelectFormat4<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[1].end = end
@@ -756,7 +714,6 @@ impl<'a> FdSelectFormat4<'a> {
     ranges[3].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[3].end = end
-    let sentinelValue = scalarOr<u32>(data, ranges[3].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -768,7 +725,7 @@ impl<'a> FdSelectFormat4<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -780,7 +737,7 @@ impl<'a> FdSelectFormat4<'a> {
   pub fn nRanges(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[1].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -796,9 +753,11 @@ impl<'a> FdSelectFormat4<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ComputedArray<'a, (), FdSelectRange4<'a>>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, (), FdSelectRange4<'a>>, ReadError>.Failure {
-        error
-      } => ComputedArray<'a, (), FdSelectRange4<'a>>.empty(())
+      Result<ComputedArray<'a, (), FdSelectRange4<'a>>, ReadError>.Failure { .. } => ComputedArray<
+        'a,
+        (),
+        FdSelectRange4<'a>
+      >.empty(())
     }
   }
 
@@ -810,7 +769,7 @@ impl<'a> FdSelectFormat4<'a> {
   pub fn sentinel(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[3].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -868,7 +827,7 @@ impl<'a> FdSelectRange4<'a> {
   pub fn first(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, (self.position + 0)) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -876,7 +835,7 @@ impl<'a> FdSelectRange4<'a> {
   pub fn fd(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 4)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 }
@@ -1038,7 +997,6 @@ impl<'a> CharsetFormat0<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, (usize.saturatingSubtract(FontData.len(&data), end) / 2 * 2))
     ranges[1].end = end
@@ -1053,7 +1011,7 @@ impl<'a> CharsetFormat0<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1069,7 +1027,7 @@ impl<'a> CharsetFormat0<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, u16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, u16>, ReadError>.Failure { error } => ScalarArray<u16>.empty()
+      Result<ScalarArray<'a, u16>, ReadError>.Failure { .. } => ScalarArray<u16>.empty()
     }
   }
 
@@ -1132,7 +1090,6 @@ impl<'a> CharsetFormat1<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, (usize.saturatingSubtract(FontData.len(&data), end) / 3 * 3))
     ranges[1].end = end
@@ -1147,7 +1104,7 @@ impl<'a> CharsetFormat1<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1163,9 +1120,11 @@ impl<'a> CharsetFormat1<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ComputedArray<'a, (), CharsetRange1<'a>>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, (), CharsetRange1<'a>>, ReadError>.Failure {
-        error
-      } => ComputedArray<'a, (), CharsetRange1<'a>>.empty(())
+      Result<ComputedArray<'a, (), CharsetRange1<'a>>, ReadError>.Failure { .. } => ComputedArray<
+        'a,
+        (),
+        CharsetRange1<'a>
+      >.empty(())
     }
   }
 
@@ -1223,7 +1182,7 @@ impl<'a> CharsetRange1<'a> {
   pub fn first(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 0)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1231,7 +1190,7 @@ impl<'a> CharsetRange1<'a> {
   pub fn nLeft(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, (self.position + 2)) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 }
@@ -1276,7 +1235,6 @@ impl<'a> CharsetFormat2<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, (usize.saturatingSubtract(FontData.len(&data), end) / 4 * 4))
     ranges[1].end = end
@@ -1291,7 +1249,7 @@ impl<'a> CharsetFormat2<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1307,9 +1265,11 @@ impl<'a> CharsetFormat2<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ComputedArray<'a, (), CharsetRange2<'a>>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, (), CharsetRange2<'a>>, ReadError>.Failure {
-        error
-      } => ComputedArray<'a, (), CharsetRange2<'a>>.empty(())
+      Result<ComputedArray<'a, (), CharsetRange2<'a>>, ReadError>.Failure { .. } => ComputedArray<
+        'a,
+        (),
+        CharsetRange2<'a>
+      >.empty(())
     }
   }
 
@@ -1367,7 +1327,7 @@ impl<'a> CharsetRange2<'a> {
   pub fn first(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 0)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1375,7 +1335,7 @@ impl<'a> CharsetRange2<'a> {
   pub fn nLeft(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 2)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 }
@@ -1422,7 +1382,7 @@ impl<'a> EncodingRange1<'a> {
   pub fn first(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, (self.position + 0)) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1430,7 +1390,7 @@ impl<'a> EncodingRange1<'a> {
   pub fn nLeft(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, (self.position + 1)) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 }
@@ -1477,7 +1437,7 @@ impl<'a> EncodingSupplement<'a> {
   pub fn code(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, (self.position + 0)) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1485,7 +1445,7 @@ impl<'a> EncodingSupplement<'a> {
   pub fn glyph(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 1)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 }
@@ -1815,7 +1775,7 @@ impl<'a> Cff<'a> {
           count = u16.toU32(Index.count(&index))
           hasCount = true
         }
-        Result<Entry, Error>.Success { value: Entry.Ros { registry, ordering, supplement } } => {
+        Result<Entry, Error>.Success { value: Entry.Ros { .. } } => {
           return Option<Charset<'a>>.None
         }
         _ => {}

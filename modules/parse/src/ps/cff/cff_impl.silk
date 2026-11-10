@@ -161,7 +161,7 @@ impl<'a> Cff<'a> {
           count = u16.toU32(Index.count(&index))
           hasCount = true
         }
-        Result<Entry, Error>.Success { value: Entry.Ros { registry, ordering, supplement } } => {
+        Result<Entry, Error>.Success { value: Entry.Ros { .. } } => {
           return Option<Charset<'a>>.None
         }
         _ => {}

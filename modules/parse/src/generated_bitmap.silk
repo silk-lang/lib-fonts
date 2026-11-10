@@ -3,39 +3,20 @@
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 import font_data { FontData }
 import read { ReadError, FontRead, FontReadAt, ComputeSize, Format, computeSize, readAtWithArgs }
-import table_provider { TopLevelTable }
-import array { ScalarArray, ComputedArray, VarLenArray }
-import offset { resolve, resolveWithArgs, resolveNullableWithArgs }
-import offset_array { ArrayOfOffsets, ArrayOfNullableOffsets }
-import read_args { ReadArgs2, ReadArgs3 }
+import array { ScalarArray, ComputedArray }
+import offset { resolveWithArgs }
+import read_args { ReadArgs2 }
 import table_ref { ByteRange, MinByteRange }
-import generated_support { scalarOr, recordArray, varLenArray, varLenBytes, signedCount }
+import generated_support { scalarOr, recordArray }
 import font_types.lib {
   Scalar,
   FixedSize,
   rawByteLen,
   readScalar,
   writeScalar,
-  Tag,
-  Fixed,
-  F2Dot14,
-  F4Dot12,
-  F6Dot10,
-  FWord,
-  UfWord,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
   GlyphId,
   GlyphId16,
-  GlyphId24,
-  NameId,
-  Offset16,
-  Offset24,
-  Offset32,
-  Nullable
+  Offset32
 }
 import silk.core.option { Option }
 import silk.core.result { Result }
@@ -49,9 +30,6 @@ import silk.num.usize
 import silk.num.u8
 import silk.num.u16
 import silk.num.u32
-import silk.num.u64
-import silk.num.i16
-import silk.num.i32
 
 /// [BitmapSize](https://learn.microsoft.com/en-us/typography/opentype/spec/eblc#bitmapsize-record) record.
 pub struct BitmapSize<'a> {
@@ -77,7 +55,7 @@ impl<'a> BitmapSize<'a> {
   pub fn indexSubtableListOffset(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, (self.position + 0)) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -85,7 +63,7 @@ impl<'a> BitmapSize<'a> {
   pub fn indexSubtableListSize(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, (self.position + 4)) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -93,7 +71,7 @@ impl<'a> BitmapSize<'a> {
   pub fn numberOfIndexSubtables(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, (self.position + 8)) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -101,7 +79,7 @@ impl<'a> BitmapSize<'a> {
   pub fn colorRef(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, (self.position + 12)) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -113,7 +91,7 @@ impl<'a> BitmapSize<'a> {
       (),
     ) {
       Result<SbitLineMetrics<'a>, ReadError>.Success { value } => value
-      Result<SbitLineMetrics<'a>, ReadError>.Failure { error } => SbitLineMetrics<'a>.default()
+      Result<SbitLineMetrics<'a>, ReadError>.Failure { .. } => SbitLineMetrics<'a>.default()
     }
   }
 
@@ -125,7 +103,7 @@ impl<'a> BitmapSize<'a> {
       (),
     ) {
       Result<SbitLineMetrics<'a>, ReadError>.Success { value } => value
-      Result<SbitLineMetrics<'a>, ReadError>.Failure { error } => SbitLineMetrics<'a>.default()
+      Result<SbitLineMetrics<'a>, ReadError>.Failure { .. } => SbitLineMetrics<'a>.default()
     }
   }
 
@@ -133,7 +111,7 @@ impl<'a> BitmapSize<'a> {
   pub fn startGlyphIndex(self: &Self) -> GlyphId16 {
     return match move FontData<'a>.readAt<GlyphId16>(&self._fontData, (self.position + 40)) {
       Result<GlyphId16, ReadError>.Success { value } => value
-      Result<GlyphId16, ReadError>.Failure { error } => GlyphId16.new(0)
+      Result<GlyphId16, ReadError>.Failure { .. } => GlyphId16.new(0)
     }
   }
 
@@ -141,7 +119,7 @@ impl<'a> BitmapSize<'a> {
   pub fn endGlyphIndex(self: &Self) -> GlyphId16 {
     return match move FontData<'a>.readAt<GlyphId16>(&self._fontData, (self.position + 42)) {
       Result<GlyphId16, ReadError>.Success { value } => value
-      Result<GlyphId16, ReadError>.Failure { error } => GlyphId16.new(0)
+      Result<GlyphId16, ReadError>.Failure { .. } => GlyphId16.new(0)
     }
   }
 
@@ -149,7 +127,7 @@ impl<'a> BitmapSize<'a> {
   pub fn ppemX(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, (self.position + 44)) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -157,7 +135,7 @@ impl<'a> BitmapSize<'a> {
   pub fn ppemY(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, (self.position + 45)) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -166,7 +144,7 @@ impl<'a> BitmapSize<'a> {
   pub fn bitDepth(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, (self.position + 46)) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -174,7 +152,7 @@ impl<'a> BitmapSize<'a> {
   pub fn flags(self: &Self) -> BitmapFlags {
     return match move FontData<'a>.readAt<BitmapFlags>(&self._fontData, (self.position + 47)) {
       Result<BitmapFlags, ReadError>.Success { value } => value
-      Result<BitmapFlags, ReadError>.Failure { error } => BitmapFlags.empty()
+      Result<BitmapFlags, ReadError>.Failure { .. } => BitmapFlags.empty()
     }
   }
 }
@@ -220,84 +198,84 @@ impl<'a> SbitLineMetrics<'a> {
   pub fn ascender(self: &Self) -> i8 {
     return match move FontData<'a>.readAt<i8>(&self._fontData, (self.position + 0)) {
       Result<i8, ReadError>.Success { value } => value
-      Result<i8, ReadError>.Failure { error } => 0
+      Result<i8, ReadError>.Failure { .. } => 0
     }
   }
 
   pub fn descender(self: &Self) -> i8 {
     return match move FontData<'a>.readAt<i8>(&self._fontData, (self.position + 1)) {
       Result<i8, ReadError>.Success { value } => value
-      Result<i8, ReadError>.Failure { error } => 0
+      Result<i8, ReadError>.Failure { .. } => 0
     }
   }
 
   pub fn widthMax(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, (self.position + 2)) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
   pub fn caretSlopeNumerator(self: &Self) -> i8 {
     return match move FontData<'a>.readAt<i8>(&self._fontData, (self.position + 3)) {
       Result<i8, ReadError>.Success { value } => value
-      Result<i8, ReadError>.Failure { error } => 0
+      Result<i8, ReadError>.Failure { .. } => 0
     }
   }
 
   pub fn caretSlopeDenominator(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, (self.position + 4)) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
   pub fn caretOffset(self: &Self) -> i8 {
     return match move FontData<'a>.readAt<i8>(&self._fontData, (self.position + 5)) {
       Result<i8, ReadError>.Success { value } => value
-      Result<i8, ReadError>.Failure { error } => 0
+      Result<i8, ReadError>.Failure { .. } => 0
     }
   }
 
   pub fn minOriginSb(self: &Self) -> i8 {
     return match move FontData<'a>.readAt<i8>(&self._fontData, (self.position + 6)) {
       Result<i8, ReadError>.Success { value } => value
-      Result<i8, ReadError>.Failure { error } => 0
+      Result<i8, ReadError>.Failure { .. } => 0
     }
   }
 
   pub fn minAdvanceSb(self: &Self) -> i8 {
     return match move FontData<'a>.readAt<i8>(&self._fontData, (self.position + 7)) {
       Result<i8, ReadError>.Success { value } => value
-      Result<i8, ReadError>.Failure { error } => 0
+      Result<i8, ReadError>.Failure { .. } => 0
     }
   }
 
   pub fn maxBeforeBl(self: &Self) -> i8 {
     return match move FontData<'a>.readAt<i8>(&self._fontData, (self.position + 8)) {
       Result<i8, ReadError>.Success { value } => value
-      Result<i8, ReadError>.Failure { error } => 0
+      Result<i8, ReadError>.Failure { .. } => 0
     }
   }
 
   pub fn minAfterBl(self: &Self) -> i8 {
     return match move FontData<'a>.readAt<i8>(&self._fontData, (self.position + 9)) {
       Result<i8, ReadError>.Success { value } => value
-      Result<i8, ReadError>.Failure { error } => 0
+      Result<i8, ReadError>.Failure { .. } => 0
     }
   }
 
   pub fn pad1(self: &Self) -> i8 {
     return match move FontData<'a>.readAt<i8>(&self._fontData, (self.position + 10)) {
       Result<i8, ReadError>.Success { value } => value
-      Result<i8, ReadError>.Failure { error } => 0
+      Result<i8, ReadError>.Failure { .. } => 0
     }
   }
 
   pub fn pad2(self: &Self) -> i8 {
     return match move FontData<'a>.readAt<i8>(&self._fontData, (self.position + 11)) {
       Result<i8, ReadError>.Success { value } => value
-      Result<i8, ReadError>.Failure { error } => 0
+      Result<i8, ReadError>.Failure { .. } => 0
     }
   }
 }
@@ -524,7 +502,7 @@ impl<'a> BigGlyphMetrics<'a> {
   pub fn height(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, (self.position + 0)) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -532,7 +510,7 @@ impl<'a> BigGlyphMetrics<'a> {
   pub fn width(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, (self.position + 1)) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -540,7 +518,7 @@ impl<'a> BigGlyphMetrics<'a> {
   pub fn horiBearingX(self: &Self) -> i8 {
     return match move FontData<'a>.readAt<i8>(&self._fontData, (self.position + 2)) {
       Result<i8, ReadError>.Success { value } => value
-      Result<i8, ReadError>.Failure { error } => 0
+      Result<i8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -548,7 +526,7 @@ impl<'a> BigGlyphMetrics<'a> {
   pub fn horiBearingY(self: &Self) -> i8 {
     return match move FontData<'a>.readAt<i8>(&self._fontData, (self.position + 3)) {
       Result<i8, ReadError>.Success { value } => value
-      Result<i8, ReadError>.Failure { error } => 0
+      Result<i8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -556,7 +534,7 @@ impl<'a> BigGlyphMetrics<'a> {
   pub fn horiAdvance(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, (self.position + 4)) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -564,7 +542,7 @@ impl<'a> BigGlyphMetrics<'a> {
   pub fn vertBearingX(self: &Self) -> i8 {
     return match move FontData<'a>.readAt<i8>(&self._fontData, (self.position + 5)) {
       Result<i8, ReadError>.Success { value } => value
-      Result<i8, ReadError>.Failure { error } => 0
+      Result<i8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -572,7 +550,7 @@ impl<'a> BigGlyphMetrics<'a> {
   pub fn vertBearingY(self: &Self) -> i8 {
     return match move FontData<'a>.readAt<i8>(&self._fontData, (self.position + 6)) {
       Result<i8, ReadError>.Success { value } => value
-      Result<i8, ReadError>.Failure { error } => 0
+      Result<i8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -580,7 +558,7 @@ impl<'a> BigGlyphMetrics<'a> {
   pub fn vertAdvance(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, (self.position + 7)) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 }
@@ -627,7 +605,7 @@ impl<'a> SmallGlyphMetrics<'a> {
   pub fn height(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, (self.position + 0)) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -635,7 +613,7 @@ impl<'a> SmallGlyphMetrics<'a> {
   pub fn width(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, (self.position + 1)) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -643,7 +621,7 @@ impl<'a> SmallGlyphMetrics<'a> {
   pub fn bearingX(self: &Self) -> i8 {
     return match move FontData<'a>.readAt<i8>(&self._fontData, (self.position + 2)) {
       Result<i8, ReadError>.Success { value } => value
-      Result<i8, ReadError>.Failure { error } => 0
+      Result<i8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -651,7 +629,7 @@ impl<'a> SmallGlyphMetrics<'a> {
   pub fn bearingY(self: &Self) -> i8 {
     return match move FontData<'a>.readAt<i8>(&self._fontData, (self.position + 3)) {
       Result<i8, ReadError>.Success { value } => value
-      Result<i8, ReadError>.Failure { error } => 0
+      Result<i8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -659,7 +637,7 @@ impl<'a> SmallGlyphMetrics<'a> {
   pub fn advance(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, (self.position + 4)) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 }
@@ -742,7 +720,7 @@ impl<'a> IndexSubtableList<'a> {
     ) {
       Result<ComputedArray<'a, (), IndexSubtableRecord<'a>>, ReadError>.Success { value } => value
       Result<ComputedArray<'a, (), IndexSubtableRecord<'a>>, ReadError>.Failure {
-        error
+        ..
       } => ComputedArray<'a, (), IndexSubtableRecord<'a>>.empty(())
     }
   }
@@ -794,7 +772,7 @@ impl<'a> IndexSubtableRecord<'a> {
   pub fn firstGlyphIndex(self: &Self) -> GlyphId16 {
     return match move FontData<'a>.readAt<GlyphId16>(&self._fontData, (self.position + 0)) {
       Result<GlyphId16, ReadError>.Success { value } => value
-      Result<GlyphId16, ReadError>.Failure { error } => GlyphId16.new(0)
+      Result<GlyphId16, ReadError>.Failure { .. } => GlyphId16.new(0)
     }
   }
 
@@ -802,7 +780,7 @@ impl<'a> IndexSubtableRecord<'a> {
   pub fn lastGlyphIndex(self: &Self) -> GlyphId16 {
     return match move FontData<'a>.readAt<GlyphId16>(&self._fontData, (self.position + 2)) {
       Result<GlyphId16, ReadError>.Success { value } => value
-      Result<GlyphId16, ReadError>.Failure { error } => GlyphId16.new(0)
+      Result<GlyphId16, ReadError>.Failure { .. } => GlyphId16.new(0)
     }
   }
 
@@ -810,7 +788,7 @@ impl<'a> IndexSubtableRecord<'a> {
   pub fn indexSubtableOffset(self: &Self) -> Offset32 {
     return match move FontData<'a>.readAt<Offset32>(&self._fontData, (self.position + 4)) {
       Result<Offset32, ReadError>.Success { value } => value
-      Result<Offset32, ReadError>.Failure { error } => Offset32.new(0)
+      Result<Offset32, ReadError>.Failure { .. } => Offset32.new(0)
     }
   }
 
@@ -890,15 +868,12 @@ impl<'a> IndexSubtable1<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let indexFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let imageFormatValue = scalarOr<u16>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[2].end = end
-    let imageDataOffsetValue = scalarOr<u32>(data, ranges[2].start, 0)
     ranges[3].start = end
     end = usize.saturatingAdd(
       end,
@@ -932,7 +907,7 @@ impl<'a> IndexSubtable1<'a> {
   pub fn indexFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -944,7 +919,7 @@ impl<'a> IndexSubtable1<'a> {
   pub fn imageFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -956,7 +931,7 @@ impl<'a> IndexSubtable1<'a> {
   pub fn imageDataOffset(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[2].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -971,7 +946,7 @@ impl<'a> IndexSubtable1<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, u32>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, u32>, ReadError>.Failure { error } => ScalarArray<u32>.empty()
+      Result<ScalarArray<'a, u32>, ReadError>.Failure { .. } => ScalarArray<u32>.empty()
     }
   }
 
@@ -1030,19 +1005,15 @@ impl<'a> IndexSubtable2<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let indexFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let imageFormatValue = scalarOr<u16>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[2].end = end
-    let imageDataOffsetValue = scalarOr<u32>(data, ranges[2].start, 0)
     ranges[3].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[3].end = end
-    let imageSizeValue = scalarOr<u32>(data, ranges[3].start, 0)
     ranges[4].start = end
     end = usize.saturatingAdd(end, 8)
     ranges[4].end = end
@@ -1057,7 +1028,7 @@ impl<'a> IndexSubtable2<'a> {
   pub fn indexFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1069,7 +1040,7 @@ impl<'a> IndexSubtable2<'a> {
   pub fn imageFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1081,7 +1052,7 @@ impl<'a> IndexSubtable2<'a> {
   pub fn imageDataOffset(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[2].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1093,7 +1064,7 @@ impl<'a> IndexSubtable2<'a> {
   pub fn imageSize(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[3].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1109,7 +1080,7 @@ impl<'a> IndexSubtable2<'a> {
       (),
     ) {
       Result<BigGlyphMetrics<'a>, ReadError>.Success { value } => value
-      Result<BigGlyphMetrics<'a>, ReadError>.Failure { error } => BigGlyphMetrics<'a>.default()
+      Result<BigGlyphMetrics<'a>, ReadError>.Failure { .. } => BigGlyphMetrics<'a>.default()
     }
   }
 
@@ -1172,15 +1143,12 @@ impl<'a> IndexSubtable3<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let indexFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let imageFormatValue = scalarOr<u16>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[2].end = end
-    let imageDataOffsetValue = scalarOr<u32>(data, ranges[2].start, 0)
     ranges[3].start = end
     end = usize.saturatingAdd(
       end,
@@ -1214,7 +1182,7 @@ impl<'a> IndexSubtable3<'a> {
   pub fn indexFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1226,7 +1194,7 @@ impl<'a> IndexSubtable3<'a> {
   pub fn imageFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1238,7 +1206,7 @@ impl<'a> IndexSubtable3<'a> {
   pub fn imageDataOffset(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[2].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1253,7 +1221,7 @@ impl<'a> IndexSubtable3<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, u16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, u16>, ReadError>.Failure { error } => ScalarArray<u16>.empty()
+      Result<ScalarArray<'a, u16>, ReadError>.Failure { .. } => ScalarArray<u16>.empty()
     }
   }
 
@@ -1312,15 +1280,12 @@ impl<'a> IndexSubtable4<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let indexFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let imageFormatValue = scalarOr<u16>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[2].end = end
-    let imageDataOffsetValue = scalarOr<u32>(data, ranges[2].start, 0)
     ranges[3].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[3].end = end
@@ -1342,7 +1307,7 @@ impl<'a> IndexSubtable4<'a> {
   pub fn indexFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1354,7 +1319,7 @@ impl<'a> IndexSubtable4<'a> {
   pub fn imageFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1366,7 +1331,7 @@ impl<'a> IndexSubtable4<'a> {
   pub fn imageDataOffset(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[2].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1378,7 +1343,7 @@ impl<'a> IndexSubtable4<'a> {
   pub fn numGlyphs(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[3].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1395,7 +1360,7 @@ impl<'a> IndexSubtable4<'a> {
     ) {
       Result<ComputedArray<'a, (), GlyphIdOffsetPair<'a>>, ReadError>.Success { value } => value
       Result<ComputedArray<'a, (), GlyphIdOffsetPair<'a>>, ReadError>.Failure {
-        error
+        ..
       } => ComputedArray<'a, (), GlyphIdOffsetPair<'a>>.empty(())
     }
   }
@@ -1454,7 +1419,7 @@ impl<'a> GlyphIdOffsetPair<'a> {
   pub fn glyphId(self: &Self) -> GlyphId16 {
     return match move FontData<'a>.readAt<GlyphId16>(&self._fontData, (self.position + 0)) {
       Result<GlyphId16, ReadError>.Success { value } => value
-      Result<GlyphId16, ReadError>.Failure { error } => GlyphId16.new(0)
+      Result<GlyphId16, ReadError>.Failure { .. } => GlyphId16.new(0)
     }
   }
 
@@ -1462,7 +1427,7 @@ impl<'a> GlyphIdOffsetPair<'a> {
   pub fn sbitOffset(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 2)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 }
@@ -1507,19 +1472,15 @@ impl<'a> IndexSubtable5<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let indexFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let imageFormatValue = scalarOr<u16>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[2].end = end
-    let imageDataOffsetValue = scalarOr<u32>(data, ranges[2].start, 0)
     ranges[3].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[3].end = end
-    let imageSizeValue = scalarOr<u32>(data, ranges[3].start, 0)
     ranges[4].start = end
     end = usize.saturatingAdd(end, 8)
     ranges[4].end = end
@@ -1541,7 +1502,7 @@ impl<'a> IndexSubtable5<'a> {
   pub fn indexFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1553,7 +1514,7 @@ impl<'a> IndexSubtable5<'a> {
   pub fn imageFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1565,7 +1526,7 @@ impl<'a> IndexSubtable5<'a> {
   pub fn imageDataOffset(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[2].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1577,7 +1538,7 @@ impl<'a> IndexSubtable5<'a> {
   pub fn imageSize(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[3].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1593,7 +1554,7 @@ impl<'a> IndexSubtable5<'a> {
       (),
     ) {
       Result<BigGlyphMetrics<'a>, ReadError>.Success { value } => value
-      Result<BigGlyphMetrics<'a>, ReadError>.Failure { error } => BigGlyphMetrics<'a>.default()
+      Result<BigGlyphMetrics<'a>, ReadError>.Failure { .. } => BigGlyphMetrics<'a>.default()
     }
   }
 
@@ -1605,7 +1566,7 @@ impl<'a> IndexSubtable5<'a> {
   pub fn numGlyphs(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[5].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1621,9 +1582,7 @@ impl<'a> IndexSubtable5<'a> {
       self._fieldRanges[6].end,
     ) {
       Result<ScalarArray<'a, GlyphId16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, GlyphId16>, ReadError>.Failure { error } => ScalarArray<
-        GlyphId16
-      >.empty()
+      Result<ScalarArray<'a, GlyphId16>, ReadError>.Failure { .. } => ScalarArray<GlyphId16>.empty()
     }
   }
 
@@ -1681,7 +1640,7 @@ impl<'a> BdtComponent<'a> {
   pub fn glyphId(self: &Self) -> GlyphId16 {
     return match move FontData<'a>.readAt<GlyphId16>(&self._fontData, (self.position + 0)) {
       Result<GlyphId16, ReadError>.Success { value } => value
-      Result<GlyphId16, ReadError>.Failure { error } => GlyphId16.new(0)
+      Result<GlyphId16, ReadError>.Failure { .. } => GlyphId16.new(0)
     }
   }
 
@@ -1689,7 +1648,7 @@ impl<'a> BdtComponent<'a> {
   pub fn xOffset(self: &Self) -> i8 {
     return match move FontData<'a>.readAt<i8>(&self._fontData, (self.position + 2)) {
       Result<i8, ReadError>.Success { value } => value
-      Result<i8, ReadError>.Failure { error } => 0
+      Result<i8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1697,7 +1656,7 @@ impl<'a> BdtComponent<'a> {
   pub fn yOffset(self: &Self) -> i8 {
     return match move FontData<'a>.readAt<i8>(&self._fontData, (self.position + 3)) {
       Result<i8, ReadError>.Success { value } => value
-      Result<i8, ReadError>.Failure { error } => 0
+      Result<i8, ReadError>.Failure { .. } => 0
     }
   }
 }

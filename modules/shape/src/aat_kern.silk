@@ -4,7 +4,7 @@ import silk.mem.allocator { Allocator, OutOfMemoryError }
 import buffer { Buffer, Glyph }
 import direction { Direction }
 import feature { Feature }
-import font { ConfiguredShaper, FontFuncs, Shaper, table }
+import font { ConfiguredShaper, FontFuncs, table }
 import plan { featureValue }
 import scale { Scale, add, sub }
 import view { View, offset }

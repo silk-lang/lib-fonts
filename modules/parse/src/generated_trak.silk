@@ -2,56 +2,21 @@
 // Source: pinned resources/codegen_inputs; generator: modules/parse/tools/font-codegen-silk.
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 import font_data { FontData }
-import read { ReadError, FontRead, FontReadAt, ComputeSize, Format, computeSize, readAtWithArgs }
+import read { ReadError, FontRead, FontReadAt, ComputeSize, computeSize }
 import table_provider { TopLevelTable }
-import array { ScalarArray, ComputedArray, VarLenArray }
-import offset { resolve, resolveWithArgs, resolveNullableWithArgs }
-import offset_array { ArrayOfOffsets, ArrayOfNullableOffsets }
-import read_args { ReadArgs2, ReadArgs3 }
+import array { ScalarArray, ComputedArray }
+import offset { resolveNullableWithArgs }
 import table_ref { ByteRange, MinByteRange }
-import generated_support { scalarOr, recordArray, varLenArray, varLenBytes, signedCount }
-import font_types.lib {
-  Scalar,
-  FixedSize,
-  rawByteLen,
-  readScalar,
-  writeScalar,
-  Tag,
-  Fixed,
-  F2Dot14,
-  F4Dot12,
-  F6Dot10,
-  FWord,
-  UfWord,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
-  GlyphId,
-  GlyphId16,
-  GlyphId24,
-  NameId,
-  Offset16,
-  Offset24,
-  Offset32,
-  Nullable
-}
+import generated_support { scalarOr, recordArray }
+import font_types.lib { FixedSize, rawByteLen, Tag, Fixed, MajorMinor, NameId, Offset16, Nullable }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.core.ownership { Copy }
-import silk.core.equal { Equal }
-import silk.core.order { Order, Ordering }
-import silk.text.format { Debug, Formatter }
-import silk.io.writer { Writer, WriterError }
-import silk.core.ops { BitAnd, BitOr, BitXor, Not, Subtract }
 import silk.num.usize
 import silk.num.u8
 import silk.num.u16
 import silk.num.u32
-import silk.num.u64
 import silk.num.i16
-import silk.num.i32
 
 /// The [tracking (trak)](https://developer.apple.com/fonts/TrueType-Reference-Manual/RM06/Chap6trak.html) table.
 pub struct Trak<'a> {
@@ -82,31 +47,18 @@ impl<'a> Trak<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[0].end = end
-    let versionValue = scalarOr<MajorMinor>(data, ranges[0].start, MajorMinor.new(0, 0))
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let formatValue = scalarOr<u16>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let horizOffsetValue = scalarOr<Nullable<Offset16>>(
-      data,
-      ranges[2].start,
-      Nullable<Offset16>.default(),
-    )
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let vertOffsetValue = scalarOr<Nullable<Offset16>>(
-      data,
-      ranges[3].start,
-      Nullable<Offset16>.default(),
-    )
     ranges[4].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[4].end = end
-    let reservedValue = scalarOr<u16>(data, ranges[4].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -122,7 +74,7 @@ impl<'a> Trak<'a> {
   pub fn version(self: &Self) -> MajorMinor {
     return match move FontData<'a>.readAt<MajorMinor>(&self._fontData, self._fieldRanges[0].start) {
       Result<MajorMinor, ReadError>.Success { value } => value
-      Result<MajorMinor, ReadError>.Failure { error } => MajorMinor.new(0, 0)
+      Result<MajorMinor, ReadError>.Failure { .. } => MajorMinor.new(0, 0)
     }
   }
 
@@ -134,7 +86,7 @@ impl<'a> Trak<'a> {
   pub fn format(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -149,7 +101,7 @@ impl<'a> Trak<'a> {
       self._fieldRanges[2].start,
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -169,7 +121,7 @@ impl<'a> Trak<'a> {
       self._fieldRanges[3].start,
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -245,11 +197,9 @@ impl<'a> TrackData<'a> {
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let nSizesValue = scalarOr<u16>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[2].end = end
-    let sizeTableOffsetValue = scalarOr<u32>(data, ranges[2].start, 0)
     ranges[3].start = end
     end = usize.saturatingAdd(end, usize.saturatingMultiply(u16.toUsize(nTracksValue), 8))
     ranges[3].end = end
@@ -264,7 +214,7 @@ impl<'a> TrackData<'a> {
   pub fn nTracks(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -276,7 +226,7 @@ impl<'a> TrackData<'a> {
   pub fn nSizes(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -288,7 +238,7 @@ impl<'a> TrackData<'a> {
   pub fn sizeTableOffset(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[2].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -304,9 +254,11 @@ impl<'a> TrackData<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ComputedArray<'a, (), TrackTableEntry<'a>>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, (), TrackTableEntry<'a>>, ReadError>.Failure {
-        error
-      } => ComputedArray<'a, (), TrackTableEntry<'a>>.empty(())
+      Result<ComputedArray<'a, (), TrackTableEntry<'a>>, ReadError>.Failure { .. } => ComputedArray<
+        'a,
+        (),
+        TrackTableEntry<'a>
+      >.empty(())
     }
   }
 
@@ -358,7 +310,7 @@ impl<'a> TrackTableEntry<'a> {
   pub fn track(self: &Self) -> Fixed {
     return match move FontData<'a>.readAt<Fixed>(&self._fontData, (self.position + 0)) {
       Result<Fixed, ReadError>.Success { value } => value
-      Result<Fixed, ReadError>.Failure { error } => Fixed.zero()
+      Result<Fixed, ReadError>.Failure { .. } => Fixed.zero()
     }
   }
 
@@ -366,7 +318,7 @@ impl<'a> TrackTableEntry<'a> {
   pub fn nameIndex(self: &Self) -> NameId {
     return match move FontData<'a>.readAt<NameId>(&self._fontData, (self.position + 4)) {
       Result<NameId, ReadError>.Success { value } => value
-      Result<NameId, ReadError>.Failure { error } => NameId.default()
+      Result<NameId, ReadError>.Failure { .. } => NameId.default()
     }
   }
 
@@ -374,7 +326,7 @@ impl<'a> TrackTableEntry<'a> {
   pub fn offset(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 6)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 }

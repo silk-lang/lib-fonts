@@ -1,44 +1,25 @@
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
-import read_fonts.lib {
-  FontRef,
-  FontData,
-  ReadError,
-  ScalarArray,
-  ComputedArray,
-  VarLenArray,
-  VarLenIter
-}
+import read_fonts.lib { FontRef, FontData, ReadError, ScalarArray, ComputedArray, }
 import read_fonts.tables.kern {
   Kern,
   Subtable,
   SubtableKind,
   Subtable0,
   Subtable2,
-  OtKern,
-  AatKern,
   OtSubtable,
   AatSubtable,
   Subtables,
-  Subtable2ClassTable,
   Subtable3
 }
 import read_fonts.tables.kerx { Subtable0Pair }
 import read_fonts.tables.maxp { SelectedMaxp }
-import read_fonts.tables.aat { StateTable, NoPayload }
 import font_types.lib { GlyphId, GlyphId16 }
-import extensions_aat_common {
-  dumpArray,
-  dumpLookupU16,
-  dumpLookupU32,
-  dumpExtendedState,
-  dumpLegacyState
-}
+import extensions_aat_common { dumpLegacyState }
 import generated_dump_kern
-import dump_support { DumpPath, scalar, bytes, readError, absent }
+import dump_support { DumpPath, scalar, readError, absent }
 import silk.core.result { Result }
 import silk.core.option { Option }
 import silk.io.writer { Writer, WriterError }
-import silk.num.u16
 import silk.num.u32
 import silk.num.usize
 

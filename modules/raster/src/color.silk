@@ -35,7 +35,7 @@ import font_types.lib { GlyphId, GlyphId16, Offset32, Tag }
 import codec.png { decode, PngError }
 import codec.image { Image, ImageError }
 import vector.pixmap { Pixmap, Rgba8 }
-import vector.strips { Coverage, NONZERO }
+import vector.strips { Coverage }
 import vector.geometry_error { GeometryError }
 import silk.geometry.affine { Affine2 }
 import silk.collections.list { List }
@@ -444,7 +444,7 @@ effect fn colrLayers(
             OutOfMemoryError problem => {
               fail move problem
             }
-            GeometryError problem => {
+            GeometryError _ => {
               return Outcome.Missing
             }
           }

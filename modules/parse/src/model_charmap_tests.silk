@@ -3,8 +3,6 @@ import model.charmap {
   Charmap,
   Encoding,
   EncodingKind,
-  SfntIndex,
-  SfntIds,
   Unicodes,
   UnicodeVariants,
   UnicodeVariant,
@@ -24,8 +22,8 @@ import generated_model_fixtures {
   notoSansJp
 }
 import generated_cff_fixtures { notoSerifFont, notoSerifTable }
-import lib { FontRef, FontData, TableProvider, ReadError }
-import tables.cmap { Cmap, CmapSubtable, BestCmapSubtable, CmapMapping, EncodingRecord, PlatformId }
+import lib { FontRef, FontData, ReadError }
+import tables.cmap { Cmap, CmapSubtable, CmapMapping, EncodingRecord, PlatformId }
 import ps.encoding { PredefinedEncoding }
 import ps.cff.font { CffFontRef }
 import model.error { Error }

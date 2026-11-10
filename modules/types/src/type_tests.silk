@@ -2,7 +2,7 @@
 import integer_types { Uint24, Int24, GlyphId16, GlyphId24, GlyphId, Offset16 }
 import nullable { Nullable }
 import scalar { readScalar, writeScalar }
-import version { MajorMinor, Version16Dot16 }
+import version { Version16Dot16 }
 import tag { Tag, InvalidTag }
 import silk.geometry.point { Point2 }
 import silk.geometry.vector { Vector2 }
@@ -24,7 +24,7 @@ fn equal<T: Equal>(left: T, right: T) -> bool {
 
 fn ok<T, E>(input: Result<T, E>) -> bool {
   return match move input {
-    Result<T, E>.Success { value } => true
+    Result<T, E>.Success { .. } => true
     _ => false
   }
 }

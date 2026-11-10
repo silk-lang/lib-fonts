@@ -2,56 +2,18 @@
 // Source: pinned resources/codegen_inputs; generator: modules/parse/tools/font-codegen-silk.
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 import font_data { FontData }
-import read { ReadError, FontRead, FontReadAt, ComputeSize, Format, computeSize, readAtWithArgs }
+import read { ReadError, FontRead }
 import table_provider { TopLevelTable }
-import array { ScalarArray, ComputedArray, VarLenArray }
-import offset { resolve, resolveWithArgs, resolveNullableWithArgs }
-import offset_array { ArrayOfOffsets, ArrayOfNullableOffsets }
-import read_args { ReadArgs2, ReadArgs3 }
 import table_ref { ByteRange, MinByteRange }
-import generated_support { scalarOr, recordArray, varLenArray, varLenBytes, signedCount }
-import font_types.lib {
-  Scalar,
-  FixedSize,
-  rawByteLen,
-  readScalar,
-  writeScalar,
-  Tag,
-  Fixed,
-  F2Dot14,
-  F4Dot12,
-  F6Dot10,
-  FWord,
-  UfWord,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
-  GlyphId,
-  GlyphId16,
-  GlyphId24,
-  NameId,
-  Offset16,
-  Offset24,
-  Offset32,
-  Nullable
-}
+import font_types.lib { Tag, FWord, UfWord, MajorMinor }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.core.ownership { Copy }
-import silk.core.equal { Equal }
-import silk.core.order { Order, Ordering }
-import silk.text.format { Debug, Formatter }
-import silk.io.writer { Writer, WriterError }
-import silk.core.ops { BitAnd, BitOr, BitXor, Not, Subtract }
 import silk.num.usize
 import silk.num.u8
 import silk.num.u16
 import silk.num.u32
-import silk.num.u64
 import silk.num.i16
-import silk.num.i32
 
 /// [hhea](https://docs.microsoft.com/en-us/typography/opentype/spec/hhea) Horizontal Header Table
 pub struct Hhea<'a> {
@@ -82,71 +44,54 @@ impl<'a> Hhea<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[0].end = end
-    let versionValue = scalarOr<MajorMinor>(data, ranges[0].start, MajorMinor.new(0, 0))
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let ascenderValue = scalarOr<FWord>(data, ranges[1].start, FWord.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let descenderValue = scalarOr<FWord>(data, ranges[2].start, FWord.new(0))
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let lineGapValue = scalarOr<FWord>(data, ranges[3].start, FWord.new(0))
     ranges[4].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[4].end = end
-    let advanceWidthMaxValue = scalarOr<UfWord>(data, ranges[4].start, UfWord.new(0))
     ranges[5].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[5].end = end
-    let minLeftSideBearingValue = scalarOr<FWord>(data, ranges[5].start, FWord.new(0))
     ranges[6].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[6].end = end
-    let minRightSideBearingValue = scalarOr<FWord>(data, ranges[6].start, FWord.new(0))
     ranges[7].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[7].end = end
-    let xMaxExtentValue = scalarOr<FWord>(data, ranges[7].start, FWord.new(0))
     ranges[8].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[8].end = end
-    let caretSlopeRiseValue = scalarOr<i16>(data, ranges[8].start, 0)
     ranges[9].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[9].end = end
-    let caretSlopeRunValue = scalarOr<i16>(data, ranges[9].start, 0)
     ranges[10].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[10].end = end
-    let caretOffsetValue = scalarOr<i16>(data, ranges[10].start, 0)
     ranges[11].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[11].end = end
-    let reserved1Value = scalarOr<i16>(data, ranges[11].start, 0)
     ranges[12].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[12].end = end
-    let reserved2Value = scalarOr<i16>(data, ranges[12].start, 0)
     ranges[13].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[13].end = end
-    let reserved3Value = scalarOr<i16>(data, ranges[13].start, 0)
     ranges[14].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[14].end = end
-    let reserved4Value = scalarOr<i16>(data, ranges[14].start, 0)
     ranges[15].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[15].end = end
-    let metricDataFormatValue = scalarOr<i16>(data, ranges[15].start, 0)
     ranges[16].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[16].end = end
-    let numberOfHMetricsValue = scalarOr<u16>(data, ranges[16].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -162,7 +107,7 @@ impl<'a> Hhea<'a> {
   pub fn version(self: &Self) -> MajorMinor {
     return match move FontData<'a>.readAt<MajorMinor>(&self._fontData, self._fieldRanges[0].start) {
       Result<MajorMinor, ReadError>.Success { value } => value
-      Result<MajorMinor, ReadError>.Failure { error } => MajorMinor.new(0, 0)
+      Result<MajorMinor, ReadError>.Failure { .. } => MajorMinor.new(0, 0)
     }
   }
 
@@ -174,7 +119,7 @@ impl<'a> Hhea<'a> {
   pub fn ascender(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[1].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -186,7 +131,7 @@ impl<'a> Hhea<'a> {
   pub fn descender(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[2].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -199,7 +144,7 @@ impl<'a> Hhea<'a> {
   pub fn lineGap(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[3].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -211,7 +156,7 @@ impl<'a> Hhea<'a> {
   pub fn advanceWidthMax(self: &Self) -> UfWord {
     return match move FontData<'a>.readAt<UfWord>(&self._fontData, self._fieldRanges[4].start) {
       Result<UfWord, ReadError>.Success { value } => value
-      Result<UfWord, ReadError>.Failure { error } => UfWord.new(0)
+      Result<UfWord, ReadError>.Failure { .. } => UfWord.new(0)
     }
   }
 
@@ -224,7 +169,7 @@ impl<'a> Hhea<'a> {
   pub fn minLeftSideBearing(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[5].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -237,7 +182,7 @@ impl<'a> Hhea<'a> {
   pub fn minRightSideBearing(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[6].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -249,7 +194,7 @@ impl<'a> Hhea<'a> {
   pub fn xMaxExtent(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[7].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -262,7 +207,7 @@ impl<'a> Hhea<'a> {
   pub fn caretSlopeRise(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[8].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -274,7 +219,7 @@ impl<'a> Hhea<'a> {
   pub fn caretSlopeRun(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[9].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -288,7 +233,7 @@ impl<'a> Hhea<'a> {
   pub fn caretOffset(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[10].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -316,7 +261,7 @@ impl<'a> Hhea<'a> {
   pub fn metricDataFormat(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[15].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -328,7 +273,7 @@ impl<'a> Hhea<'a> {
   pub fn numberOfHMetrics(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[16].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -391,71 +336,54 @@ impl<'a> HheaExtended<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[0].end = end
-    let versionValue = scalarOr<MajorMinor>(data, ranges[0].start, MajorMinor.new(0, 0))
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let ascenderValue = scalarOr<FWord>(data, ranges[1].start, FWord.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let descenderValue = scalarOr<FWord>(data, ranges[2].start, FWord.new(0))
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let lineGapValue = scalarOr<FWord>(data, ranges[3].start, FWord.new(0))
     ranges[4].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[4].end = end
-    let advanceWidthMaxValue = scalarOr<UfWord>(data, ranges[4].start, UfWord.new(0))
     ranges[5].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[5].end = end
-    let minLeftSideBearingValue = scalarOr<FWord>(data, ranges[5].start, FWord.new(0))
     ranges[6].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[6].end = end
-    let minRightSideBearingValue = scalarOr<FWord>(data, ranges[6].start, FWord.new(0))
     ranges[7].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[7].end = end
-    let xMaxExtentValue = scalarOr<FWord>(data, ranges[7].start, FWord.new(0))
     ranges[8].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[8].end = end
-    let caretSlopeRiseValue = scalarOr<i16>(data, ranges[8].start, 0)
     ranges[9].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[9].end = end
-    let caretSlopeRunValue = scalarOr<i16>(data, ranges[9].start, 0)
     ranges[10].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[10].end = end
-    let caretOffsetValue = scalarOr<i16>(data, ranges[10].start, 0)
     ranges[11].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[11].end = end
-    let reserved1Value = scalarOr<i16>(data, ranges[11].start, 0)
     ranges[12].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[12].end = end
-    let reserved2Value = scalarOr<i16>(data, ranges[12].start, 0)
     ranges[13].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[13].end = end
-    let reserved3Value = scalarOr<i16>(data, ranges[13].start, 0)
     ranges[14].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[14].end = end
-    let reserved4Value = scalarOr<i16>(data, ranges[14].start, 0)
     ranges[15].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[15].end = end
-    let metricDataFormatValue = scalarOr<i16>(data, ranges[15].start, 0)
     ranges[16].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[16].end = end
-    let numberOfHMetricsValue = scalarOr<u32>(data, ranges[16].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -470,7 +398,7 @@ impl<'a> HheaExtended<'a> {
   pub fn version(self: &Self) -> MajorMinor {
     return match move FontData<'a>.readAt<MajorMinor>(&self._fontData, self._fieldRanges[0].start) {
       Result<MajorMinor, ReadError>.Success { value } => value
-      Result<MajorMinor, ReadError>.Failure { error } => MajorMinor.new(0, 0)
+      Result<MajorMinor, ReadError>.Failure { .. } => MajorMinor.new(0, 0)
     }
   }
 
@@ -481,7 +409,7 @@ impl<'a> HheaExtended<'a> {
   pub fn ascender(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[1].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -492,7 +420,7 @@ impl<'a> HheaExtended<'a> {
   pub fn descender(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[2].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -503,7 +431,7 @@ impl<'a> HheaExtended<'a> {
   pub fn lineGap(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[3].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -514,7 +442,7 @@ impl<'a> HheaExtended<'a> {
   pub fn advanceWidthMax(self: &Self) -> UfWord {
     return match move FontData<'a>.readAt<UfWord>(&self._fontData, self._fieldRanges[4].start) {
       Result<UfWord, ReadError>.Success { value } => value
-      Result<UfWord, ReadError>.Failure { error } => UfWord.new(0)
+      Result<UfWord, ReadError>.Failure { .. } => UfWord.new(0)
     }
   }
 
@@ -525,7 +453,7 @@ impl<'a> HheaExtended<'a> {
   pub fn minLeftSideBearing(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[5].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -536,7 +464,7 @@ impl<'a> HheaExtended<'a> {
   pub fn minRightSideBearing(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[6].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -547,7 +475,7 @@ impl<'a> HheaExtended<'a> {
   pub fn xMaxExtent(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[7].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -558,7 +486,7 @@ impl<'a> HheaExtended<'a> {
   pub fn caretSlopeRise(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[8].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -569,7 +497,7 @@ impl<'a> HheaExtended<'a> {
   pub fn caretSlopeRun(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[9].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -580,7 +508,7 @@ impl<'a> HheaExtended<'a> {
   pub fn caretOffset(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[10].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -607,7 +535,7 @@ impl<'a> HheaExtended<'a> {
   pub fn metricDataFormat(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[15].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -619,7 +547,7 @@ impl<'a> HheaExtended<'a> {
   pub fn numberOfHMetrics(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[16].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 

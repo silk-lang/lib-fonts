@@ -3,7 +3,7 @@
 import tables.trak { Trak, TrackData, TrackTableEntry }
 import tables.ankr { Ankr, AnchorPoint }
 import tables.feat { Feat, FeatureName, SettingNameArray, SettingName }
-import tables.ltag { Ltag, TagIndex, TagIndices }
+import tables.ltag { Ltag, TagIndices }
 import font_data { FontData }
 import read { ReadError }
 import array { ScalarArray, ComputedArray }

@@ -7,12 +7,12 @@ import font_types.lib { Scalar, FixedSize, fixedByteLen }
 import silk.core.result { Result }
 import silk.core.option { Option }
 import array { VarLenArray }
-import read { FontRead, VarSize, totalLenForCount }
+import read { VarSize, totalLenForCount }
 
 pub fn scalarOr<'a, T: Scalar>(data: FontData<'a>, position: usize, fallback: T) -> T {
   return match move FontData<'a>.readAt<T>(&data, position) {
     Result<T, ReadError>.Success { value } => move value
-    Result<T, ReadError>.Failure { error } => move fallback
+    Result<T, ReadError>.Failure { .. } => move fallback
   }
 }
 

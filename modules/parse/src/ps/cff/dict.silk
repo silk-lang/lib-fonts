@@ -8,7 +8,6 @@ import ps.hinting { Blues, StemSnaps }
 import ps.transform { ScaledFontMatrix }
 import ps.read { take, takeRead, require, Failed, catchError }
 import font_types.lib { Fixed }
-import silk.geometry.affine { Affine2 }
 import font_data { FontData, Cursor }
 import table_ref { ByteRange }
 import generated_support { signedCount }
@@ -414,7 +413,7 @@ impl<'a, 'c> Entries<'a, 'c> {
 
 fn failed<T>(result: Result<T, Error>) -> bool {
   return match move result {
-    Result<T, Error>.Failure { error } => true
+    Result<T, Error>.Failure { .. } => true
     _ => false
   }
 }

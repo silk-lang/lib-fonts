@@ -1,7 +1,5 @@
 //! Checked, table-relative reads. Invalid offsets yield an empty view.
 import read_fonts.lib { FontData, ReadError }
-import read_fonts.tables.layout { CoverageTable, ClassDef }
-import font_types.lib { GlyphId }
 import silk.core.ownership { Copy }
 import silk.core.option { Option }
 import silk.core.result { Result }

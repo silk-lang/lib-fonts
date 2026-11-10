@@ -24,7 +24,7 @@ impl MajorMinor {
 
   pub fn toBeBytes(self: &Self) -> [u8; 4] {
     let mut bytes: [u8; 4] = [0; 4]
-    let done = writeScalar<MajorMinor>(self.*, &mut bytes)
+    drop writeScalar<MajorMinor>(self.*, &mut bytes)
     return bytes
   }
 }
@@ -88,7 +88,7 @@ impl Version16Dot16 {
 
   pub fn toBeBytes(self: &Self) -> [u8; 4] {
     let mut bytes: [u8; 4] = [0; 4]
-    let done = writeScalar<u32>(self.value, &mut bytes)
+    drop writeScalar<u32>(self.value, &mut bytes)
     return bytes
   }
 }

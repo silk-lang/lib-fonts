@@ -12,46 +12,13 @@ import read_fonts.tables.stat {
   AxisValueRecord,
   AxisValueTableFlags
 }
-import read_fonts.lib {
-  FontData,
-  FontRead,
-  ReadError,
-  ScalarArray,
-  ComputedArray,
-  VarLenArray,
-  VarLenIter,
-  ReadArgs2,
-  ReadArgs3,
-  ArrayOfOffsets,
-  ArrayOfNullableOffsets
-}
-import font_types.lib {
-  Fixed,
-  F2Dot14,
-  FWord,
-  UfWord,
-  Tag,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
-  GlyphId16,
-  GlyphId24,
-  GlyphId,
-  NameId,
-  Nullable,
-  Offset16,
-  Offset24,
-  Offset32
-}
-import dump_support { DumpPath, DumpTable, scalar, absent, readError, versionBits, bytes }
+import read_fonts.lib { FontData, ReadError, ScalarArray, ComputedArray, ArrayOfOffsets }
+import font_types.lib { Fixed, Tag, NameId, Nullable, Offset16, Offset32 }
+import dump_support { DumpPath, DumpTable, scalar, absent, readError }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.io.writer { Writer, WriterError }
-import silk.num.u8
 import silk.num.u16
-import silk.num.u32
 import silk.num.u64
 
 pub effect fn dumpStat<'a>(path: &mut DumpPath, value: Stat<'a>) -> ()
@@ -178,7 +145,6 @@ pub effect fn dumpAxisRecord<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -215,7 +181,6 @@ pub effect fn dumpAxisValueArray<'a>(path: &mut DumpPath, value: AxisValueArray<
   ) {
     return
   }
-  let base = AxisValueArray<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "axisValueOffsets")
     let fieldValue = AxisValueArray<'a>.axisValueOffsets(&value)
@@ -265,7 +230,6 @@ pub effect fn dumpAxisValueArray<'a>(path: &mut DumpPath, value: AxisValueArray<
 pub effect fn dumpAxisValue<'a>(path: &mut DumpPath, value: AxisValue<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -310,7 +274,6 @@ pub effect fn dumpAxisValueFormat1<'a>(path: &mut DumpPath, value: AxisValueForm
   ) {
     return
   }
-  let base = AxisValueFormat1<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = AxisValueFormat1<'a>.format(&value)
@@ -355,7 +318,6 @@ pub effect fn dumpAxisValueFormat2<'a>(path: &mut DumpPath, value: AxisValueForm
   ) {
     return
   }
-  let base = AxisValueFormat2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = AxisValueFormat2<'a>.format(&value)
@@ -412,7 +374,6 @@ pub effect fn dumpAxisValueFormat3<'a>(path: &mut DumpPath, value: AxisValueForm
   ) {
     return
   }
-  let base = AxisValueFormat3<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = AxisValueFormat3<'a>.format(&value)
@@ -520,7 +481,6 @@ pub effect fn dumpAxisValueRecord<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return

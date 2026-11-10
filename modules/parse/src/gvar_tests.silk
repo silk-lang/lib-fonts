@@ -17,7 +17,6 @@ import tables.variations {
   TupleVariationIter,
   TupleDeltaIter,
   ActiveTupleVariationIter,
-  ActiveTupleVariation,
   TupleVariationCount
 }
 import generated_variation_fixtures as Fixtures
@@ -262,7 +261,7 @@ test effect fn vazirmatnVarGrave() -> ()
   run Testing.expect(none(TupleVariationIter<'static, GlyphDelta>.next(&mut tuples)), "two tuples")
   let mut deltas = TupleVariation<'static, GlyphDelta>.deltas(&first)
   let mut count: usize = 0
-  while let Option<GlyphDelta>.Some { value } = move TupleDeltaIter<'static, GlyphDelta>.next(
+  while let Option<GlyphDelta>.Some { .. } = move TupleDeltaIter<'static, GlyphDelta>.next(
     &mut deltas,
   ) {
     count = count + 1
@@ -314,7 +313,7 @@ fn none<T>(value: Option<T>) -> bool {
 
 fn failed<T>(value: Result<T, ReadError>) -> bool {
   return match move value {
-    Result<T, ReadError>.Failure { error } => true
+    Result<T, ReadError>.Failure { .. } => true
     _ => false
   }
 }
@@ -336,7 +335,6 @@ import font_types.lib { GlyphId16 }
 import silk.geometry.vector { Vector2 }
 import silk.collections.slice { Slice }
 import silk.num.i32
-import silk.text.string { String }
 
 test effect fn accumulateDense() -> ()
   ! AssertionError<'static> {

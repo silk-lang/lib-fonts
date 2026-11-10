@@ -46,7 +46,7 @@ impl<'a, T> ScalarArray<'a, T> {
     }
     return match move FontData<'a>.readAt<T>(&self.data, index * rawByteLen<T>()) {
       Result<T, ReadError>.Success { value } => Option<T>.some(move value)
-      Result<T, ReadError>.Failure { error } => Option<T>.None
+      Result<T, ReadError>.Failure { .. } => Option<T>.None
     }
   }
 

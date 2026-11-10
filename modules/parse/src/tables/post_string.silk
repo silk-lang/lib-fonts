@@ -58,7 +58,7 @@ impl<'a> VarSize for PString<'a> {
   fn readLenAt<'b>(data: FontData<'b>, position: usize) -> Option<usize> {
     return match move FontData<'b>.readAt<u8>(&data, position) {
       Result<u8, ReadError>.Success { value } => Option<usize>.some(u8.toUsize(value) + 1)
-      Result<u8, ReadError>.Failure { error } => Option<usize>.None
+      Result<u8, ReadError>.Failure { .. } => Option<usize>.None
     }
   }
 }

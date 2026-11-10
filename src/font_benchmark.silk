@@ -26,39 +26,88 @@ import font_harness_corpus as Corpus
 import font_harness_dump as Dump
 
 type Errors = TaskError | FileError | HostInputError | OutOfMemoryError | WriterError | ProcessError
+
 @foreign(noCapture: .("from", "to"))
 unsafe extern "C" fn rename(from: ?[*]const u8, to: ?[*]const u8) -> i32
-extern "C" struct Tm { second: i32, minute: i32, hour: i32, day: i32, month: i32, year: i32, weekday: i32, yearday: i32, dst: i32, offset: i64, zone: ?*const u8 }
-unsafe extern "C" fn gmtime_r(time: *const i64, result: *mut Tm) -> ?*mut Tm
-unsafe extern "C" fn strftime(output: ?[*]mut u8, length: usize, format: ?[*]const u8, time: *const Tm) -> usize
 
-pub effect fn float(output: &mut Bytes, value: f64) -> () ! OutOfMemoryError ? &mut Allocator {
+extern "C" struct Tm {
+  second: i32,
+  minute: i32,
+  hour: i32,
+  day: i32,
+  month: i32,
+  year: i32,
+  weekday: i32,
+  yearday: i32,
+  dst: i32,
+  offset: i64,
+  zone: ?*const u8
+}
+
+unsafe extern "C" fn gmtime_r(time: *const i64, result: *mut Tm) -> ?*mut Tm
+
+unsafe extern "C" fn strftime(
+  output: ?[*]mut u8,
+  length: usize,
+  format: ?[*]const u8,
+  time: *const Tm,
+) -> usize
+
+pub effect fn float(output: &mut Bytes, value: f64) -> ()
+  ! OutOfMemoryError
+  ? &mut Allocator {
   let mut buffer: [u8; 25] = [0; 25]
   let count = Format.writeF64Debug(value, &mut buffer, 0)
   run output.append(Slice.view<u8>(&buffer, 0, count))
 }
 
-effect fn timestamp() -> String ! TaskError | OutOfMemoryError ? &mut Allocator {
+effect fn timestamp() -> String
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
   let mut clock = OsSystemClock.make()
   let now = run SystemClock.now() |> Effect.provideMut<SystemClock>(&mut clock)
   let seconds = SystemClock.seconds(&now)
-  let mut tm = Tm { second: 0, minute: 0, hour: 0, day: 0, month: 0, year: 0, weekday: 0, yearday: 0, dst: 0, offset: 0, zone: Pointer.null<u8>() }
-  if Pointer.isNull(unsafe gmtime_r(Pointer.fromRef(&seconds), Pointer.fromMutRef(&mut tm))) { run Task.abort("cannot format benchmark timestamp") }
+  let mut tm = Tm {
+    second: 0,
+    minute: 0,
+    hour: 0,
+    day: 0,
+    month: 0,
+    year: 0,
+    weekday: 0,
+    yearday: 0,
+    dst: 0,
+    offset: 0,
+    zone: Pointer.null<u8>(),
+  }
+  if Pointer.isNull(unsafe gmtime_r(Pointer.fromRef(&seconds), Pointer.fromMutRef(&mut tm))) {
+    run Task.abort("cannot format benchmark timestamp")
+  }
   let mut buffer: [u8; 32] = [0; 32]
-  let count = unsafe strftime(Pointer.fromMutSlice(&mut buffer), 32, Pointer.fromSlice(b"%Y-%m-%dT%H:%M:%S\x00"), Pointer.fromRef(&tm))
+  let count = unsafe strftime(
+    Pointer.fromMutSlice(&mut buffer),
+    32,
+    Pointer.fromSlice(b"%Y-%m-%dT%H:%M:%S\x00"),
+    Pointer.fromRef(&tm),
+  )
   let mut result = run Bytes.copy(Slice.view<u8>(&buffer, 0, count))
   run result.append(b".")
   let mut fraction = SystemClock.nanoseconds(&now) / 1000
   let mut digits: [u8; 6] = [48; 6]
   let mut at: usize = 6
-  while at > 0 { at = at - 1  digits[at] = i64.toU8(fraction % 10) + 48  fraction = fraction / 10 }
+  while at > 0 {
+    at = at - 1
+    digits[at] = i64.toU8(fraction % 10) + 48
+    fraction = fraction / 10
+  }
   run result.append(&digits)
   run result.append(b"+00:00")
   return unsafe String.fromBytesUnchecked(move result)
 }
 
 pub effect fn atomicSave(report: string, bytes: &[u8]) -> ()
-  ! TaskError | FileError | HostInputError | OutOfMemoryError ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  ! TaskError | FileError | HostInputError | OutOfMemoryError
+  ? &mut HostInput | &mut Allocator | &mut FileSystem {
   let destination = run Corpus.resolve(report)
   let mut temp = run Bytes.copy(Path.rawBytes(&destination))
   run temp.append(b".tmp")
@@ -67,12 +116,22 @@ pub effect fn atomicSave(report: string, bytes: &[u8]) -> ()
   run temp.append(b"\x00")
   let mut final = run Bytes.copy(Path.rawBytes(&destination))
   run final.append(b"\x00")
-  if unsafe rename(Pointer.fromSlice(temp.asSlice()), Pointer.fromSlice(final.asSlice())) != 0 { run Task.abort("cannot publish benchmark report") }
+  if unsafe rename(Pointer.fromSlice(temp.asSlice()), Pointer.fromSlice(final.asSlice())) != 0 {
+    run Task.abort("cannot publish benchmark report")
+  }
 }
 
-struct Report { name: String, base: Bytes, warmup: Bytes, rounds: Bytes }
+struct Report {
+  name: String,
+  base: Bytes,
+  warmup: Bytes,
+  rounds: Bytes
+}
+
 impl Report {
-  effect fn save(self: &Self, tail: &[u8]) -> () ! TaskError | FileError | HostInputError | OutOfMemoryError ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  effect fn save(self: &Self, tail: &[u8]) -> ()
+    ! TaskError | FileError | HostInputError | OutOfMemoryError
+    ? &mut HostInput | &mut Allocator | &mut FileSystem {
     let mut bytes = run Bytes.copy(self.base.asSlice())
     run bytes.append(b",\"warmup\":{")
     run bytes.append(self.warmup.asSlice())
@@ -85,19 +144,33 @@ impl Report {
   }
 }
 
-struct Measurement { seconds: f64, json: Bytes }
+struct Measurement {
+  seconds: f64,
+  json: Bytes
+}
 
-effect fn measure(name: string, binary: string, fonts: &[String], timeout: f64, report: &Report) -> Measurement
-  ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+effect fn measure(
+  name: string,
+  binary: string,
+  fonts: &[String],
+  timeout: f64,
+  report: &Report,
+) -> Measurement
+  ! Errors
+  ? &mut HostInput | &mut Allocator | &mut FileSystem {
   let root = run Task.root()
   let mut samples = run Bytes.copy(b"[")
   let start = run Process.now()
   let mut at: usize = 0
   while at < fonts.length {
     let before = run Process.now()
-    let result = run Effect.result(Process.execute(binary, &[String.view(&fonts[at])], timeout, true))
+    let result = run Effect.result(
+      Process.execute(binary, &[String.view(&fonts[at])], timeout, true),
+    )
     match move result {
-      Result<Process.RunResult, TaskError | FileError | HostInputError | OutOfMemoryError>.Failure { error } => {
+      Result<Process.RunResult, TaskError | FileError | HostInputError | OutOfMemoryError>.Failure {
+        error
+      } => {
         let mut failure = run Bytes.copy(b",\"failure\":{\"program\":")
         run Corpus.quote(&mut failure, name)
         run failure.append(b",\"font\":")
@@ -106,15 +179,18 @@ effect fn measure(name: string, binary: string, fonts: &[String], timeout: f64, 
         run report.save(failure.asSlice())
         fail move error
       }
-      Result<Process.RunResult, TaskError | FileError | HostInputError | OutOfMemoryError>.Success { value } => {
+      Result<Process.RunResult, TaskError | FileError | HostInputError | OutOfMemoryError>.Success {
+        value
+      } => {
         let mut result = move value
         if result.timedOut || result.code != 0 {
           let mut failure = run Bytes.copy(b",\"failure\":{\"program\":")
           run Corpus.quote(&mut failure, name)
           run failure.append(b",\"font\":")
           run Corpus.quote(&mut failure, Corpus.display(&root, &fonts[at]))
-          if result.timedOut { run failure.append(b",\"error\":\"subprocess timed out\"}") }
-          else {
+          if result.timedOut {
+            run failure.append(b",\"error\":\"subprocess timed out\"}")
+          } else {
             run failure.append(b",\"returncode\":")
             let mut number: [u8; 20] = [0; 20]
             let length = Format.writeI64Display(i32.toI64(result.code), &mut number, 0)
@@ -130,7 +206,9 @@ effect fn measure(name: string, binary: string, fonts: &[String], timeout: f64, 
         }
       }
     }
-    if at > 0 { run samples.append(b",") }
+    if at > 0 {
+      run samples.append(b",")
+    }
     run float(&mut samples, (run Process.now()) - before)
     at = at + 1
   }
@@ -144,11 +222,22 @@ effect fn measure(name: string, binary: string, fonts: &[String], timeout: f64, 
   return Measurement { seconds: seconds, json: move json }
 }
 
-
-pub effect fn benchmark(fonts: string, reference: string, silk: string, rounds: usize, timeout: f64, report: string) -> ()
-  ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem | &mut ChildProcess {
-  if rounds < 1 || timeout <= 0.0 { run Task.abort("rounds and timeout must be positive") }
-  if report == "" { run Task.abort("--report is required") }
+pub effect fn benchmark(
+  fonts: string,
+  reference: string,
+  silk: string,
+  rounds: usize,
+  timeout: f64,
+  report: string,
+) -> ()
+  ! Errors
+  ? &mut HostInput | &mut Allocator | &mut FileSystem | &mut ChildProcess {
+  if rounds < 1 || timeout <= 0.0 {
+    run Task.abort("rounds and timeout must be positive")
+  }
+  if report == "" {
+    run Task.abort("--report is required")
+  }
   let corpus = run Corpus.load(fonts)
   let root = run Task.root()
   let paths = corpus.fonts.asSlice()
@@ -159,7 +248,10 @@ pub effect fn benchmark(fonts: string, reference: string, silk: string, rounds: 
     let path = run Path.make(String.view(&paths[at]))
     let data = run FileSystem.readFile(&path)
     let hash = run Dump.sha(data.asSlice())
-    if at > 0 { run files.append(b",")  run canonical.append(b", ") }
+    if at > 0 {
+      run files.append(b",")
+      run canonical.append(b", ")
+    }
     run files.append(b"{\"path\":")
     run Corpus.quote(&mut files, Corpus.display(&root, &paths[at]))
     run files.append(b",\"bytes\":")
@@ -167,6 +259,7 @@ pub effect fn benchmark(fonts: string, reference: string, silk: string, rounds: 
     run files.append(b",\"sha256\":")
     run Corpus.quote(&mut files, String.view(&hash))
     run files.append(b"}")
+
     // Match json.dumps(files, sort_keys=True), including its separators.
     run canonical.append(b"{\"bytes\": ")
     run Corpus.appendNumber(&mut canonical, data.length())
@@ -193,13 +286,22 @@ pub effect fn benchmark(fonts: string, reference: string, silk: string, rounds: 
       if String.startsWith(value, "model name") {
         let mut parts = String.split(value, ":")
         let _key = parts.next()
-        if let Option<string>.Some { value: remaining } = move parts.remainder() { cpu = run Corpus.utf8(Process.trim(String.utf8Bytes(remaining))) }
+        if let Option<string>.Some { value: remaining } = move parts.remainder() {
+          cpu = run Corpus.utf8(Process.trim(String.utf8Bytes(remaining)))
+        }
         break
       }
     }
   }
   let started = run timestamp()
-  let mut state = Report { name: run String.copy(report), base: run Bytes.copy(b"{\"method\":\"one subprocess per font; stdout=/dev/null; serial wall time; one whole-corpus warmup per binary; alternating program order by timed round\",\"platform\":"), warmup: Bytes.make(), rounds: Bytes.make() }
+  let mut state = Report {
+    name: run String.copy(report),
+    base: run Bytes.copy(
+      b"{\"method\":\"one subprocess per font; stdout=/dev/null; serial wall time; one whole-corpus warmup per binary; alternating program order by timed round\",\"platform\":",
+    ),
+    warmup: Bytes.make(),
+    rounds: Bytes.make(),
+  }
   run Corpus.quote(&mut state.base, String.view(&platformText))
   run state.base.append(b",\"processor\":")
   run Corpus.quote(&mut state.base, String.view(&processorText))
@@ -218,7 +320,9 @@ pub effect fn benchmark(fonts: string, reference: string, silk: string, rounds: 
   let names = ["rust", "silk"]
   at = 0
   while at < 2 {
-    if at > 0 { run state.base.append(b",") }
+    if at > 0 {
+      run state.base.append(b",")
+    }
     run Corpus.quote(&mut state.base, names[at])
     run state.base.append(b":{\"path\":")
     let path = run Corpus.absolute(binaries[at])
@@ -239,12 +343,18 @@ pub effect fn benchmark(fonts: string, reference: string, silk: string, rounds: 
   at = 0
   while at < 2 {
     let measurement = run measure(names[at], binaries[at], paths, timeout, &state)
-    if at > 0 { run state.warmup.append(b",") }
+    if at > 0 {
+      run state.warmup.append(b",")
+    }
     run Corpus.quote(&mut state.warmup, names[at])
     run state.warmup.append(b":")
     run state.warmup.append(measurement.json.asSlice())
     run state.save(b"")
-    run Format.format("warmup {name}: {seconds:.3}s\n", &.{ name: names[at], seconds: measurement.seconds }) |> Effect.provideMut<Writer>(&mut writer)
+    run Format.format(
+      "warmup {name}: {seconds:.3}s\n",
+      &.{ name: names[at], seconds: measurement.seconds },
+    )
+      |> Effect.provideMut<Writer>(&mut writer)
     at = at + 1
   }
   let mut rustTimes = List<f64>.make()
@@ -254,10 +364,20 @@ pub effect fn benchmark(fonts: string, reference: string, silk: string, rounds: 
     let first = at % 2
     let second = 1 - first
     let a = run measure(names[first], binaries[first], paths, timeout, &state)
-    run Format.format("round {round} {name}: {seconds:.3}s\n", &.{ round: at + 1, name: names[first], seconds: a.seconds }) |> Effect.provideMut<Writer>(&mut writer)
+    run Format.format(
+      "round {round} {name}: {seconds:.3}s\n",
+      &.{ round: at + 1, name: names[first], seconds: a.seconds },
+    )
+      |> Effect.provideMut<Writer>(&mut writer)
     let b = run measure(names[second], binaries[second], paths, timeout, &state)
-    run Format.format("round {round} {name}: {seconds:.3}s\n", &.{ round: at + 1, name: names[second], seconds: b.seconds }) |> Effect.provideMut<Writer>(&mut writer)
-    if at > 0 { run state.rounds.append(b",") }
+    run Format.format(
+      "round {round} {name}: {seconds:.3}s\n",
+      &.{ round: at + 1, name: names[second], seconds: b.seconds },
+    )
+      |> Effect.provideMut<Writer>(&mut writer)
+    if at > 0 {
+      run state.rounds.append(b",")
+    }
     run state.rounds.append(b"{\"order\":[")
     run Corpus.quote(&mut state.rounds, names[first])
     run state.rounds.append(b",")
@@ -271,8 +391,20 @@ pub effect fn benchmark(fonts: string, reference: string, silk: string, rounds: 
     run state.rounds.append(b":")
     run state.rounds.append(b.json.asSlice())
     run state.rounds.append(b"}")
-    run rustTimes.append(if first == 0 { a.seconds } else { b.seconds })
-    run silkTimes.append(if first == 1 { a.seconds } else { b.seconds })
+    run rustTimes.append(
+      if first == 0 {
+        a.seconds
+      } else {
+        b.seconds
+      },
+    )
+    run silkTimes.append(
+      if first == 1 {
+        a.seconds
+      } else {
+        b.seconds
+      },
+    )
     run state.save(b"")
     at = at + 1
   }
@@ -300,6 +432,8 @@ pub effect fn benchmark(fonts: string, reference: string, silk: string, rounds: 
 
 fn median(values: &[f64]) -> f64 {
   let middle = values.length / 2
-  if values.length % 2 == 1 { return values[middle] }
+  if values.length % 2 == 1 {
+    return values[middle]
+  }
   return (values[middle - 1] + values[middle]) / 2.0
 }

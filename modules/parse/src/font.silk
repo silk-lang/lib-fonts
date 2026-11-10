@@ -154,7 +154,7 @@ impl<'a> TTCHeader<'a> {
     )
     return match move FontData<'a>.readAt<u32>(&self.bytes, usize.saturatingAdd(start, field)) {
       Result<u32, ReadError>.Success { value } => Option<u32>.some(value)
-      Result<u32, ReadError>.Failure { error } => Option<u32>.None
+      Result<u32, ReadError>.Failure { .. } => Option<u32>.None
     }
   }
 
@@ -387,7 +387,7 @@ impl<'a> FileRef<'a> {
 
   pub fn len(self: &Self) -> u32 {
     return match &self.* {
-      FileRef.Font { font } => 1
+      FileRef.Font { .. } => 1
       FileRef.Collection { collection } => CollectionRef.len(&collection)
     }
   }
@@ -439,7 +439,7 @@ impl<'a> FontRef<'a> {
   pub fn fonts(data: &'a [u8]) -> FontIter<'a> {
     return match move FileRef<'a>.new(data) {
       Result<FileRef<'a>, ReadError>.Success { value } => FileRef.fonts(&value)
-      Result<FileRef<'a>, ReadError>.Failure { error } => FontIter {
+      Result<FileRef<'a>, ReadError>.Failure { .. } => FontIter {
         file: Option<FileRef<'a>>.None,
         index: 0,
         count: 0,

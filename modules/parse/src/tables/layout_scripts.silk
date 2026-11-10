@@ -38,7 +38,7 @@ impl<'a> ScriptList<'a> {
       let mid = lo + (hi - lo) / 2
       let record = match move ComputedArray<'a, (), ScriptRecord<'a>>.get(&records, mid) {
         Result<ScriptRecord<'a>, ReadError>.Success { value } => value
-        Result<ScriptRecord<'a>, ReadError>.Failure { error } => {
+        Result<ScriptRecord<'a>, ReadError>.Failure { .. } => {
           return Option<u16>.None
         }
       }
@@ -53,7 +53,7 @@ impl<'a> ScriptList<'a> {
     }
     let record = match move ComputedArray<'a, (), ScriptRecord<'a>>.get(&records, lo - 1) {
       Result<ScriptRecord<'a>, ReadError>.Success { value } => value
-      Result<ScriptRecord<'a>, ReadError>.Failure { error } => {
+      Result<ScriptRecord<'a>, ReadError>.Failure { .. } => {
         return Option<u16>.None
       }
     }
@@ -69,7 +69,7 @@ impl<'a> ScriptList<'a> {
       u16.toUsize(index),
     ) {
       Result<ScriptRecord<'a>, ReadError>.Success { value } => value
-      Result<ScriptRecord<'a>, ReadError>.Failure { error } => {
+      Result<ScriptRecord<'a>, ReadError>.Failure { .. } => {
         return Result<TaggedElement<Script<'a>>, ReadError>.failResult(ReadError.OutOfBounds)
       }
     }
@@ -95,7 +95,7 @@ impl<'a> Script<'a> {
       let mid = lo + (hi - lo) / 2
       let record = match move ComputedArray<'a, (), LangSysRecord<'a>>.get(&records, mid) {
         Result<LangSysRecord<'a>, ReadError>.Success { value } => value
-        Result<LangSysRecord<'a>, ReadError>.Failure { error } => {
+        Result<LangSysRecord<'a>, ReadError>.Failure { .. } => {
           return Option<u16>.None
         }
       }
@@ -110,7 +110,7 @@ impl<'a> Script<'a> {
     }
     let record = match move ComputedArray<'a, (), LangSysRecord<'a>>.get(&records, lo - 1) {
       Result<LangSysRecord<'a>, ReadError>.Success { value } => value
-      Result<LangSysRecord<'a>, ReadError>.Failure { error } => {
+      Result<LangSysRecord<'a>, ReadError>.Failure { .. } => {
         return Option<u16>.None
       }
     }
@@ -126,7 +126,7 @@ impl<'a> Script<'a> {
       u16.toUsize(index),
     ) {
       Result<LangSysRecord<'a>, ReadError>.Success { value } => value
-      Result<LangSysRecord<'a>, ReadError>.Failure { error } => {
+      Result<LangSysRecord<'a>, ReadError>.Failure { .. } => {
         return Result<TaggedElement<LangSys<'a>>, ReadError>.failResult(ReadError.OutOfBounds)
       }
     }
@@ -179,7 +179,7 @@ impl<'a> FeatureList<'a> {
       u16.toUsize(index),
     ) {
       Result<FeatureRecord<'a>, ReadError>.Success { value } => value
-      Result<FeatureRecord<'a>, ReadError>.Failure { error } => {
+      Result<FeatureRecord<'a>, ReadError>.Failure { .. } => {
         return Result<TaggedElement<Feature<'a>>, ReadError>.failResult(ReadError.OutOfBounds)
       }
     }

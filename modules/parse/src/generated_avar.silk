@@ -2,56 +2,19 @@
 // Source: pinned resources/codegen_inputs; generator: modules/parse/tools/font-codegen-silk.
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 import font_data { FontData }
-import read { ReadError, FontRead, FontReadAt, ComputeSize, Format, computeSize, readAtWithArgs }
+import read { ReadError, FontRead, FontReadAt, ComputeSize, computeSize }
 import table_provider { TopLevelTable }
-import array { ScalarArray, ComputedArray, VarLenArray }
-import offset { resolve, resolveWithArgs, resolveNullableWithArgs }
-import offset_array { ArrayOfOffsets, ArrayOfNullableOffsets }
-import read_args { ReadArgs2, ReadArgs3 }
+import array { ComputedArray, VarLenArray }
+import offset { resolveNullableWithArgs }
 import table_ref { ByteRange, MinByteRange }
-import generated_support { scalarOr, recordArray, varLenArray, varLenBytes, signedCount }
-import font_types.lib {
-  Scalar,
-  FixedSize,
-  rawByteLen,
-  readScalar,
-  writeScalar,
-  Tag,
-  Fixed,
-  F2Dot14,
-  F4Dot12,
-  F6Dot10,
-  FWord,
-  UfWord,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
-  GlyphId,
-  GlyphId16,
-  GlyphId24,
-  NameId,
-  Offset16,
-  Offset24,
-  Offset32,
-  Nullable
-}
+import generated_support { scalarOr, recordArray, varLenArray, varLenBytes }
+import font_types.lib { FixedSize, rawByteLen, Tag, Fixed, F2Dot14, MajorMinor, Offset32, Nullable }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.core.ownership { Copy }
-import silk.core.equal { Equal }
-import silk.core.order { Order, Ordering }
-import silk.text.format { Debug, Formatter }
-import silk.io.writer { Writer, WriterError }
-import silk.core.ops { BitAnd, BitOr, BitXor, Not, Subtract }
 import silk.num.usize
 import silk.num.u8
 import silk.num.u16
-import silk.num.u32
-import silk.num.u64
-import silk.num.i16
-import silk.num.i32
 import generated_variations { DeltaSetIndexMap, ItemVariationStore }
 
 /// The [avar (Axis Variations)](https://docs.microsoft.com/en-us/typography/opentype/spec/avar) table
@@ -87,7 +50,6 @@ impl<'a> Avar<'a> {
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let reservedValue = scalarOr<u16>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
@@ -103,21 +65,11 @@ impl<'a> Avar<'a> {
       end = usize.saturatingAdd(end, 4)
     }
     ranges[4].end = end
-    let axisIndexMapOffsetValue = scalarOr<Nullable<Offset32>>(
-      data,
-      ranges[4].start,
-      Nullable<Offset32>.default(),
-    )
     ranges[5].start = end
     if MajorMinor.compatible(&versionValue, MajorMinor.new(2, 0)) {
       end = usize.saturatingAdd(end, 4)
     }
     ranges[5].end = end
-    let varStoreOffsetValue = scalarOr<Nullable<Offset32>>(
-      data,
-      ranges[5].start,
-      Nullable<Offset32>.default(),
-    )
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -134,7 +86,7 @@ impl<'a> Avar<'a> {
   pub fn version(self: &Self) -> MajorMinor {
     return match move FontData<'a>.readAt<MajorMinor>(&self._fontData, self._fieldRanges[0].start) {
       Result<MajorMinor, ReadError>.Success { value } => value
-      Result<MajorMinor, ReadError>.Failure { error } => MajorMinor.new(0, 0)
+      Result<MajorMinor, ReadError>.Failure { .. } => MajorMinor.new(0, 0)
     }
   }
 
@@ -150,7 +102,7 @@ impl<'a> Avar<'a> {
   pub fn axisCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[2].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -166,7 +118,7 @@ impl<'a> Avar<'a> {
       FontData.len(&self._fontData),
     ) {
       Result<VarLenArray<'a, SegmentMaps<'a>>, ReadError>.Success { value } => value
-      Result<VarLenArray<'a, SegmentMaps<'a>>, ReadError>.Failure { error } => VarLenArray<
+      Result<VarLenArray<'a, SegmentMaps<'a>>, ReadError>.Failure { .. } => VarLenArray<
         'a,
         SegmentMaps<'a>
       >.empty()
@@ -189,7 +141,7 @@ impl<'a> Avar<'a> {
       Result<Nullable<Offset32>, ReadError>.Success { value } => Option<Nullable<Offset32>>.some(
         value,
       )
-      Result<Nullable<Offset32>, ReadError>.Failure { error } => Option<Nullable<Offset32>>.None
+      Result<Nullable<Offset32>, ReadError>.Failure { .. } => Option<Nullable<Offset32>>.None
     }
   }
 
@@ -219,7 +171,7 @@ impl<'a> Avar<'a> {
       Result<Nullable<Offset32>, ReadError>.Success { value } => Option<Nullable<Offset32>>.some(
         value,
       )
-      Result<Nullable<Offset32>, ReadError>.Failure { error } => Option<Nullable<Offset32>>.None
+      Result<Nullable<Offset32>, ReadError>.Failure { .. } => Option<Nullable<Offset32>>.None
     }
   }
 
@@ -301,7 +253,7 @@ impl<'a> SegmentMaps<'a> {
   pub fn positionMapCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -313,7 +265,7 @@ impl<'a> SegmentMaps<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ComputedArray<'a, (), AxisValueMap<'a>>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, (), AxisValueMap<'a>>, ReadError>.Failure { error } => ComputedArray<
+      Result<ComputedArray<'a, (), AxisValueMap<'a>>, ReadError>.Failure { .. } => ComputedArray<
         'a,
         (),
         AxisValueMap<'a>
@@ -382,7 +334,7 @@ impl<'a> AxisValueMap<'a> {
   pub fn fromCoordinate(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, (self.position + 0)) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -390,7 +342,7 @@ impl<'a> AxisValueMap<'a> {
   pub fn toCoordinate(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, (self.position + 2)) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 }

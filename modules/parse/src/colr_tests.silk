@@ -1,6 +1,6 @@
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 import lib { FontData, ReadError }
-import tables.colr { Colr, Paint, PaintGlyph2, PaintSolid, PaintWithId, ColorLayer }
+import tables.colr { Colr, Paint, PaintGlyph2, PaintSolid }
 import font_types.lib { GlyphId, GlyphId16, GlyphId24, Offset24, F2Dot14 }
 import test_font_builder as Builder
 import silk.core.option { Option }
@@ -40,7 +40,7 @@ fn none<T>(option: Option<T>) -> bool {
 
 fn failed<T>(result: Result<T, ReadError>) -> bool {
   return match move result {
-    Result<T, ReadError>.Failure { error } => true
+    Result<T, ReadError>.Failure { .. } => true
     _ => false
   }
 }

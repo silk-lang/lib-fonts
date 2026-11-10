@@ -11,7 +11,6 @@ import silk.num.numeric { Zero, One }
 import silk.num.i16
 import silk.num.i32
 import silk.num.i64
-import silk.num.u32
 import silk.num.u64
 import silk.num.f32
 import silk.num.f64

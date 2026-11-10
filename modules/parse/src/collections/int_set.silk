@@ -412,7 +412,7 @@ impl<T> IntSet<T> {
       Bound<T>.Included { value: last },
     )
     return match move IntSetIter<T>.next(&mut it) {
-      Option<T>.Some { value } => true
+      Option<T>.Some { .. } => true
       _ => false
     }
   }
@@ -528,13 +528,13 @@ impl<T> IntSet<T> {
       }
       if av.last < bv.last {
         return match move IntSetRangeIter<T>.nextRaw(&mut a) {
-          Option<U32Range>.Some { value } => Ordering.Greater
+          Option<U32Range>.Some { .. } => Ordering.Greater
           _ => Ordering.Less
         }
       }
       if av.last > bv.last {
         return match move IntSetRangeIter<T>.nextRaw(&mut b) {
-          Option<U32Range>.Some { value } => Ordering.Less
+          Option<U32Range>.Some { .. } => Ordering.Less
           _ => Ordering.Greater
         }
       }

@@ -3,12 +3,11 @@ import generated_unicode as Data
 import unicode
 import view { View }
 import read_fonts.lib { FontData }
-import font { ConfiguredShaper, FontFuncs, ShaperData, Shaper, Metrics, metrics }
+import font { ConfiguredShaper, FontFuncs, Metrics, metrics }
 import font_types.lib { GlyphId }
 import direction { Direction }
 import scale { add, sub, clamp }
 import silk.num.i32
-import silk.num.i64
 import silk.num.usize
 import silk.mem.allocator { Allocator, OutOfMemoryError }
 import feature { Feature }

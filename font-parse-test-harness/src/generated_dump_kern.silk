@@ -10,47 +10,14 @@ import read_fonts.tables.kern {
   Subtable2ClassTable,
   Subtable3
 }
-import read_fonts.lib {
-  FontData,
-  FontRead,
-  ReadError,
-  ScalarArray,
-  ComputedArray,
-  VarLenArray,
-  VarLenIter,
-  ReadArgs2,
-  ReadArgs3,
-  ArrayOfOffsets,
-  ArrayOfNullableOffsets
-}
-import font_types.lib {
-  Fixed,
-  F2Dot14,
-  FWord,
-  UfWord,
-  Tag,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
-  GlyphId16,
-  GlyphId24,
-  GlyphId,
-  NameId,
-  Nullable,
-  Offset16,
-  Offset24,
-  Offset32
-}
-import dump_support { DumpPath, DumpTable, scalar, absent, readError, versionBits, bytes }
+import read_fonts.lib { FontData, ReadError, ScalarArray, ComputedArray }
+import font_types.lib { GlyphId16 }
+import dump_support { DumpPath, scalar, readError }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.io.writer { Writer, WriterError }
 import silk.num.u8
 import silk.num.u16
-import silk.num.u32
-import silk.num.u64
 import generated_dump_kerx { dumpSubtable0Pair }
 
 pub effect fn dumpOtKern<'a>(path: &mut DumpPath, value: OtKern<'a>) -> ()
@@ -65,7 +32,6 @@ pub effect fn dumpOtKern<'a>(path: &mut DumpPath, value: OtKern<'a>) -> ()
   ) {
     return
   }
-  let base = OtKern<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "version")
     let fieldValue = OtKern<'a>.version(&value)
@@ -109,7 +75,6 @@ pub effect fn dumpAatKern<'a>(path: &mut DumpPath, value: AatKern<'a>) -> ()
   ) {
     return
   }
-  let base = AatKern<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "version")
     let fieldValue = AatKern<'a>.version(&value)
@@ -158,7 +123,6 @@ pub effect fn dumpOtSubtable<'a>(path: &mut DumpPath, value: OtSubtable<'a>) -> 
   ) {
     return
   }
-  let base = OtSubtable<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "version")
     let fieldValue = OtSubtable<'a>.version(&value)
@@ -208,7 +172,6 @@ pub effect fn dumpAatSubtable<'a>(path: &mut DumpPath, value: AatSubtable<'a>) -
   ) {
     return
   }
-  let base = AatSubtable<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "length")
     let fieldValue = AatSubtable<'a>.length(&value)
@@ -320,7 +283,6 @@ pub effect fn dumpSubtable2ClassTable<'a>(path: &mut DumpPath, value: Subtable2C
   ) {
     return
   }
-  let base = Subtable2ClassTable<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "firstGlyph")
     let fieldValue = Subtable2ClassTable<'a>.firstGlyph(&value)
@@ -364,7 +326,6 @@ pub effect fn dumpSubtable3<'a>(path: &mut DumpPath, value: Subtable3<'a>) -> ()
   ) {
     return
   }
-  let base = Subtable3<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "glyphCount")
     let fieldValue = Subtable3<'a>.glyphCount(&value)

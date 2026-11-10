@@ -1,6 +1,6 @@
 //! Indic base selection, masks, and initial/final reordering.
 import buffer { Buffer, Glyph, reverseRange }
-import font { ConfiguredShaper, FontFuncs, Shaper, ShaperData }
+import font { ConfiguredShaper, FontFuncs }
 import plan { OtPlan }
 import complex { consonant, moveGlyph, dotted }
 import syllable

@@ -2,56 +2,20 @@
 // Source: pinned resources/codegen_inputs; generator: modules/parse/tools/font-codegen-silk.
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 import font_data { FontData }
-import read { ReadError, FontRead, FontReadAt, ComputeSize, Format, computeSize, readAtWithArgs }
+import read { ReadError, FontRead, FontReadAt, ComputeSize, computeSize }
 import table_provider { TopLevelTable }
-import array { ScalarArray, ComputedArray, VarLenArray }
-import offset { resolve, resolveWithArgs, resolveNullableWithArgs }
-import offset_array { ArrayOfOffsets, ArrayOfNullableOffsets }
-import read_args { ReadArgs2, ReadArgs3 }
+import array { ComputedArray }
+import offset { resolveWithArgs }
 import table_ref { ByteRange, MinByteRange }
-import generated_support { scalarOr, recordArray, varLenArray, varLenBytes, signedCount }
-import font_types.lib {
-  Scalar,
-  FixedSize,
-  rawByteLen,
-  readScalar,
-  writeScalar,
-  Tag,
-  Fixed,
-  F2Dot14,
-  F4Dot12,
-  F6Dot10,
-  FWord,
-  UfWord,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
-  GlyphId,
-  GlyphId16,
-  GlyphId24,
-  NameId,
-  Offset16,
-  Offset24,
-  Offset32,
-  Nullable
-}
+import generated_support { scalarOr, recordArray }
+import font_types.lib { FixedSize, rawByteLen, Tag, GlyphId, GlyphId16, Offset32 }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.core.ownership { Copy }
-import silk.core.equal { Equal }
-import silk.core.order { Order, Ordering }
-import silk.text.format { Debug, Formatter }
-import silk.io.writer { Writer, WriterError }
-import silk.core.ops { BitAnd, BitOr, BitXor, Not, Subtract }
 import silk.num.usize
 import silk.num.u8
 import silk.num.u16
 import silk.num.u32
-import silk.num.u64
-import silk.num.i16
-import silk.num.i32
 
 /// The [SVG](https://learn.microsoft.com/en-us/typography/opentype/spec/svg) table
 pub struct Svg<'a> {
@@ -82,15 +46,12 @@ impl<'a> Svg<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let versionValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[1].end = end
-    let svgDocumentListOffsetValue = scalarOr<Offset32>(data, ranges[1].start, Offset32.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let reservedValue = scalarOr<u16>(data, ranges[2].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -106,7 +67,7 @@ impl<'a> Svg<'a> {
   pub fn version(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -119,7 +80,7 @@ impl<'a> Svg<'a> {
   pub fn svgDocumentListOffset(self: &Self) -> Offset32 {
     return match move FontData<'a>.readAt<Offset32>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset32, ReadError>.Success { value } => value
-      Result<Offset32, ReadError>.Failure { error } => Offset32.new(0)
+      Result<Offset32, ReadError>.Failure { .. } => Offset32.new(0)
     }
   }
 
@@ -206,7 +167,7 @@ impl<'a> SVGDocumentList<'a> {
   pub fn numEntries(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -223,7 +184,7 @@ impl<'a> SVGDocumentList<'a> {
     ) {
       Result<ComputedArray<'a, (), SVGDocumentRecord<'a>>, ReadError>.Success { value } => value
       Result<ComputedArray<'a, (), SVGDocumentRecord<'a>>, ReadError>.Failure {
-        error
+        ..
       } => ComputedArray<'a, (), SVGDocumentRecord<'a>>.empty(())
     }
   }
@@ -276,7 +237,7 @@ impl<'a> SVGDocumentRecord<'a> {
   pub fn startGlyphId(self: &Self) -> GlyphId16 {
     return match move FontData<'a>.readAt<GlyphId16>(&self._fontData, (self.position + 0)) {
       Result<GlyphId16, ReadError>.Success { value } => value
-      Result<GlyphId16, ReadError>.Failure { error } => GlyphId16.new(0)
+      Result<GlyphId16, ReadError>.Failure { .. } => GlyphId16.new(0)
     }
   }
 
@@ -284,7 +245,7 @@ impl<'a> SVGDocumentRecord<'a> {
   pub fn endGlyphId(self: &Self) -> GlyphId16 {
     return match move FontData<'a>.readAt<GlyphId16>(&self._fontData, (self.position + 2)) {
       Result<GlyphId16, ReadError>.Success { value } => value
-      Result<GlyphId16, ReadError>.Failure { error } => GlyphId16.new(0)
+      Result<GlyphId16, ReadError>.Failure { .. } => GlyphId16.new(0)
     }
   }
 
@@ -293,7 +254,7 @@ impl<'a> SVGDocumentRecord<'a> {
   pub fn svgDocOffset(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, (self.position + 4)) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -301,7 +262,7 @@ impl<'a> SVGDocumentRecord<'a> {
   pub fn svgDocLength(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, (self.position + 8)) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 }

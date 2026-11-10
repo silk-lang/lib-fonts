@@ -263,7 +263,7 @@ impl<'a> ContextualSubtable<'a> {
         return Result<Self, ReadError>.failResult(error)
       }
     }
-    let offset0 = u16.toUsize(
+    drop u16.toUsize(
       match move FontData<'a>.readAt<u16>(&data, 8) {
         Result<u16, ReadError>.Success { value } => value
         Result<u16, ReadError>.Failure { error } => {
@@ -314,7 +314,7 @@ impl<'a> LigatureSubtable<'a> {
         return Result<Self, ReadError>.failResult(error)
       }
     }
-    let offset0 = u16.toUsize(
+    drop u16.toUsize(
       match move FontData<'a>.readAt<u16>(&data, 8) {
         Result<u16, ReadError>.Success { value } => value
         Result<u16, ReadError>.Failure { error } => {
@@ -322,7 +322,7 @@ impl<'a> LigatureSubtable<'a> {
         }
       },
     )
-    let offset1 = u16.toUsize(
+    drop u16.toUsize(
       match move FontData<'a>.readAt<u16>(&data, 10) {
         Result<u16, ReadError>.Success { value } => value
         Result<u16, ReadError>.Failure { error } => {
@@ -330,7 +330,7 @@ impl<'a> LigatureSubtable<'a> {
         }
       },
     )
-    let offset2 = u16.toUsize(
+    drop u16.toUsize(
       match move FontData<'a>.readAt<u16>(&data, 12) {
         Result<u16, ReadError>.Success { value } => value
         Result<u16, ReadError>.Failure { error } => {

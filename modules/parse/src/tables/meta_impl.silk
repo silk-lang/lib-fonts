@@ -79,7 +79,7 @@ impl<'a> VarSize for ScriptLangTag<'a> {
 impl<'a> FontRead<'a, ()> for ScriptLangTag<'a> {
   fn readWithArgs(data: FontData<'a>, args: ()) -> Result<Self, ReadError> {
     let bytes = FontData.asBytes(&data)
-    if let Result<string<'a>, InvalidUtf8>.Failure { error } = move String.fromUtf8(bytes) {
+    if let Result<string<'a>, InvalidUtf8>.Failure { .. } = move String.fromUtf8(bytes) {
       return Result<Self, ReadError>.failResult(
         ReadError.MalformedData { message: "LangScriptTag must be utf8" },
       )

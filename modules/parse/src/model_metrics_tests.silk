@@ -10,10 +10,8 @@ import model.metrics {
   IdentityConverter,
   MetricConverter,
   NoExtents,
-  LineExtents,
-  LineBox
 }
-import model.glyph { GlyphSource, GlyphSourceOrder }
+import model.glyph { GlyphSourceOrder }
 import generated_model_fixtures { tinos, vazirmatn, vorgFont }
 import lib { FontRef, ReadError }
 import tables.hmtx { Hmtx }
@@ -836,7 +834,7 @@ effect fn extendedGvarMetricsAndExtentsInTheCachedFontModelBody() -> ()
   let mut variant: usize = 0
   while variant < 4 {
     let size = Builder.outlinesFont(&mut bytes, (variant & 1) != 0, true, true, 0)
-    let font = run must(FontRef.new(Slice.view<u8>(&bytes, 0, size)))
+    drop run must(FontRef.new(Slice.view<u8>(&bytes, 0, size)))
     let varSize = Builder.gvar(&mut variations, 65537, true, (variant & 2) != 0, false)
     let replacements = [
       Builder.TestTable { tag: 0x47564152, data: Slice.view<u8>(&variations, 0, varSize) },
@@ -961,7 +959,7 @@ effect fn glyfBearingUsesHmtxTailThenFallsBackToZeroBody() -> ()
   let mut checked = false
   while i < GlyphMetrics.numGlyphs(&metrics) {
     if let Option<LocaGlyph>.Some { value: entry } = Loca.get(&loca, GlyphId.new(i), &glyf) {
-      if let LocaGlyph.Glyph { value: outline } = entry {
+      if let LocaGlyph.Glyph { .. } = entry {
         let glyph = GlyphId.new(i)
         let original = run some(run GlyphMetrics.extentsExact(&metrics, glyph))
         run Testing.expect(

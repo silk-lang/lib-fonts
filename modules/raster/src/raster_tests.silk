@@ -3,17 +3,15 @@
 import key { GlyphKey, PenPosition, SUBPIXEL_VARIANTS }
 import face { FontFace }
 import rasterize { GlyphRasterizer, GlyphImage, Outcome, densify }
-import cache { GlyphCache, RasterGlyph, CacheStats }
-import lines { LineCache, LineId, ShapedGlyph }
+import cache { GlyphCache, RasterGlyph }
+import lines { LineCache }
 import fixtures { Textures, readFile, SANS, SERIF }
-import atlas.atlas { Atlas, AtlasError, AtlasOptions, AtlasTile, Kind }
+import atlas.atlas { Atlas, AtlasError, AtlasOptions, Kind }
 import harfrust.lib { ShaperData }
 import read_fonts.lib { ReadError }
-import font_types.lib { F2Dot14 }
 import vector.strips { Rasterizer, Coverage, NONZERO }
 import vector.geometry_error { GeometryError }
 import silk.geometry.affine { Affine2 }
-import silk.collections.bytes { Bytes }
 import silk.collections.hash { Hash, HashKey }
 import silk.collections.list { List }
 import silk.core.effect { Effect }
@@ -104,8 +102,8 @@ test effect fn glyphKeysDifferInEveryField() -> ()
   ! AssertionError<'static> {
   let seed = Hash.seed(3)
   let base = GlyphKey { font: 1, glyph: 2, size: 13.0, scale: 1.0, subpixel: 0, color: false }
-  let mut variants = List<GlyphKey>.make()
-  let mut allocator = Allocator.systemAllocatorProvider()
+  drop List<GlyphKey>.make()
+  drop Allocator.systemAllocatorProvider()
   let keys = [
     GlyphKey { font: 2, glyph: 2, size: 13.0, scale: 1.0, subpixel: 0, color: false },
     GlyphKey { font: 1, glyph: 3, size: 13.0, scale: 1.0, subpixel: 0, color: false },
@@ -413,7 +411,7 @@ effect fn atlasFullWithinOneFrame() -> ()
   )
   run Testing.expect(
     match &first {
-      Result<Option<RasterGlyph>, OutOfMemoryError | AtlasError>.Success { value } => true
+      Result<Option<RasterGlyph>, OutOfMemoryError | AtlasError>.Success { .. } => true
       _ => false
     },
     "the first W fits",
@@ -426,8 +424,8 @@ effect fn atlasFullWithinOneFrame() -> ()
     Result<Option<RasterGlyph>, OutOfMemoryError | AtlasError>.Failure {
       error
     } => match move error {
-      AtlasError problem => true
-      OutOfMemoryError problem => false
+      AtlasError _ => true
+      OutOfMemoryError _ => false
     }
     _ => false
   }

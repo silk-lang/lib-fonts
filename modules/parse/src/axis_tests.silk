@@ -14,7 +14,6 @@ import silk.core.result { Result }
 import silk.testing.testing { Testing, AssertionError }
 import silk.mem.allocator { Allocator, OutOfMemoryError }
 import silk.core.effect { Effect }
-import silk.collections.slice { Slice }
 import silk.num.usize
 import silk.num.u16
 import silk.num.f64

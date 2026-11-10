@@ -2,14 +2,13 @@
 // Source: pinned resources/codegen_inputs; generator: modules/parse/tools/font-codegen-silk.
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 import font_data { FontData }
-import read { ReadError, FontRead, FontReadAt, ComputeSize, Format, computeSize, readAtWithArgs }
+import read { ReadError, FontRead, FontReadAt, ComputeSize, computeSize }
 import table_provider { TopLevelTable }
-import array { ScalarArray, ComputedArray, VarLenArray }
-import offset { resolve, resolveWithArgs, resolveNullableWithArgs }
-import offset_array { ArrayOfOffsets, ArrayOfNullableOffsets }
-import read_args { ReadArgs2, ReadArgs3 }
+import array { ComputedArray, VarLenArray }
+import offset { resolveWithArgs }
+import read_args { ReadArgs2 }
 import table_ref { ByteRange, MinByteRange }
-import generated_support { scalarOr, recordArray, varLenArray, varLenBytes, signedCount }
+import generated_support { scalarOr, varLenArray }
 import font_types.lib {
   Scalar,
   FixedSize,
@@ -19,23 +18,12 @@ import font_types.lib {
   Tag,
   Fixed,
   F2Dot14,
-  F4Dot12,
-  F6Dot10,
-  FWord,
-  UfWord,
   MajorMinor,
-  Version16Dot16,
-  LongDateTime,
   Uint24,
-  Int24,
   GlyphId,
-  GlyphId16,
-  GlyphId24,
-  NameId,
   Offset16,
   Offset24,
-  Offset32,
-  Nullable
+  Offset32
 }
 import silk.core.option { Option }
 import silk.core.result { Result }
@@ -49,8 +37,6 @@ import silk.num.usize
 import silk.num.u8
 import silk.num.u16
 import silk.num.u32
-import silk.num.u64
-import silk.num.i16
 import silk.num.i32
 import generated_variations { Tuple, TupleVariationHeader, TupleVariationCount }
 
@@ -83,19 +69,15 @@ impl<'a> Gvar<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[0].end = end
-    let versionValue = scalarOr<MajorMinor>(data, ranges[0].start, MajorMinor.new(0, 0))
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let axisCountValue = scalarOr<u16>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let sharedTupleCountValue = scalarOr<u16>(data, ranges[2].start, 0)
     ranges[3].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[3].end = end
-    let sharedTuplesOffsetValue = scalarOr<Offset32>(data, ranges[3].start, Offset32.new(0))
     ranges[4].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[4].end = end
@@ -107,7 +89,6 @@ impl<'a> Gvar<'a> {
     ranges[6].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[6].end = end
-    let glyphVariationDataArrayOffsetValue = scalarOr<u32>(data, ranges[6].start, 0)
     ranges[7].start = end
     end = usize.saturatingAdd(
       end,
@@ -132,7 +113,7 @@ impl<'a> Gvar<'a> {
   pub fn version(self: &Self) -> MajorMinor {
     return match move FontData<'a>.readAt<MajorMinor>(&self._fontData, self._fieldRanges[0].start) {
       Result<MajorMinor, ReadError>.Success { value } => value
-      Result<MajorMinor, ReadError>.Failure { error } => MajorMinor.new(0, 0)
+      Result<MajorMinor, ReadError>.Failure { .. } => MajorMinor.new(0, 0)
     }
   }
 
@@ -145,7 +126,7 @@ impl<'a> Gvar<'a> {
   pub fn axisCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -160,7 +141,7 @@ impl<'a> Gvar<'a> {
   pub fn sharedTupleCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[2].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -177,7 +158,7 @@ impl<'a> Gvar<'a> {
   pub fn glyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[4].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -191,7 +172,7 @@ impl<'a> Gvar<'a> {
   pub fn flags(self: &Self) -> GvarFlags {
     return match move FontData<'a>.readAt<GvarFlags>(&self._fontData, self._fieldRanges[5].start) {
       Result<GvarFlags, ReadError>.Success { value } => value
-      Result<GvarFlags, ReadError>.Failure { error } => GvarFlags.empty()
+      Result<GvarFlags, ReadError>.Failure { .. } => GvarFlags.empty()
     }
   }
 
@@ -204,7 +185,7 @@ impl<'a> Gvar<'a> {
   pub fn glyphVariationDataArrayOffset(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[6].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -222,7 +203,7 @@ impl<'a> Gvar<'a> {
       Gvar<'a>.flags(self),
     ) {
       Result<ComputedArray<'a, GvarFlags, U16Or32>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, GvarFlags, U16Or32>, ReadError>.Failure { error } => ComputedArray<
+      Result<ComputedArray<'a, GvarFlags, U16Or32>, ReadError>.Failure { .. } => ComputedArray<
         'a,
         GvarFlags,
         U16Or32
@@ -289,19 +270,15 @@ impl<'a> GvarExtended<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[0].end = end
-    let versionValue = scalarOr<MajorMinor>(data, ranges[0].start, MajorMinor.new(0, 0))
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let axisCountValue = scalarOr<u16>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let sharedTupleCountValue = scalarOr<u16>(data, ranges[2].start, 0)
     ranges[3].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[3].end = end
-    let sharedTuplesOffsetValue = scalarOr<Offset32>(data, ranges[3].start, Offset32.new(0))
     ranges[4].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[4].end = end
@@ -313,7 +290,6 @@ impl<'a> GvarExtended<'a> {
     ranges[6].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[6].end = end
-    let glyphVariationDataArrayOffsetValue = scalarOr<u32>(data, ranges[6].start, 0)
     ranges[7].start = end
     end = usize.saturatingAdd(
       end,
@@ -337,7 +313,7 @@ impl<'a> GvarExtended<'a> {
   pub fn version(self: &Self) -> MajorMinor {
     return match move FontData<'a>.readAt<MajorMinor>(&self._fontData, self._fieldRanges[0].start) {
       Result<MajorMinor, ReadError>.Success { value } => value
-      Result<MajorMinor, ReadError>.Failure { error } => MajorMinor.new(0, 0)
+      Result<MajorMinor, ReadError>.Failure { .. } => MajorMinor.new(0, 0)
     }
   }
 
@@ -348,7 +324,7 @@ impl<'a> GvarExtended<'a> {
   pub fn axisCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -359,7 +335,7 @@ impl<'a> GvarExtended<'a> {
   pub fn sharedTupleCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[2].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -375,7 +351,7 @@ impl<'a> GvarExtended<'a> {
   pub fn glyphCount(self: &Self) -> Uint24 {
     return match move FontData<'a>.readAt<Uint24>(&self._fontData, self._fieldRanges[4].start) {
       Result<Uint24, ReadError>.Success { value } => value
-      Result<Uint24, ReadError>.Failure { error } => Uint24.new(0)
+      Result<Uint24, ReadError>.Failure { .. } => Uint24.new(0)
     }
   }
 
@@ -386,7 +362,7 @@ impl<'a> GvarExtended<'a> {
   pub fn flags(self: &Self) -> GvarFlags {
     return match move FontData<'a>.readAt<GvarFlags>(&self._fontData, self._fieldRanges[5].start) {
       Result<GvarFlags, ReadError>.Success { value } => value
-      Result<GvarFlags, ReadError>.Failure { error } => GvarFlags.empty()
+      Result<GvarFlags, ReadError>.Failure { .. } => GvarFlags.empty()
     }
   }
 
@@ -397,7 +373,7 @@ impl<'a> GvarExtended<'a> {
   pub fn glyphVariationDataArrayOffset(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[6].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -413,7 +389,7 @@ impl<'a> GvarExtended<'a> {
       GvarExtended<'a>.flags(self),
     ) {
       Result<ComputedArray<'a, GvarFlags, U16Or32>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, GvarFlags, U16Or32>, ReadError>.Failure { error } => ComputedArray<
+      Result<ComputedArray<'a, GvarFlags, U16Or32>, ReadError>.Failure { .. } => ComputedArray<
         'a,
         GvarFlags,
         U16Or32
@@ -687,7 +663,7 @@ impl<'a> SharedTuples<'a> {
       self._axisCount,
     ) {
       Result<ComputedArray<'a, u16, Tuple<'a>>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, u16, Tuple<'a>>, ReadError>.Failure { error } => ComputedArray<
+      Result<ComputedArray<'a, u16, Tuple<'a>>, ReadError>.Failure { .. } => ComputedArray<
         'a,
         u16,
         Tuple<'a>
@@ -748,15 +724,9 @@ impl<'a> GlyphVariationDataHeader<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let tupleVariationCountValue = scalarOr<TupleVariationCount>(
-      data,
-      ranges[0].start,
-      TupleVariationCount.new(0),
-    )
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let serializedDataOffsetValue = scalarOr<Offset16>(data, ranges[1].start, Offset16.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, usize.saturatingSubtract(FontData.len(&data), end))
     ranges[2].end = end
@@ -777,7 +747,7 @@ impl<'a> GlyphVariationDataHeader<'a> {
       self._fieldRanges[0].start,
     ) {
       Result<TupleVariationCount, ReadError>.Success { value } => value
-      Result<TupleVariationCount, ReadError>.Failure { error } => TupleVariationCount.new(0)
+      Result<TupleVariationCount, ReadError>.Failure { .. } => TupleVariationCount.new(0)
     }
   }
 
@@ -790,7 +760,7 @@ impl<'a> GlyphVariationDataHeader<'a> {
   pub fn serializedDataOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -811,7 +781,7 @@ impl<'a> GlyphVariationDataHeader<'a> {
       FontData.len(&self._fontData),
     ) {
       Result<VarLenArray<'a, TupleVariationHeader<'a>>, ReadError>.Success { value } => value
-      Result<VarLenArray<'a, TupleVariationHeader<'a>>, ReadError>.Failure { error } => VarLenArray<
+      Result<VarLenArray<'a, TupleVariationHeader<'a>>, ReadError>.Failure { .. } => VarLenArray<
         'a,
         TupleVariationHeader<'a>
       >.empty()
@@ -871,19 +841,9 @@ impl<'a> GlyphVariationDataHeaderExtended<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let tupleVariationCountValue = scalarOr<TupleVariationCount>(
-      data,
-      ranges[0].start,
-      TupleVariationCount.new(0),
-    )
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let serializedDataOffsetValue = scalarOr<Offset24>(
-      data,
-      ranges[1].start,
-      Offset24.new(Uint24.new(0)),
-    )
     ranges[2].start = end
     end = usize.saturatingAdd(end, usize.saturatingSubtract(FontData.len(&data), end))
     ranges[2].end = end
@@ -900,7 +860,7 @@ impl<'a> GlyphVariationDataHeaderExtended<'a> {
       self._fieldRanges[0].start,
     ) {
       Result<TupleVariationCount, ReadError>.Success { value } => value
-      Result<TupleVariationCount, ReadError>.Failure { error } => TupleVariationCount.new(0)
+      Result<TupleVariationCount, ReadError>.Failure { .. } => TupleVariationCount.new(0)
     }
   }
 
@@ -911,7 +871,7 @@ impl<'a> GlyphVariationDataHeaderExtended<'a> {
   pub fn serializedDataOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -931,7 +891,7 @@ impl<'a> GlyphVariationDataHeaderExtended<'a> {
       FontData.len(&self._fontData),
     ) {
       Result<VarLenArray<'a, TupleVariationHeader<'a>>, ReadError>.Success { value } => value
-      Result<VarLenArray<'a, TupleVariationHeader<'a>>, ReadError>.Failure { error } => VarLenArray<
+      Result<VarLenArray<'a, TupleVariationHeader<'a>>, ReadError>.Failure { .. } => VarLenArray<
         'a,
         TupleVariationHeader<'a>
       >.empty()
@@ -1120,7 +1080,7 @@ impl<'a> SelectedGvar<'a> {
 
   pub fn isExtended(self: &Self) -> bool {
     return match &self.* {
-      SelectedGvar<'a>.Extended { table } => true
+      SelectedGvar<'a>.Extended { .. } => true
       _ => false
     }
   }

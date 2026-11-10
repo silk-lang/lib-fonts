@@ -1,7 +1,7 @@
 //! Geometric mark placement for fonts without usable mark positioning.
 import trace
 import buffer { Buffer, Glyph, GlyphPosition }
-import font { ConfiguredShaper, FontFuncs, Shaper, Metrics, metrics }
+import font { ConfiguredShaper, FontFuncs, Metrics, metrics }
 import direction { Direction }
 import scale { Scale, add, sub, clamp }
 import unicode

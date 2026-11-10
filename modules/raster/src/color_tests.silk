@@ -2,12 +2,11 @@
 import face { FontFace }
 import key { GlyphKey }
 import cache { GlyphCache, RasterGlyph }
-import fixtures { Textures, readFile, COLR_V0, SBIX, CBDT, SANS }
+import fixtures { Textures, readFile, COLR_V0, SBIX, CBDT }
 import raster_tests { must, present }
 import atlas.atlas { Atlas, AtlasError, AtlasOptions, Kind }
 import vector.pixmap { Rgba8 }
 import silk.core.effect { Effect }
-import silk.core.option { Option }
 import silk.mem.allocator { Allocator, OutOfMemoryError }
 import silk.system.host_input { HostInputError }
 import silk.system.filesystem { FileError }

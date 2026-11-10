@@ -1,10 +1,9 @@
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 // Upstream cmap regressions, retaining their original table bytes and expectations.
-import lib { FontData, FontRef, ReadError, ComputedArray }
+import lib { FontData, FontRef, ReadError }
 import tables.cmap {
   Cmap,
   CmapSubtable,
-  Cmap0,
   Cmap4,
   Cmap6,
   Cmap10,
@@ -27,8 +26,6 @@ import tables.cmap {
   UvsSubtableIter,
   UvsMappingEntry,
   MapVariant,
-  BestCmapSubtable,
-  SelectedUvsSubtable,
   EncodingRecord,
   PlatformId
 }
@@ -536,7 +533,7 @@ test effect fn cmap15MalformedArraysAndOffsets() -> ()
   }
   run Testing.expect(
     match move Cmap15.read(FontData.new(Slice.view<u8>(&bytes, 0, 9))) {
-      Result<Cmap15, ReadError>.Failure { error } => true
+      Result<Cmap15, ReadError>.Failure { .. } => true
       _ => false
     },
     "short header",

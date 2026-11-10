@@ -13,17 +13,35 @@ import font_harness_process as Process
 import font_harness_corpus as Corpus
 import silk.num.i64
 
-struct Row { difference: f64, silk: f64, rust: f64, name: String }
+struct Row {
+  difference: f64,
+  silk: f64,
+  rust: f64,
+  name: String
+}
+
 impl Order for Row {
   fn compare(left: &Self, right: &Self) -> Ordering {
-    if left.difference != right.difference { return Order.compare(&right.difference, &left.difference) }
-    if left.silk != right.silk { return Order.compare(&right.silk, &left.silk) }
-    if left.rust != right.rust { return Order.compare(&right.rust, &left.rust) }
+    if left.difference != right.difference {
+      return Order.compare(&right.difference, &left.difference)
+    }
+    if left.silk != right.silk {
+      return Order.compare(&right.silk, &left.silk)
+    }
+    if left.rust != right.rust {
+      return Order.compare(&right.rust, &left.rust)
+    }
     return Order.compare(&String.view(&right.name), &String.view(&left.name))
   }
 }
 
-pub effect fn benchLibrary(fonts: string, silk: string, rust: string, workloads: &[String], top: i64) -> ()
+pub effect fn benchLibrary(
+  fonts: string,
+  silk: string,
+  rust: string,
+  workloads: &[String],
+  top: i64,
+) -> ()
   ! TaskError | FileError | HostInputError | OutOfMemoryError | WriterError
   ? &mut HostInput | &mut Allocator | &mut FileSystem {
   let corpus = run Corpus.load(fonts)
@@ -32,14 +50,24 @@ pub effect fn benchLibrary(fonts: string, silk: string, rust: string, workloads:
   let mut chosen = List<string>.make()
   let mut at: usize = 0
   if workloads.length == 0 {
-    while at < defaults.length { run chosen.append(defaults[at])  at = at + 1 }
+    while at < defaults.length {
+      run chosen.append(defaults[at])
+      at = at + 1
+    }
   } else {
     while at < workloads.length {
       let value = String.view(&workloads[at])
       let mut valid = false
       let mut k: usize = 0
-      while k < defaults.length { if defaults[k] == value { valid = true }  k = k + 1 }
-      if !valid { run Task.abort("unknown library benchmark workload") }
+      while k < defaults.length {
+        if defaults[k] == value {
+          valid = true
+        }
+        k = k + 1
+      }
+      if !valid {
+        run Task.abort("unknown library benchmark workload")
+      }
       run chosen.append(value)
       at = at + 1
     }
@@ -66,28 +94,64 @@ pub effect fn benchLibrary(fonts: string, silk: string, rust: string, workloads:
       let name = Corpus.display(&root, &paths[index])
       if !Process.equal(silkSum.asSlice(), rustSum.asSlice()) {
         mismatches = mismatches + 1
-        run Format.format("MISMATCH {workload} {name}: silk {silk:?} rust {rust:?}\n", &.{ workload: workload, name: name, silk: Process.trim(silkSum.asSlice()), rust: Process.trim(rustSum.asSlice()) }) |> Effect.provideMut<Writer>(&mut writer)
+        run Format.format(
+          "MISMATCH {workload} {name}: silk {silk:?} rust {rust:?}\n",
+          &.{
+            workload: workload,
+            name: name,
+            silk: Process.trim(silkSum.asSlice()),
+            rust: Process.trim(rustSum.asSlice()),
+          },
+        )
+          |> Effect.provideMut<Writer>(&mut writer)
       }
       silkTotal = silkTotal + left.seconds
       rustTotal = rustTotal + right.seconds
-      run rows.append(Row { difference: left.seconds - right.seconds, silk: left.seconds, rust: right.seconds, name: run String.copy(name) })
+      run rows.append(
+        Row {
+          difference: left.seconds - right.seconds,
+          silk: left.seconds,
+          rust: right.seconds,
+          name: run String.copy(name),
+        },
+      )
       index = index + 1
     }
-    run Format.format("{workload}: silk {silk:.2}s rust {rust:.2}s ratio {ratio:.2}\n", &.{ workload: workload, silk: silkTotal, rust: rustTotal, ratio: silkTotal / rustTotal }) |> Effect.provideMut<Writer>(&mut writer)
+    run Format.format(
+      "{workload}: silk {silk:.2}s rust {rust:.2}s ratio {ratio:.2}\n",
+      &.{ workload: workload, silk: silkTotal, rust: rustTotal, ratio: silkTotal / rustTotal },
+    )
+      |> Effect.provideMut<Writer>(&mut writer)
     run rows.sort()
     let results = rows.asSlice()
     let mut length = results.length
-    if top >= 0 && i64.toUsize(top) < length { length = i64.toUsize(top) }
+    if top >= 0 && i64.toUsize(top) < length {
+      length = i64.toUsize(top)
+    }
     if top < 0 {
       let omitted = i64.toUsize(-top)
-      length = if omitted < length { length - omitted } else { 0 }
+      length = if omitted < length {
+        length - omitted
+      } else {
+        0
+      }
     }
     index = 0
     while index < length {
-      run Format.format("  {silk:7.3}s {rust:7.3}s {name}\n", &.{ silk: results[index].silk, rust: results[index].rust, name: String.view(&results[index].name) }) |> Effect.provideMut<Writer>(&mut writer)
+      run Format.format(
+        "  {silk:7.3}s {rust:7.3}s {name}\n",
+        &.{
+          silk: results[index].silk,
+          rust: results[index].rust,
+          name: String.view(&results[index].name),
+        },
+      )
+        |> Effect.provideMut<Writer>(&mut writer)
       index = index + 1
     }
     at = at + 1
   }
-  if mismatches != 0 { run Task.abort("library benchmark checksums differ") }
+  if mismatches != 0 {
+    run Task.abort("library benchmark checksums differ")
+  }
 }

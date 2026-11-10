@@ -1,5 +1,5 @@
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
-import read_fonts.lib { FontRef, FontData, ReadError, VarLenArray, VarLenIter, ScalarArray }
+import read_fonts.lib { FontRef, ReadError, VarLenArray, VarLenIter, ScalarArray }
 import read_fonts.tables.mort {
   Mort,
   Chain,
@@ -10,10 +10,9 @@ import read_fonts.tables.mort {
   LigatureSubtable
 }
 import read_fonts.tables.maxp { SelectedMaxp }
-import read_fonts.tables.aat { TypedLookup, LookupU16 }
 import font_types.lib { GlyphId16 }
-import extensions_aat_common { dumpLegacyState, dumpArray, dumpGlyphs, dumpLookupU16 }
-import dump_support { DumpPath, scalar, readError, absent }
+import extensions_aat_common { dumpLegacyState, dumpGlyphs, dumpLookupU16 }
+import dump_support { DumpPath, scalar, readError }
 import silk.core.result { Result }
 import silk.core.option { Option }
 import silk.io.writer { Writer, WriterError }
@@ -114,7 +113,7 @@ effect fn dumpSubtable<'a>(path: &mut DumpPath, subtable: Subtable<'a>, count: u
       DumpPath.pop(&mut path)
       DumpPath.push(&mut path, "fromParts")
       match move SubtableKind<'a>.fromParts(data, &parts) {
-        Result<SubtableKind<'a>, ReadError>.Success { value } => run scalar(&path, "ok")
+        Result<SubtableKind<'a>, ReadError>.Success { .. } => run scalar(&path, "ok")
         Result<SubtableKind<'a>, ReadError>.Failure { error } => run readError(&path, error)
       }
       DumpPath.pop(&mut path)

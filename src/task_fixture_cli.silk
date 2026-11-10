@@ -15,7 +15,12 @@ pub union FixtureTasks {
   CheckVariationFixtures { pub reference: String, pub silkDumper: String, pub report: String },
   CheckModelFixtures { pub reference: String, pub silkDumper: String, pub report: String },
   CheckAatFixtures { pub reference: String, pub silkDumper: String, pub report: String },
-  CheckCffFixtures { pub reference: String, pub silkDumper: String, pub report: String, pub seedsOnly: bool },
+  CheckCffFixtures {
+    pub reference: String,
+    pub silkDumper: String,
+    pub report: String,
+    pub seedsOnly: bool
+  },
   CheckMiscTableFixtures { pub reference: String, pub silkDumper: String, pub report: String },
 }
 
@@ -27,8 +32,14 @@ impl CommandLine for FixtureTasks {
       |> Command.option("silkDumper", Opt.about("Silk dumper path"))
       |> Command.variant("CheckCoreFixtures", "Compare focused container edge cases")
       |> Command.variant("CheckTableFixtures", "Compare core OpenType table fixtures")
-      |> Command.variant("CheckLayoutFixtures", "Compare layout tables, prefixes, aliases and offsets")
-      |> Command.variant("CheckVariationFixtures", "Compare variation table fixtures and corruptions")
+      |> Command.variant(
+        "CheckLayoutFixtures",
+        "Compare layout tables, prefixes, aliases and offsets",
+      )
+      |> Command.variant(
+        "CheckVariationFixtures",
+        "Compare variation table fixtures and corruptions",
+      )
       |> Command.variant("CheckModelFixtures", "Compare model selection and fallback edge cases")
       |> Command.variant("CheckAatFixtures", "Compare AAT table scopes, offsets and prefixes")
       |> Command.variant("CheckCffFixtures", "Compare CFF seeds, prefixes and malformed structures")
@@ -43,15 +54,68 @@ impl TaskSet for FixtureTasks {
     ? &mut HostInput | &mut Allocator | &mut ChildProcess | &mut FileSystem {
     let task = match move self {
       FixtureTasks.CheckCoreFixtures => Tasks.CheckCoreFixtures
-      FixtureTasks.CheckTableFixtures { reference, silkDumper, report } => Tasks.CheckTableFixtures { reference: move reference, silkDumper: move silkDumper, report: move report }
-      FixtureTasks.CheckLayoutFixtures { reference, silkDumper, report } => Tasks.CheckLayoutFixtures { reference: move reference, silkDumper: move silkDumper, report: move report }
-      FixtureTasks.CheckVariationFixtures { reference, silkDumper, report } => Tasks.CheckVariationFixtures { reference: move reference, silkDumper: move silkDumper, report: move report }
-      FixtureTasks.CheckModelFixtures { reference, silkDumper, report } => Tasks.CheckModelFixtures { reference: move reference, silkDumper: move silkDumper, report: move report }
-      FixtureTasks.CheckAatFixtures { reference, silkDumper, report } => Tasks.CheckAatFixtures { reference: move reference, silkDumper: move silkDumper, report: move report }
-      FixtureTasks.CheckCffFixtures { reference, silkDumper, report, seedsOnly } => Tasks.CheckCffFixtures { reference: move reference, silkDumper: move silkDumper, report: move report, seedsOnly: move seedsOnly }
-      FixtureTasks.CheckMiscTableFixtures { reference, silkDumper, report } => Tasks.CheckMiscTableFixtures { reference: move reference, silkDumper: move silkDumper, report: move report }
+      FixtureTasks.CheckTableFixtures {
+        reference,
+        silkDumper,
+        report
+      } => Tasks.CheckTableFixtures {
+        reference: move reference,
+        silkDumper: move silkDumper,
+        report: move report,
+      }
+      FixtureTasks.CheckLayoutFixtures {
+        reference,
+        silkDumper,
+        report
+      } => Tasks.CheckLayoutFixtures {
+        reference: move reference,
+        silkDumper: move silkDumper,
+        report: move report,
+      }
+      FixtureTasks.CheckVariationFixtures {
+        reference,
+        silkDumper,
+        report
+      } => Tasks.CheckVariationFixtures {
+        reference: move reference,
+        silkDumper: move silkDumper,
+        report: move report,
+      }
+      FixtureTasks.CheckModelFixtures {
+        reference,
+        silkDumper,
+        report
+      } => Tasks.CheckModelFixtures {
+        reference: move reference,
+        silkDumper: move silkDumper,
+        report: move report,
+      }
+      FixtureTasks.CheckAatFixtures { reference, silkDumper, report } => Tasks.CheckAatFixtures {
+        reference: move reference,
+        silkDumper: move silkDumper,
+        report: move report,
+      }
+      FixtureTasks.CheckCffFixtures {
+        reference,
+        silkDumper,
+        report,
+        seedsOnly
+      } => Tasks.CheckCffFixtures {
+        reference: move reference,
+        silkDumper: move silkDumper,
+        report: move report,
+        seedsOnly: move seedsOnly,
+      }
+      FixtureTasks.CheckMiscTableFixtures {
+        reference,
+        silkDumper,
+        report
+      } => Tasks.CheckMiscTableFixtures {
+        reference: move reference,
+        silkDumper: move silkDumper,
+        report: move report,
+      }
     }
     run TaskSet.perform(move task)
   }
 }
-

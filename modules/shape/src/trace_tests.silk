@@ -4,10 +4,9 @@ import silk.system.filesystem { FileError }
 import silk.system.host_input { HostInputError }
 //! Behavioral ports of upstream tests/tracing.rs.
 import buffer { Buffer, ContentType, GlyphInfos, GlyphPositions }
-import font { ShaperData, ConfiguredShaper, FontFuncs, DefaultFontFuncs }
+import font { ShaperData, ConfiguredShaper, FontFuncs }
 import shape { shapeWithFeatures }
 import serialize { serialize, serializeWithoutFont }
-import generated_fixtures as Fixtures
 import silk.concurrency.sync { Mutex, MutexGuard }
 import silk.text.string { String }
 import silk.collections.list { List }

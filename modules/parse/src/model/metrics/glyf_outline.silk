@@ -328,7 +328,7 @@ impl Loader {
           &mut buffers,
         )
         drop buffers
-        if let Option<bool>.Some { value } = move valid {
+        if let Option<bool>.Some { .. } = move valid {
           i = 0
           while i < count + 4 {
             let point = List<Point2<f32>>.get(&points, i)
@@ -384,7 +384,7 @@ impl Loader {
     if context.coords.length != 0 {
       if let Maybe<SelectedGvar<'a>>.Some { value: gvar } = context.gvar {
         deltas = run repeated(Vector2<f32>.zero(), count + 4)
-        if let Option<bool>.Some { value } = SelectedGvar<'a>.compositeDeltas<f32>(
+        if let Option<bool>.Some { .. } = SelectedGvar<'a>.compositeDeltas<f32>(
           &gvar,
           gid,
           context.coords,

@@ -4,7 +4,6 @@ import ps.cff.index { Index }
 import ps.cff.charset {
   Charset,
   Iter,
-  CharsetEntry,
   RangeValues,
   RangeSource,
   stringIdFromRanges,
@@ -17,8 +16,6 @@ import ps.encoding { PredefinedEncoding }
 import ps.string { Sid }
 import generated_ps_data { standardString, expertCharset }
 import font_data { FontData }
-import read { ReadError }
-import model.error { Error }
 import font_types.lib { GlyphId }
 import silk.core.option { Option }
 import silk.core.result { Result }

@@ -11,7 +11,6 @@ import buffer {
 }
 import silk.core.option { Option }
 import normalize
-import syllable
 import direction { Direction }
 import silk.collections.list { List }
 import silk.testing.testing { Testing, AssertionError }

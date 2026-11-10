@@ -2,8 +2,6 @@
 import font_types.lib { F48Dot16, Fixed, F26Dot6, F2Dot14, F4Dot12, F6Dot10 }
 import silk.geometry.rect { Rect }
 import silk.core.ownership { Copy }
-import silk.core.order { Order }
-import silk.core.ops { Subtract }
 import silk.num.f32
 
 pub struct GlyphExtents<T> {

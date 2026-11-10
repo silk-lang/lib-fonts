@@ -109,7 +109,7 @@ effect fn renderWithFont<F: FontFuncs>(
   run Buffer.pushText(&mut buffer, text, options.utf8Clusters)
   Buffer.guessSegmentProperties(&mut buffer)
   let result = run shape(&font, &mut buffer, List<Feature>.asSlice(&options.features))
-  if let Result<(), ShapeError>.Failure { error } = move result {
+  if let Result<(), ShapeError>.Failure { .. } = move result {
     return String.make()
   }
   let mut output = run serialize(&font, &buffer, options.serializeFlags)

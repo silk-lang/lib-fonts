@@ -1395,7 +1395,7 @@ effect fn ensureBuildChar<'a, 'c, 's>(state: &mut Evaluator<'a, 'c, 's>, count: 
       resizeBuildChar(&mut state.heapBuildChar, count)
         |> Effect.provideMut<Allocator>(&mut allocator),
     )
-    if let Result<(), OutOfMemoryError>.Failure { error } = move result {
+    if let Result<(), OutOfMemoryError>.Failure { .. } = move result {
       fail Error.InsufficientMemory
     }
   }
@@ -2557,7 +2557,7 @@ fn otherSubrFails<'w, 's>(
   }
   let mut sink = TestCapture.new()
   return match move run Effect.result(handleOtherSubr(&mut state, ctx, &mut sink)) {
-    Result<(), Error>.Failure { error } => true
+    Result<(), Error>.Failure { .. } => true
     _ => false
   }
 }

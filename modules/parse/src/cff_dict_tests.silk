@@ -19,7 +19,6 @@ import ps.hinting { Blues, StemSnaps }
 import ps.string { Sid }
 import tables.variations { ItemVariationStore }
 import font_types.lib { Fixed, F2Dot14, GlyphId }
-import silk.geometry.affine { Affine2 }
 import font_data { FontData }
 import font { FontRef }
 import table_ref { ByteRange }
@@ -173,10 +172,10 @@ test effect fn exampleTopDictEntries() -> ()
 
 fn keepUnhinted(entry: &Entry) -> bool {
   return match entry.* {
-    Entry.SubrsOffset { value } => true
-    Entry.VariationStoreIndex { value } => true
-    Entry.DefaultWidthX { value } => true
-    Entry.NominalWidthX { value } => true
+    Entry.SubrsOffset { .. } => true
+    Entry.VariationStoreIndex { .. } => true
+    Entry.DefaultWidthX { .. } => true
+    Entry.NominalWidthX { .. } => true
     _ => false
   }
 }

@@ -1,6 +1,5 @@
 // Display regression tests ported from upstream font-types.
 import fixed { F2Dot14, F4Dot12, F6Dot10, Fixed, F26Dot6, F48Dot16 }
-import fixed_format { decimalRepresentation }
 import tag { Tag }
 import silk.text.format { Format, Display, ParseError }
 import silk.io.writer { Writer, WriterError }
@@ -12,7 +11,6 @@ import silk.collections.slice { Slice }
 import silk.num.i16
 import silk.num.i32
 import silk.num.i64
-import silk.num.u64
 import silk.num.f64
 
 struct Capture {

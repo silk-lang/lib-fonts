@@ -1,5 +1,5 @@
 import feature { Feature }
-import direction { Direction, ParseError }
+import direction { ParseError }
 import scale { Scale }
 import font_types.lib { Tag }
 import silk.testing.testing { Testing, AssertionError }
@@ -61,7 +61,7 @@ test effect fn rejectsMalformedFeatures() -> ()
   let mut i: usize = 0
   while i < 8 {
     let rejected = match move Feature.parse(cases[i]) {
-      Result<Feature, ParseError>.Failure { error } => true
+      Result<Feature, ParseError>.Failure { .. } => true
       _ => false
     }
     run Testing.expect(rejected, "malformed feature rejected")

@@ -11,14 +11,10 @@ import table_provider { TableProvider }
 import tables.colr {
   Colr,
   ClipBox,
-  ClipBoxFormat1,
   ClipBoxFormat2,
   Paint,
   PaintWithId,
-  ColorLayer,
   PaintColrLayers,
-  PaintSolid,
-  PaintVarSolid,
   PaintLinearGradient,
   PaintVarLinearGradient,
   PaintRadialGradient,
@@ -63,7 +59,6 @@ import font_types.lib { F48Dot16, F2Dot14, FWord, Fixed, GlyphId, GlyphId16, Gly
 import silk.geometry.rect { Rect }
 import silk.geometry.affine { Affine2 }
 import array { ComputedArray }
-import table_ref { ByteRange }
 import read { ReadError }
 import silk.core.option { Option }
 import silk.core.result { Result }
@@ -169,7 +164,7 @@ impl<'a> ColorSources<'a> {
         GlyphExtents<F48Dot16>
       >.some(exactExtents(GlyphExtents<f32>.fromBounds(value)))
       Result<Rect<f32>, Error | OutOfMemoryError>.Failure { error } => match move error {
-        Error problem => Option<GlyphExtents<F48Dot16>>.None
+        Error _ => Option<GlyphExtents<F48Dot16>>.None
         OutOfMemoryError problem => {
           fail move problem
         }
@@ -223,7 +218,7 @@ impl<'a> ColorOutlines<'a> {
         transformBounds(matrix, value),
       )
       Result<Rect<f32>, Error | OutOfMemoryError>.Failure { error } => match move error {
-        Error problem => Bounds.Empty
+        Error _ => Bounds.Empty
         OutOfMemoryError problem => {
           fail move problem
         }
@@ -564,10 +559,10 @@ impl<'a, 'c> ColorInstance<'a, 'c> {
         )
         return ResolvedPaint<'a>.Layers { start: start, end: end }
       }
-      Paint<'a>.Solid { value } => {
+      Paint<'a>.Solid { .. } => {
         return ResolvedPaint<'a>.Brush { renders: true }
       }
-      Paint<'a>.VarSolid { value } => {
+      Paint<'a>.VarSolid { .. } => {
         return ResolvedPaint<'a>.Brush { renders: true }
       }
       Paint<'a>.Glyph { value } => {
@@ -1016,7 +1011,7 @@ effect fn cmAlloc<T>(result: Result<T, Error | OutOfMemoryError>) -> T
   return match move result {
     Result<T, Error | OutOfMemoryError>.Success { value } => move value
     Result<T, Error | OutOfMemoryError>.Failure { error } => match move error {
-      Error problem => {
+      Error _ => {
         run Testing.expect(false, "color operation succeeds")
         return Intrinsic.trap("assertion")
       }
@@ -1300,7 +1295,7 @@ effect fn cmV0Extents() -> ()
   )
   run Testing.expect(
     match move actual {
-      Option<GlyphExtents<F48Dot16>>.Some { value } => true
+      Option<GlyphExtents<F48Dot16>>.Some { .. } => true
       _ => false
     },
     "version0 extents",
@@ -1339,7 +1334,7 @@ effect fn cmComplexFlags() -> ()
   let mut checked: usize = 0
   while gid < outlines.base.glyphCount {
     let glyph = GlyphId.new(gid)
-    if let Option<PaintWithId<'static>>.Some { value } = Colr.v1BaseGlyph(&sources.table, glyph) {
+    if let Option<PaintWithId<'static>>.Some { .. } = Colr.v1BaseGlyph(&sources.table, glyph) {
       drop run cmAlloc(run Effect.result(cmWalk(&instance, &outlines, glyph, 16384)))
       checked = checked + 1
     }
@@ -1501,7 +1496,7 @@ test effect fn glyph2BoundsPreserveBoundaryIds() -> ()
     run Testing.expect(
       match move result {
         Result<ResolvedPaint, Error>.Success {
-          value: ResolvedPaint.Glyph { glyph, child }
+          value: ResolvedPaint.Glyph { glyph, .. }
         } => GlyphId.toU32(glyph) == gid
         _ => false
       },

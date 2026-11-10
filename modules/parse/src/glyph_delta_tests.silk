@@ -1,9 +1,9 @@
 // Ports of upstream gvar/deltas.rs tests.
 // Copyright 2026 the Fontations Authors. Licensed under Apache-2.0 or MIT.
-import lib { FontData, FontRef, ReadError, ScalarArray }
+import lib { FontRef, ReadError, ScalarArray }
 import tables.gvar { Gvar, GlyphDelta, GlyphVariationData, DeltaBuffers }
 import tables.variations { TupleVariationData, interpolateDeltas }
-import tables.glyf { Glyf, Glyph, SimpleGlyph, PointIter, CurvePoint, PointFlags, PointMarker }
+import tables.glyf { Glyph, SimpleGlyph, PointFlags, PointMarker }
 import tables.loca { Loca }
 import generated_variation_fixtures as Fixtures
 import font_types.lib { Fixed, F2Dot14, GlyphId }
@@ -14,7 +14,6 @@ import silk.core.result { Result }
 import silk.testing.testing { Testing, AssertionError }
 import silk.collections.slice { Slice }
 import silk.core.ownership { Copy }
-import silk.num.i16
 import silk.num.i32
 import silk.num.usize
 import silk.num.f64
@@ -528,7 +527,7 @@ effect fn bothLayersImpl() -> ()
     drop move buffers
     let maybeData = run must(Gvar.glyphVariationData(&gvar, id))
     let presentData = match &maybeData {
-      Option<GlyphVariationData<'static>>.Some { value } => true
+      Option<GlyphVariationData<'static>>.Some { .. } => true
       _ => false
     }
     run Testing.expect(hadData == presentData, "wrapper reports data presence")

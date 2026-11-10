@@ -22,7 +22,7 @@ fn rangeAt<'a, T: FontReadAt<'a, ()> + ComputeSize<()> + LayoutRangeRecord>(
     Result<T, ReadError>.Success { value } => Option<LayoutRange>.some(
       LayoutRangeRecord.range(&value),
     )
-    Result<T, ReadError>.Failure { error } => Option<LayoutRange>.None
+    Result<T, ReadError>.Failure { .. } => Option<LayoutRange>.None
   }
 }
 
@@ -607,9 +607,9 @@ impl<'a> ClassDef<'a> {
 
   pub fn cost(self: &Self) -> u32 {
     return match &self.* {
-      ClassDef<'a>.Format1 { value } => 1
+      ClassDef<'a>.Format1 { .. } => 1
       ClassDef<'a>.Format2 { value } => ClassDefFormat2<'a>.cost(&value)
-      ClassDef<'a>.Format3 { value } => 1
+      ClassDef<'a>.Format3 { .. } => 1
       ClassDef<'a>.Format4 { value } => bitStorage(
         Uint24.toU32(ClassDefFormat4<'a>.classRangeCount(&value)),
       )

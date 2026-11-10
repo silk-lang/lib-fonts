@@ -102,7 +102,7 @@ effect fn vzeroAxes(bytes: &mut [u8]) -> ()
   ! AssertionError<'static> {
   vcopy(&mut bytes, VarcFixtures.varcCjkFont())
   let table = run vtable(&bytes)
-  let data = Varc.offsetData(&table)
+  drop Varc.offsetData(&table)
   let base = run vtableOffset(&bytes)
   let relative = u32.toUsize(
     Offset32.toU32(Nullable<Offset32>.offset(&Varc.axisIndicesListOffset(&table)).*),

@@ -2,56 +2,19 @@
 // Source: pinned resources/codegen_inputs; generator: modules/parse/tools/font-codegen-silk.
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 import font_data { FontData }
-import read { ReadError, FontRead, FontReadAt, ComputeSize, Format, computeSize, readAtWithArgs }
+import read { ReadError, FontRead, FontReadAt, ComputeSize, computeSize }
 import table_provider { TopLevelTable }
-import array { ScalarArray, ComputedArray, VarLenArray }
-import offset { resolve, resolveWithArgs, resolveNullableWithArgs }
-import offset_array { ArrayOfOffsets, ArrayOfNullableOffsets }
-import read_args { ReadArgs2, ReadArgs3 }
+import array { ComputedArray }
 import table_ref { ByteRange, MinByteRange }
-import generated_support { scalarOr, recordArray, varLenArray, varLenBytes, signedCount }
-import font_types.lib {
-  Scalar,
-  FixedSize,
-  rawByteLen,
-  readScalar,
-  writeScalar,
-  Tag,
-  Fixed,
-  F2Dot14,
-  F4Dot12,
-  F6Dot10,
-  FWord,
-  UfWord,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
-  GlyphId,
-  GlyphId16,
-  GlyphId24,
-  NameId,
-  Offset16,
-  Offset24,
-  Offset32,
-  Nullable
-}
+import generated_support { scalarOr, recordArray }
+import font_types.lib { FixedSize, rawByteLen, Tag, NameId, Offset16 }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.core.ownership { Copy }
-import silk.core.equal { Equal }
-import silk.core.order { Order, Ordering }
-import silk.text.format { Debug, Formatter }
-import silk.io.writer { Writer, WriterError }
-import silk.core.ops { BitAnd, BitOr, BitXor, Not, Subtract }
 import silk.num.usize
 import silk.num.u8
 import silk.num.u16
 import silk.num.u32
-import silk.num.u64
-import silk.num.i16
-import silk.num.i32
 
 /// [Naming table version 1](https://docs.microsoft.com/en-us/typography/opentype/spec/name#naming-table-version-1)
 pub struct Name<'a> {
@@ -90,7 +53,6 @@ impl<'a> Name<'a> {
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let storageOffsetValue = scalarOr<u16>(data, ranges[2].start, 0)
     ranges[3].start = end
     end = usize.saturatingAdd(end, usize.saturatingMultiply(u16.toUsize(countValue), 12))
     ranges[3].end = end
@@ -120,7 +82,7 @@ impl<'a> Name<'a> {
   pub fn version(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -132,7 +94,7 @@ impl<'a> Name<'a> {
   pub fn count(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -144,7 +106,7 @@ impl<'a> Name<'a> {
   pub fn storageOffset(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[2].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -160,7 +122,7 @@ impl<'a> Name<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ComputedArray<'a, (), NameRecord<'a>>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, (), NameRecord<'a>>, ReadError>.Failure { error } => ComputedArray<
+      Result<ComputedArray<'a, (), NameRecord<'a>>, ReadError>.Failure { .. } => ComputedArray<
         'a,
         (),
         NameRecord<'a>
@@ -179,7 +141,7 @@ impl<'a> Name<'a> {
     }
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[4].start) {
       Result<u16, ReadError>.Success { value } => Option<u16>.some(value)
-      Result<u16, ReadError>.Failure { error } => Option<u16>.None
+      Result<u16, ReadError>.Failure { .. } => Option<u16>.None
     }
   }
 
@@ -200,7 +162,7 @@ impl<'a> Name<'a> {
       Result<ComputedArray<'a, (), LangTagRecord<'a>>, ReadError>.Success { value } => Option<
         ComputedArray<'a, (), LangTagRecord<'a>>
       >.some(value)
-      Result<ComputedArray<'a, (), LangTagRecord<'a>>, ReadError>.Failure { error } => Option<
+      Result<ComputedArray<'a, (), LangTagRecord<'a>>, ReadError>.Failure { .. } => Option<
         ComputedArray<'a, (), LangTagRecord<'a>>
       >.None
     }
@@ -260,7 +222,7 @@ impl<'a> LangTagRecord<'a> {
   pub fn length(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 0)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -269,7 +231,7 @@ impl<'a> LangTagRecord<'a> {
   pub fn langTagOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, (self.position + 2)) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 }
@@ -316,7 +278,7 @@ impl<'a> NameRecord<'a> {
   pub fn platformId(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 0)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -324,7 +286,7 @@ impl<'a> NameRecord<'a> {
   pub fn encodingId(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 2)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -332,7 +294,7 @@ impl<'a> NameRecord<'a> {
   pub fn languageId(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 4)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -340,7 +302,7 @@ impl<'a> NameRecord<'a> {
   pub fn nameId(self: &Self) -> NameId {
     return match move FontData<'a>.readAt<NameId>(&self._fontData, (self.position + 6)) {
       Result<NameId, ReadError>.Success { value } => value
-      Result<NameId, ReadError>.Failure { error } => NameId.default()
+      Result<NameId, ReadError>.Failure { .. } => NameId.default()
     }
   }
 
@@ -348,7 +310,7 @@ impl<'a> NameRecord<'a> {
   pub fn length(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 8)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -356,7 +318,7 @@ impl<'a> NameRecord<'a> {
   pub fn stringOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, (self.position + 10)) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 }

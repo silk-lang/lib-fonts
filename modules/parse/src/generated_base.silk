@@ -2,38 +2,20 @@
 // Source: pinned resources/codegen_inputs; generator: modules/parse/tools/font-codegen-silk.
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 import font_data { FontData }
-import read { ReadError, FontRead, FontReadAt, ComputeSize, Format, computeSize, readAtWithArgs }
+import read { ReadError, FontRead, FontReadAt, ComputeSize, Format, computeSize }
 import table_provider { TopLevelTable }
-import array { ScalarArray, ComputedArray, VarLenArray }
-import offset { resolve, resolveWithArgs, resolveNullableWithArgs }
-import offset_array { ArrayOfOffsets, ArrayOfNullableOffsets }
-import read_args { ReadArgs2, ReadArgs3 }
+import array { ScalarArray, ComputedArray }
+import offset { resolveWithArgs, resolveNullableWithArgs }
+import offset_array { ArrayOfOffsets }
 import table_ref { ByteRange, MinByteRange }
-import generated_support { scalarOr, recordArray, varLenArray, varLenBytes, signedCount }
+import generated_support { scalarOr, recordArray }
 import font_types.lib {
-  Scalar,
   FixedSize,
   rawByteLen,
-  readScalar,
-  writeScalar,
   Tag,
-  Fixed,
   F2Dot14,
-  F4Dot12,
-  F6Dot10,
-  FWord,
-  UfWord,
   MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
-  GlyphId,
-  GlyphId16,
-  GlyphId24,
-  NameId,
   Offset16,
-  Offset24,
   Offset32,
   Nullable
 }
@@ -41,15 +23,10 @@ import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.core.ownership { Copy }
 import silk.core.equal { Equal }
-import silk.core.order { Order, Ordering }
-import silk.text.format { Debug, Formatter }
-import silk.io.writer { Writer, WriterError }
-import silk.core.ops { BitAnd, BitOr, BitXor, Not, Subtract }
 import silk.num.usize
 import silk.num.u8
 import silk.num.u16
 import silk.num.u32
-import silk.num.u64
 import silk.num.i16
 import silk.num.i32
 import generated_layout { DeviceOrVariationIndex, Device, VariationIndex }
@@ -88,29 +65,14 @@ impl<'a> Base<'a> {
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let horizAxisOffsetValue = scalarOr<Nullable<Offset16>>(
-      data,
-      ranges[1].start,
-      Nullable<Offset16>.default(),
-    )
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let vertAxisOffsetValue = scalarOr<Nullable<Offset16>>(
-      data,
-      ranges[2].start,
-      Nullable<Offset16>.default(),
-    )
     ranges[3].start = end
     if MajorMinor.compatible(&versionValue, MajorMinor.new(1, 1)) {
       end = usize.saturatingAdd(end, 4)
     }
     ranges[3].end = end
-    let itemVarStoreOffsetValue = scalarOr<Nullable<Offset32>>(
-      data,
-      ranges[3].start,
-      Nullable<Offset32>.default(),
-    )
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -126,7 +88,7 @@ impl<'a> Base<'a> {
   pub fn version(self: &Self) -> MajorMinor {
     return match move FontData<'a>.readAt<MajorMinor>(&self._fontData, self._fieldRanges[0].start) {
       Result<MajorMinor, ReadError>.Success { value } => value
-      Result<MajorMinor, ReadError>.Failure { error } => MajorMinor.new(0, 0)
+      Result<MajorMinor, ReadError>.Failure { .. } => MajorMinor.new(0, 0)
     }
   }
 
@@ -141,7 +103,7 @@ impl<'a> Base<'a> {
       self._fieldRanges[1].start,
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -161,7 +123,7 @@ impl<'a> Base<'a> {
       self._fieldRanges[2].start,
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -186,7 +148,7 @@ impl<'a> Base<'a> {
       Result<Nullable<Offset32>, ReadError>.Success { value } => Option<Nullable<Offset32>>.some(
         value,
       )
-      Result<Nullable<Offset32>, ReadError>.Failure { error } => Option<Nullable<Offset32>>.None
+      Result<Nullable<Offset32>, ReadError>.Failure { .. } => Option<Nullable<Offset32>>.None
     }
   }
 
@@ -263,15 +225,9 @@ impl<'a> Axis<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let baseTagListOffsetValue = scalarOr<Nullable<Offset16>>(
-      data,
-      ranges[0].start,
-      Nullable<Offset16>.default(),
-    )
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let baseScriptListOffsetValue = scalarOr<Offset16>(data, ranges[1].start, Offset16.new(0))
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -287,7 +243,7 @@ impl<'a> Axis<'a> {
       self._fieldRanges[0].start,
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -304,7 +260,7 @@ impl<'a> Axis<'a> {
   pub fn baseScriptListOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -382,7 +338,7 @@ impl<'a> BaseTagList<'a> {
   pub fn baseTagCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -399,7 +355,7 @@ impl<'a> BaseTagList<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, Tag>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Tag>, ReadError>.Failure { error } => ScalarArray<Tag>.empty()
+      Result<ScalarArray<'a, Tag>, ReadError>.Failure { .. } => ScalarArray<Tag>.empty()
     }
   }
 
@@ -471,7 +427,7 @@ impl<'a> BaseScriptList<'a> {
   pub fn baseScriptCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -489,7 +445,7 @@ impl<'a> BaseScriptList<'a> {
     ) {
       Result<ComputedArray<'a, (), BaseScriptRecord<'a>>, ReadError>.Success { value } => value
       Result<ComputedArray<'a, (), BaseScriptRecord<'a>>, ReadError>.Failure {
-        error
+        ..
       } => ComputedArray<'a, (), BaseScriptRecord<'a>>.empty(())
     }
   }
@@ -542,7 +498,7 @@ impl<'a> BaseScriptRecord<'a> {
   pub fn baseScriptTag(self: &Self) -> Tag {
     return match move FontData<'a>.readAt<Tag>(&self._fontData, (self.position + 0)) {
       Result<Tag, ReadError>.Success { value } => value
-      Result<Tag, ReadError>.Failure { error } => Tag.default()
+      Result<Tag, ReadError>.Failure { .. } => Tag.default()
     }
   }
 
@@ -550,7 +506,7 @@ impl<'a> BaseScriptRecord<'a> {
   pub fn baseScriptOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, (self.position + 4)) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -607,19 +563,9 @@ impl<'a> BaseScript<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let baseValuesOffsetValue = scalarOr<Nullable<Offset16>>(
-      data,
-      ranges[0].start,
-      Nullable<Offset16>.default(),
-    )
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let defaultMinMaxOffsetValue = scalarOr<Nullable<Offset16>>(
-      data,
-      ranges[1].start,
-      Nullable<Offset16>.default(),
-    )
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
@@ -641,7 +587,7 @@ impl<'a> BaseScript<'a> {
       self._fieldRanges[0].start,
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -661,7 +607,7 @@ impl<'a> BaseScript<'a> {
       self._fieldRanges[1].start,
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -678,7 +624,7 @@ impl<'a> BaseScript<'a> {
   pub fn baseLangSysCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[2].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -696,7 +642,7 @@ impl<'a> BaseScript<'a> {
     ) {
       Result<ComputedArray<'a, (), BaseLangSysRecord<'a>>, ReadError>.Success { value } => value
       Result<ComputedArray<'a, (), BaseLangSysRecord<'a>>, ReadError>.Failure {
-        error
+        ..
       } => ComputedArray<'a, (), BaseLangSysRecord<'a>>.empty(())
     }
   }
@@ -749,7 +695,7 @@ impl<'a> BaseLangSysRecord<'a> {
   pub fn baseLangSysTag(self: &Self) -> Tag {
     return match move FontData<'a>.readAt<Tag>(&self._fontData, (self.position + 0)) {
       Result<Tag, ReadError>.Success { value } => value
-      Result<Tag, ReadError>.Failure { error } => Tag.default()
+      Result<Tag, ReadError>.Failure { .. } => Tag.default()
     }
   }
 
@@ -757,7 +703,7 @@ impl<'a> BaseLangSysRecord<'a> {
   pub fn minMaxOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, (self.position + 4)) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -814,7 +760,6 @@ impl<'a> BaseValues<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let defaultBaselineIndexValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
@@ -835,7 +780,7 @@ impl<'a> BaseValues<'a> {
   pub fn defaultBaselineIndex(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -848,7 +793,7 @@ impl<'a> BaseValues<'a> {
   pub fn baseCoordCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -866,9 +811,7 @@ impl<'a> BaseValues<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ScalarArray<'a, Offset16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { error } => ScalarArray<
-        Offset16
-      >.empty()
+      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { .. } => ScalarArray<Offset16>.empty()
     }
   }
 
@@ -933,19 +876,9 @@ impl<'a> MinMax<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let minCoordOffsetValue = scalarOr<Nullable<Offset16>>(
-      data,
-      ranges[0].start,
-      Nullable<Offset16>.default(),
-    )
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let maxCoordOffsetValue = scalarOr<Nullable<Offset16>>(
-      data,
-      ranges[1].start,
-      Nullable<Offset16>.default(),
-    )
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
@@ -968,7 +901,7 @@ impl<'a> MinMax<'a> {
       self._fieldRanges[0].start,
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -989,7 +922,7 @@ impl<'a> MinMax<'a> {
       self._fieldRanges[1].start,
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -1006,7 +939,7 @@ impl<'a> MinMax<'a> {
   pub fn featMinMaxCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[2].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1024,7 +957,7 @@ impl<'a> MinMax<'a> {
     ) {
       Result<ComputedArray<'a, (), FeatMinMaxRecord<'a>>, ReadError>.Success { value } => value
       Result<ComputedArray<'a, (), FeatMinMaxRecord<'a>>, ReadError>.Failure {
-        error
+        ..
       } => ComputedArray<'a, (), FeatMinMaxRecord<'a>>.empty(())
     }
   }
@@ -1078,7 +1011,7 @@ impl<'a> FeatMinMaxRecord<'a> {
   pub fn featureTableTag(self: &Self) -> Tag {
     return match move FontData<'a>.readAt<Tag>(&self._fontData, (self.position + 0)) {
       Result<Tag, ReadError>.Success { value } => value
-      Result<Tag, ReadError>.Failure { error } => Tag.default()
+      Result<Tag, ReadError>.Failure { .. } => Tag.default()
     }
   }
 
@@ -1090,7 +1023,7 @@ impl<'a> FeatMinMaxRecord<'a> {
       (self.position + 4),
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -1107,7 +1040,7 @@ impl<'a> FeatMinMaxRecord<'a> {
       (self.position + 6),
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -1282,11 +1215,9 @@ impl<'a> BaseCoordFormat1<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let baseCoordFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let coordinateValue = scalarOr<i16>(data, ranges[1].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -1298,7 +1229,7 @@ impl<'a> BaseCoordFormat1<'a> {
   pub fn baseCoordFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1310,7 +1241,7 @@ impl<'a> BaseCoordFormat1<'a> {
   pub fn coordinate(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[1].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1366,19 +1297,15 @@ impl<'a> BaseCoordFormat2<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let baseCoordFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let coordinateValue = scalarOr<i16>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let referenceGlyphValue = scalarOr<u16>(data, ranges[2].start, 0)
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let baseCoordPointValue = scalarOr<u16>(data, ranges[3].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -1390,7 +1317,7 @@ impl<'a> BaseCoordFormat2<'a> {
   pub fn baseCoordFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1402,7 +1329,7 @@ impl<'a> BaseCoordFormat2<'a> {
   pub fn coordinate(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[1].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1414,7 +1341,7 @@ impl<'a> BaseCoordFormat2<'a> {
   pub fn referenceGlyph(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[2].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1426,7 +1353,7 @@ impl<'a> BaseCoordFormat2<'a> {
   pub fn baseCoordPoint(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[3].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1482,19 +1409,12 @@ impl<'a> BaseCoordFormat3<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let baseCoordFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let coordinateValue = scalarOr<i16>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let deviceOffsetValue = scalarOr<Nullable<Offset16>>(
-      data,
-      ranges[2].start,
-      Nullable<Offset16>.default(),
-    )
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -1506,7 +1426,7 @@ impl<'a> BaseCoordFormat3<'a> {
   pub fn baseCoordFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1518,7 +1438,7 @@ impl<'a> BaseCoordFormat3<'a> {
   pub fn coordinate(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[1].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1535,7 +1455,7 @@ impl<'a> BaseCoordFormat3<'a> {
       self._fieldRanges[2].start,
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 

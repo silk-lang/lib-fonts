@@ -9,7 +9,7 @@ import array { ScalarArray, ComputedArray }
 import offset_array { ArrayOfNullableOffsets }
 import font_types.lib { Fixed, F2Dot14, Offset32 }
 import model.error { Error }
-import ps.read { take, takeRead, require }
+import ps.read { takeRead, require }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.core.effect { Effect }

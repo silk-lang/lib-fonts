@@ -1,5 +1,5 @@
 import buffer { Buffer, Glyph, GlyphPosition, ContentType }
-import font { ConfiguredShaper, FontFuncs, Shaper, ShaperData, Metrics, Advances, metrics, table }
+import font { ConfiguredShaper, FontFuncs, Metrics, Advances, metrics }
 import direction { Direction }
 import feature { Feature }
 import plan { OtPlan, LookupStep }
@@ -17,8 +17,7 @@ import aat
 import aat_kern
 import complex
 import view { View }
-import read_fonts.model.metrics.glyph { GlyphMetrics }
-import font_types.lib { GlyphId, F2Dot14 }
+import font_types.lib { GlyphId }
 import silk.num.u8
 import silk.num.u16
 import silk.collections.list { List }
@@ -254,7 +253,7 @@ effect fn execute<'a, 's, F: FontFuncs>(
           replacement = Option<GlyphId>.None
         }
         while cp <= last {
-          if let Option<GlyphId>.Some { value } = &replacement {
+          if let Option<GlyphId>.Some { .. } = &replacement {
             break
           }
           replacement = ConfiguredShaper.nominalGlyph(font, cp)
@@ -493,11 +492,8 @@ impl ShapeError {
     return match &self.* {
       ShapeError.AlreadyShaped => "buffer already contains glyphs"
       ShapeError.DirectionUnset => "buffer direction is unset"
-      ShapeError.DirectionMismatch {
-        plan,
-        buffer
-      } => "buffer direction does not match the shape plan"
-      ShapeError.ScriptMismatch { plan, buffer } => "buffer script does not match the shape plan"
+      ShapeError.DirectionMismatch { .. } => "buffer direction does not match the shape plan"
+      ShapeError.ScriptMismatch { .. } => "buffer script does not match the shape plan"
     }
   }
 }

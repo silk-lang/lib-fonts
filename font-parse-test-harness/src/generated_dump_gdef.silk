@@ -2,7 +2,6 @@
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 import read_fonts.tables.gdef {
   Gdef,
-  GlyphClassDef,
   AttachList,
   AttachPoint,
   LigCaretList,
@@ -14,46 +13,13 @@ import read_fonts.tables.gdef {
   MarkGlyphSets,
   LigCaretList2
 }
-import read_fonts.lib {
-  FontData,
-  FontRead,
-  ReadError,
-  ScalarArray,
-  ComputedArray,
-  VarLenArray,
-  VarLenIter,
-  ReadArgs2,
-  ReadArgs3,
-  ArrayOfOffsets,
-  ArrayOfNullableOffsets
-}
-import font_types.lib {
-  Fixed,
-  F2Dot14,
-  FWord,
-  UfWord,
-  Tag,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
-  GlyphId16,
-  GlyphId24,
-  GlyphId,
-  NameId,
-  Nullable,
-  Offset16,
-  Offset24,
-  Offset32
-}
-import dump_support { DumpPath, DumpTable, scalar, absent, readError, versionBits, bytes }
+import read_fonts.lib { FontData, ReadError, ScalarArray, ArrayOfOffsets }
+import font_types.lib { Tag, Uint24, Nullable, Offset16, Offset24, Offset32 }
+import dump_support { DumpPath, DumpTable, scalar, absent, readError }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.io.writer { Writer, WriterError }
-import silk.num.u8
 import silk.num.u16
-import silk.num.u32
 import silk.num.u64
 import read_fonts.tables.layout { CoverageTable, ClassDef, DeviceOrVariationIndex }
 import read_fonts.tables.variations { ItemVariationStore }
@@ -70,7 +36,6 @@ pub effect fn dumpGdef<'a>(path: &mut DumpPath, value: Gdef<'a>) -> ()
   ) {
     return
   }
-  let base = Gdef<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "version")
     let fieldValue = Gdef<'a>.version(&value)
@@ -399,7 +364,6 @@ pub effect fn dumpAttachList<'a>(path: &mut DumpPath, value: AttachList<'a>) -> 
   ) {
     return
   }
-  let base = AttachList<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "coverageOffset")
     let fieldValue = AttachList<'a>.coverageOffset(&value)
@@ -484,7 +448,6 @@ pub effect fn dumpAttachPoint<'a>(path: &mut DumpPath, value: AttachPoint<'a>) -
   ) {
     return
   }
-  let base = AttachPoint<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "pointCount")
     let fieldValue = AttachPoint<'a>.pointCount(&value)
@@ -522,7 +485,6 @@ pub effect fn dumpLigCaretList<'a>(path: &mut DumpPath, value: LigCaretList<'a>)
   ) {
     return
   }
-  let base = LigCaretList<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "coverageOffset")
     let fieldValue = LigCaretList<'a>.coverageOffset(&value)
@@ -607,7 +569,6 @@ pub effect fn dumpLigGlyph<'a>(path: &mut DumpPath, value: LigGlyph<'a>) -> ()
   ) {
     return
   }
-  let base = LigGlyph<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "caretCount")
     let fieldValue = LigGlyph<'a>.caretCount(&value)
@@ -663,7 +624,6 @@ pub effect fn dumpLigGlyph<'a>(path: &mut DumpPath, value: LigGlyph<'a>) -> ()
 pub effect fn dumpCaretValue<'a>(path: &mut DumpPath, value: CaretValue<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -702,7 +662,6 @@ pub effect fn dumpCaretValueFormat1<'a>(path: &mut DumpPath, value: CaretValueFo
   ) {
     return
   }
-  let base = CaretValueFormat1<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "caretValueFormat")
     let fieldValue = CaretValueFormat1<'a>.caretValueFormat(&value)
@@ -729,7 +688,6 @@ pub effect fn dumpCaretValueFormat2<'a>(path: &mut DumpPath, value: CaretValueFo
   ) {
     return
   }
-  let base = CaretValueFormat2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "caretValueFormat")
     let fieldValue = CaretValueFormat2<'a>.caretValueFormat(&value)
@@ -756,7 +714,6 @@ pub effect fn dumpCaretValueFormat3<'a>(path: &mut DumpPath, value: CaretValueFo
   ) {
     return
   }
-  let base = CaretValueFormat3<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "caretValueFormat")
     let fieldValue = CaretValueFormat3<'a>.caretValueFormat(&value)
@@ -803,7 +760,6 @@ pub effect fn dumpMarkGlyphSets<'a>(path: &mut DumpPath, value: MarkGlyphSets<'a
   ) {
     return
   }
-  let base = MarkGlyphSets<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = MarkGlyphSets<'a>.format(&value)
@@ -874,7 +830,6 @@ pub effect fn dumpLigCaretList2<'a>(path: &mut DumpPath, value: LigCaretList2<'a
   ) {
     return
   }
-  let base = LigCaretList2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "coverageOffset")
     let fieldValue = LigCaretList2<'a>.coverageOffset(&value)

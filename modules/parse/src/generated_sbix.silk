@@ -2,14 +2,12 @@
 // Source: pinned resources/codegen_inputs; generator: modules/parse/tools/font-codegen-silk.
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 import font_data { FontData }
-import read { ReadError, FontRead, FontReadAt, ComputeSize, Format, computeSize, readAtWithArgs }
+import read { ReadError, FontRead }
 import table_provider { TopLevelTable }
-import array { ScalarArray, ComputedArray, VarLenArray }
-import offset { resolve, resolveWithArgs, resolveNullableWithArgs }
-import offset_array { ArrayOfOffsets, ArrayOfNullableOffsets }
-import read_args { ReadArgs2, ReadArgs3 }
+import array { ScalarArray }
+import offset_array { ArrayOfOffsets }
 import table_ref { ByteRange, MinByteRange }
-import generated_support { scalarOr, recordArray, varLenArray, varLenBytes, signedCount }
+import generated_support { scalarOr }
 import font_types.lib {
   Scalar,
   FixedSize,
@@ -17,25 +15,8 @@ import font_types.lib {
   readScalar,
   writeScalar,
   Tag,
-  Fixed,
-  F2Dot14,
-  F4Dot12,
-  F6Dot10,
-  FWord,
-  UfWord,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
   GlyphId,
-  GlyphId16,
-  GlyphId24,
-  NameId,
-  Offset16,
-  Offset24,
-  Offset32,
-  Nullable
+  Offset32
 }
 import silk.core.option { Option }
 import silk.core.result { Result }
@@ -49,9 +30,7 @@ import silk.num.usize
 import silk.num.u8
 import silk.num.u16
 import silk.num.u32
-import silk.num.u64
 import silk.num.i16
-import silk.num.i32
 
 /// Sbix header flags.
 pub struct HeaderFlags {
@@ -264,15 +243,12 @@ impl<'a> Sbix<'a> {
     }
     let mut ranges: [ByteRange; 4] = [ByteRange { start: 0, end: 0 }; 4]
     let mut end: usize = 0
-    let numGlyphsValue = numGlyphs
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let versionValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let flagsValue = scalarOr<HeaderFlags>(data, ranges[1].start, HeaderFlags.empty())
     ranges[2].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[2].end = end
@@ -297,7 +273,7 @@ impl<'a> Sbix<'a> {
   pub fn version(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -314,7 +290,7 @@ impl<'a> Sbix<'a> {
       self._fieldRanges[1].start,
     ) {
       Result<HeaderFlags, ReadError>.Success { value } => value
-      Result<HeaderFlags, ReadError>.Failure { error } => HeaderFlags.empty()
+      Result<HeaderFlags, ReadError>.Failure { .. } => HeaderFlags.empty()
     }
   }
 
@@ -326,7 +302,7 @@ impl<'a> Sbix<'a> {
   pub fn numStrikes(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[2].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -342,9 +318,7 @@ impl<'a> Sbix<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, Offset32>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset32>, ReadError>.Failure { error } => ScalarArray<
-        Offset32
-      >.empty()
+      Result<ScalarArray<'a, Offset32>, ReadError>.Failure { .. } => ScalarArray<Offset32>.empty()
     }
   }
 
@@ -421,11 +395,9 @@ impl<'a> Strike<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let ppemValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let ppiValue = scalarOr<u16>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(
       end,
@@ -445,7 +417,7 @@ impl<'a> Strike<'a> {
   pub fn ppem(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -457,7 +429,7 @@ impl<'a> Strike<'a> {
   pub fn ppi(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -473,7 +445,7 @@ impl<'a> Strike<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ScalarArray<'a, u32>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, u32>, ReadError>.Failure { error } => ScalarArray<u32>.empty()
+      Result<ScalarArray<'a, u32>, ReadError>.Failure { .. } => ScalarArray<u32>.empty()
     }
   }
 
@@ -530,15 +502,12 @@ impl<'a> GlyphData<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let originOffsetXValue = scalarOr<i16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let originOffsetYValue = scalarOr<i16>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[2].end = end
-    let graphicTypeValue = scalarOr<Tag>(data, ranges[2].start, Tag.default())
     ranges[3].start = end
     end = usize.saturatingAdd(end, (usize.saturatingSubtract(FontData.len(&data), end) / 1 * 1))
     ranges[3].end = end
@@ -553,7 +522,7 @@ impl<'a> GlyphData<'a> {
   pub fn originOffsetX(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[0].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -565,7 +534,7 @@ impl<'a> GlyphData<'a> {
   pub fn originOffsetY(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[1].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -577,7 +546,7 @@ impl<'a> GlyphData<'a> {
   pub fn graphicType(self: &Self) -> Tag {
     return match move FontData<'a>.readAt<Tag>(&self._fontData, self._fieldRanges[2].start) {
       Result<Tag, ReadError>.Success { value } => value
-      Result<Tag, ReadError>.Failure { error } => Tag.default()
+      Result<Tag, ReadError>.Failure { .. } => Tag.default()
     }
   }
 
@@ -593,7 +562,7 @@ impl<'a> GlyphData<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, u8>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, u8>, ReadError>.Failure { error } => ScalarArray<u8>.empty()
+      Result<ScalarArray<'a, u8>, ReadError>.Failure { .. } => ScalarArray<u8>.empty()
     }
   }
 

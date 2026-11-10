@@ -2,36 +2,20 @@
 // Source: pinned resources/codegen_inputs; generator: modules/parse/tools/font-codegen-silk.
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 import font_data { FontData }
-import read { ReadError, FontRead, FontReadAt, ComputeSize, Format, computeSize, readAtWithArgs }
+import read { ReadError, FontRead, Format }
 import table_provider { TopLevelTable }
-import array { ScalarArray, ComputedArray, VarLenArray }
+import array { ScalarArray }
 import offset { resolve, resolveWithArgs, resolveNullableWithArgs }
-import offset_array { ArrayOfOffsets, ArrayOfNullableOffsets }
-import read_args { ReadArgs2, ReadArgs3 }
+import offset_array { ArrayOfOffsets }
 import table_ref { ByteRange, MinByteRange }
-import generated_support { scalarOr, recordArray, varLenArray, varLenBytes, signedCount }
+import generated_support { scalarOr }
 import font_types.lib {
-  Scalar,
-  FixedSize,
-  rawByteLen,
-  readScalar,
-  writeScalar,
   Tag,
-  Fixed,
-  F2Dot14,
-  F4Dot12,
-  F6Dot10,
-  FWord,
-  UfWord,
   MajorMinor,
-  Version16Dot16,
-  LongDateTime,
   Uint24,
   Int24,
-  GlyphId,
   GlyphId16,
   GlyphId24,
-  NameId,
   Offset16,
   Offset24,
   Offset32,
@@ -40,18 +24,11 @@ import font_types.lib {
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.core.ownership { Copy }
-import silk.core.equal { Equal }
-import silk.core.order { Order, Ordering }
-import silk.text.format { Debug, Formatter }
-import silk.io.writer { Writer, WriterError }
-import silk.core.ops { BitAnd, BitOr, BitXor, Not, Subtract }
 import silk.num.usize
 import silk.num.u8
 import silk.num.u16
 import silk.num.u32
-import silk.num.u64
 import silk.num.i16
-import silk.num.i32
 import generated_layout {
   Lookup,
   LookupList,
@@ -60,8 +37,6 @@ import generated_layout {
   FeatureList,
   FeatureVariations,
   CoverageTable,
-  ClassDef,
-  DeviceOrVariationIndex,
   SequenceContext,
   ChainedSequenceContext,
   HeaderOffset,
@@ -104,67 +79,32 @@ impl<'a> Gsub<'a> {
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let scriptListOffsetValue = scalarOr<Nullable<Offset16>>(
-      data,
-      ranges[1].start,
-      Nullable<Offset16>.default(),
-    )
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let featureListOffsetValue = scalarOr<Nullable<Offset16>>(
-      data,
-      ranges[2].start,
-      Nullable<Offset16>.default(),
-    )
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let lookupListOffsetValue = scalarOr<Nullable<Offset16>>(
-      data,
-      ranges[3].start,
-      Nullable<Offset16>.default(),
-    )
     ranges[4].start = end
     if MajorMinor.compatible(&versionValue, MajorMinor.new(1, 1)) {
       end = usize.saturatingAdd(end, 4)
     }
     ranges[4].end = end
-    let featureVariationsOffsetValue = scalarOr<Nullable<Offset32>>(
-      data,
-      ranges[4].start,
-      Nullable<Offset32>.default(),
-    )
     ranges[5].start = end
     if MajorMinor.compatible(&versionValue, MajorMinor.new(1, 2)) {
       end = usize.saturatingAdd(end, 4)
     }
     ranges[5].end = end
-    let scriptList2OffsetValue = scalarOr<Nullable<Offset32>>(
-      data,
-      ranges[5].start,
-      Nullable<Offset32>.default(),
-    )
     ranges[6].start = end
     if MajorMinor.compatible(&versionValue, MajorMinor.new(1, 2)) {
       end = usize.saturatingAdd(end, 4)
     }
     ranges[6].end = end
-    let featureList2OffsetValue = scalarOr<Nullable<Offset32>>(
-      data,
-      ranges[6].start,
-      Nullable<Offset32>.default(),
-    )
     ranges[7].start = end
     if MajorMinor.compatible(&versionValue, MajorMinor.new(1, 2)) {
       end = usize.saturatingAdd(end, 4)
     }
     ranges[7].end = end
-    let lookupList2OffsetValue = scalarOr<Nullable<Offset32>>(
-      data,
-      ranges[7].start,
-      Nullable<Offset32>.default(),
-    )
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -180,7 +120,7 @@ impl<'a> Gsub<'a> {
   pub fn version(self: &Self) -> MajorMinor {
     return match move FontData<'a>.readAt<MajorMinor>(&self._fontData, self._fieldRanges[0].start) {
       Result<MajorMinor, ReadError>.Success { value } => value
-      Result<MajorMinor, ReadError>.Failure { error } => MajorMinor.new(0, 0)
+      Result<MajorMinor, ReadError>.Failure { .. } => MajorMinor.new(0, 0)
     }
   }
 
@@ -195,7 +135,7 @@ impl<'a> Gsub<'a> {
       self._fieldRanges[1].start,
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -210,7 +150,7 @@ impl<'a> Gsub<'a> {
       self._fieldRanges[2].start,
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -225,7 +165,7 @@ impl<'a> Gsub<'a> {
       self._fieldRanges[3].start,
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -246,7 +186,7 @@ impl<'a> Gsub<'a> {
       Result<Nullable<Offset32>, ReadError>.Success { value } => Option<Nullable<Offset32>>.some(
         value,
       )
-      Result<Nullable<Offset32>, ReadError>.Failure { error } => Option<Nullable<Offset32>>.None
+      Result<Nullable<Offset32>, ReadError>.Failure { .. } => Option<Nullable<Offset32>>.None
     }
   }
 
@@ -276,7 +216,7 @@ impl<'a> Gsub<'a> {
       Result<Nullable<Offset32>, ReadError>.Success { value } => Option<Nullable<Offset32>>.some(
         value,
       )
-      Result<Nullable<Offset32>, ReadError>.Failure { error } => Option<Nullable<Offset32>>.None
+      Result<Nullable<Offset32>, ReadError>.Failure { .. } => Option<Nullable<Offset32>>.None
     }
   }
 
@@ -306,7 +246,7 @@ impl<'a> Gsub<'a> {
       Result<Nullable<Offset32>, ReadError>.Success { value } => Option<Nullable<Offset32>>.some(
         value,
       )
-      Result<Nullable<Offset32>, ReadError>.Failure { error } => Option<Nullable<Offset32>>.None
+      Result<Nullable<Offset32>, ReadError>.Failure { .. } => Option<Nullable<Offset32>>.None
     }
   }
 
@@ -336,7 +276,7 @@ impl<'a> Gsub<'a> {
       Result<Nullable<Offset32>, ReadError>.Success { value } => Option<Nullable<Offset32>>.some(
         value,
       )
-      Result<Nullable<Offset32>, ReadError>.Failure { error } => Option<Nullable<Offset32>>.None
+      Result<Nullable<Offset32>, ReadError>.Failure { .. } => Option<Nullable<Offset32>>.None
     }
   }
 
@@ -706,15 +646,12 @@ impl<'a> SingleSubstFormat1<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let substFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let coverageOffsetValue = scalarOr<Offset16>(data, ranges[1].start, Offset16.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let deltaGlyphIdValue = scalarOr<i16>(data, ranges[2].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -726,7 +663,7 @@ impl<'a> SingleSubstFormat1<'a> {
   pub fn substFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -739,7 +676,7 @@ impl<'a> SingleSubstFormat1<'a> {
   pub fn coverageOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -756,7 +693,7 @@ impl<'a> SingleSubstFormat1<'a> {
   pub fn deltaGlyphId(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[2].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -812,11 +749,9 @@ impl<'a> SingleSubstFormat2<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let substFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let coverageOffsetValue = scalarOr<Offset16>(data, ranges[1].start, Offset16.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
@@ -835,7 +770,7 @@ impl<'a> SingleSubstFormat2<'a> {
   pub fn substFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -848,7 +783,7 @@ impl<'a> SingleSubstFormat2<'a> {
   pub fn coverageOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -865,7 +800,7 @@ impl<'a> SingleSubstFormat2<'a> {
   pub fn glyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[2].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -881,9 +816,7 @@ impl<'a> SingleSubstFormat2<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, GlyphId16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, GlyphId16>, ReadError>.Failure { error } => ScalarArray<
-        GlyphId16
-      >.empty()
+      Result<ScalarArray<'a, GlyphId16>, ReadError>.Failure { .. } => ScalarArray<GlyphId16>.empty()
     }
   }
 
@@ -946,11 +879,9 @@ impl<'a> MultipleSubstFormat1<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let substFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let coverageOffsetValue = scalarOr<Offset16>(data, ranges[1].start, Offset16.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
@@ -969,7 +900,7 @@ impl<'a> MultipleSubstFormat1<'a> {
   pub fn substFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -982,7 +913,7 @@ impl<'a> MultipleSubstFormat1<'a> {
   pub fn coverageOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -999,7 +930,7 @@ impl<'a> MultipleSubstFormat1<'a> {
   pub fn sequenceCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[2].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1016,9 +947,7 @@ impl<'a> MultipleSubstFormat1<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, Offset16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { error } => ScalarArray<
-        Offset16
-      >.empty()
+      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { .. } => ScalarArray<Offset16>.empty()
     }
   }
 
@@ -1105,7 +1034,7 @@ impl<'a> Sequence<'a> {
   pub fn glyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1121,9 +1050,7 @@ impl<'a> Sequence<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, GlyphId16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, GlyphId16>, ReadError>.Failure { error } => ScalarArray<
-        GlyphId16
-      >.empty()
+      Result<ScalarArray<'a, GlyphId16>, ReadError>.Failure { .. } => ScalarArray<GlyphId16>.empty()
     }
   }
 
@@ -1180,11 +1107,9 @@ impl<'a> AlternateSubstFormat1<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let substFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let coverageOffsetValue = scalarOr<Offset16>(data, ranges[1].start, Offset16.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
@@ -1203,7 +1128,7 @@ impl<'a> AlternateSubstFormat1<'a> {
   pub fn substFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1216,7 +1141,7 @@ impl<'a> AlternateSubstFormat1<'a> {
   pub fn coverageOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -1233,7 +1158,7 @@ impl<'a> AlternateSubstFormat1<'a> {
   pub fn alternateSetCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[2].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1250,9 +1175,7 @@ impl<'a> AlternateSubstFormat1<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, Offset16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { error } => ScalarArray<
-        Offset16
-      >.empty()
+      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { .. } => ScalarArray<Offset16>.empty()
     }
   }
 
@@ -1338,7 +1261,7 @@ impl<'a> AlternateSet<'a> {
   pub fn glyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1354,9 +1277,7 @@ impl<'a> AlternateSet<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, GlyphId16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, GlyphId16>, ReadError>.Failure { error } => ScalarArray<
-        GlyphId16
-      >.empty()
+      Result<ScalarArray<'a, GlyphId16>, ReadError>.Failure { .. } => ScalarArray<GlyphId16>.empty()
     }
   }
 
@@ -1413,11 +1334,9 @@ impl<'a> LigatureSubstFormat1<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let substFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let coverageOffsetValue = scalarOr<Offset16>(data, ranges[1].start, Offset16.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
@@ -1436,7 +1355,7 @@ impl<'a> LigatureSubstFormat1<'a> {
   pub fn substFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1449,7 +1368,7 @@ impl<'a> LigatureSubstFormat1<'a> {
   pub fn coverageOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -1466,7 +1385,7 @@ impl<'a> LigatureSubstFormat1<'a> {
   pub fn ligatureSetCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[2].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1483,9 +1402,7 @@ impl<'a> LigatureSubstFormat1<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, Offset16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { error } => ScalarArray<
-        Offset16
-      >.empty()
+      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { .. } => ScalarArray<Offset16>.empty()
     }
   }
 
@@ -1571,7 +1488,7 @@ impl<'a> LigatureSet<'a> {
   pub fn ligatureCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1588,9 +1505,7 @@ impl<'a> LigatureSet<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, Offset16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { error } => ScalarArray<
-        Offset16
-      >.empty()
+      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { .. } => ScalarArray<Offset16>.empty()
     }
   }
 
@@ -1655,7 +1570,6 @@ impl<'a> Ligature<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let ligatureGlyphValue = scalarOr<GlyphId16>(data, ranges[0].start, GlyphId16.new(0))
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
@@ -1677,7 +1591,7 @@ impl<'a> Ligature<'a> {
   pub fn ligatureGlyph(self: &Self) -> GlyphId16 {
     return match move FontData<'a>.readAt<GlyphId16>(&self._fontData, self._fieldRanges[0].start) {
       Result<GlyphId16, ReadError>.Success { value } => value
-      Result<GlyphId16, ReadError>.Failure { error } => GlyphId16.new(0)
+      Result<GlyphId16, ReadError>.Failure { .. } => GlyphId16.new(0)
     }
   }
 
@@ -1689,7 +1603,7 @@ impl<'a> Ligature<'a> {
   pub fn componentCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1706,9 +1620,7 @@ impl<'a> Ligature<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ScalarArray<'a, GlyphId16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, GlyphId16>, ReadError>.Failure { error } => ScalarArray<
-        GlyphId16
-      >.empty()
+      Result<ScalarArray<'a, GlyphId16>, ReadError>.Failure { .. } => ScalarArray<GlyphId16>.empty()
     }
   }
 
@@ -1765,15 +1677,12 @@ impl<'a, T> ExtensionSubstFormat1<'a, T> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let substFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let extensionLookupTypeValue = scalarOr<u16>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[2].end = end
-    let extensionOffsetValue = scalarOr<Offset32>(data, ranges[2].start, Offset32.new(0))
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -1785,7 +1694,7 @@ impl<'a, T> ExtensionSubstFormat1<'a, T> {
   pub fn substFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1798,7 +1707,7 @@ impl<'a, T> ExtensionSubstFormat1<'a, T> {
   pub fn extensionLookupType(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1812,7 +1721,7 @@ impl<'a, T> ExtensionSubstFormat1<'a, T> {
   pub fn extensionOffset(self: &Self) -> Offset32 {
     return match move FontData<'a>.readAt<Offset32>(&self._fontData, self._fieldRanges[2].start) {
       Result<Offset32, ReadError>.Success { value } => value
-      Result<Offset32, ReadError>.Failure { error } => Offset32.new(0)
+      Result<Offset32, ReadError>.Failure { .. } => Offset32.new(0)
     }
   }
 
@@ -2047,11 +1956,9 @@ impl<'a> ReverseChainSingleSubstFormat1<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let substFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let coverageOffsetValue = scalarOr<Offset16>(data, ranges[1].start, Offset16.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
@@ -2090,7 +1997,7 @@ impl<'a> ReverseChainSingleSubstFormat1<'a> {
   pub fn substFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2103,7 +2010,7 @@ impl<'a> ReverseChainSingleSubstFormat1<'a> {
   pub fn coverageOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -2120,7 +2027,7 @@ impl<'a> ReverseChainSingleSubstFormat1<'a> {
   pub fn backtrackGlyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[2].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2137,9 +2044,7 @@ impl<'a> ReverseChainSingleSubstFormat1<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, Offset16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { error } => ScalarArray<
-        Offset16
-      >.empty()
+      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { .. } => ScalarArray<Offset16>.empty()
     }
   }
 
@@ -2159,7 +2064,7 @@ impl<'a> ReverseChainSingleSubstFormat1<'a> {
   pub fn lookaheadGlyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[4].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2176,9 +2081,7 @@ impl<'a> ReverseChainSingleSubstFormat1<'a> {
       self._fieldRanges[5].end,
     ) {
       Result<ScalarArray<'a, Offset16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { error } => ScalarArray<
-        Offset16
-      >.empty()
+      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { .. } => ScalarArray<Offset16>.empty()
     }
   }
 
@@ -2198,7 +2101,7 @@ impl<'a> ReverseChainSingleSubstFormat1<'a> {
   pub fn glyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[6].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2214,9 +2117,7 @@ impl<'a> ReverseChainSingleSubstFormat1<'a> {
       self._fieldRanges[7].end,
     ) {
       Result<ScalarArray<'a, GlyphId16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, GlyphId16>, ReadError>.Failure { error } => ScalarArray<
-        GlyphId16
-      >.empty()
+      Result<ScalarArray<'a, GlyphId16>, ReadError>.Failure { .. } => ScalarArray<GlyphId16>.empty()
     }
   }
 
@@ -2272,15 +2173,12 @@ impl<'a> SingleSubstFormat3<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let substFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[1].end = end
-    let coverageOffsetValue = scalarOr<Offset32>(data, ranges[1].start, Offset32.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[2].end = end
-    let deltaGlyphIdValue = scalarOr<Int24>(data, ranges[2].start, Int24.new(0))
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -2292,7 +2190,7 @@ impl<'a> SingleSubstFormat3<'a> {
   pub fn substFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2305,7 +2203,7 @@ impl<'a> SingleSubstFormat3<'a> {
   pub fn coverageOffset(self: &Self) -> Offset32 {
     return match move FontData<'a>.readAt<Offset32>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset32, ReadError>.Success { value } => value
-      Result<Offset32, ReadError>.Failure { error } => Offset32.new(0)
+      Result<Offset32, ReadError>.Failure { .. } => Offset32.new(0)
     }
   }
 
@@ -2322,7 +2220,7 @@ impl<'a> SingleSubstFormat3<'a> {
   pub fn deltaGlyphId(self: &Self) -> Int24 {
     return match move FontData<'a>.readAt<Int24>(&self._fontData, self._fieldRanges[2].start) {
       Result<Int24, ReadError>.Success { value } => value
-      Result<Int24, ReadError>.Failure { error } => Int24.new(0)
+      Result<Int24, ReadError>.Failure { .. } => Int24.new(0)
     }
   }
 
@@ -2378,11 +2276,9 @@ impl<'a> SingleSubstFormat4<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let substFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[1].end = end
-    let coverageOffsetValue = scalarOr<Offset32>(data, ranges[1].start, Offset32.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[2].end = end
@@ -2404,7 +2300,7 @@ impl<'a> SingleSubstFormat4<'a> {
   pub fn substFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2417,7 +2313,7 @@ impl<'a> SingleSubstFormat4<'a> {
   pub fn coverageOffset(self: &Self) -> Offset32 {
     return match move FontData<'a>.readAt<Offset32>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset32, ReadError>.Success { value } => value
-      Result<Offset32, ReadError>.Failure { error } => Offset32.new(0)
+      Result<Offset32, ReadError>.Failure { .. } => Offset32.new(0)
     }
   }
 
@@ -2434,7 +2330,7 @@ impl<'a> SingleSubstFormat4<'a> {
   pub fn glyphCount(self: &Self) -> Uint24 {
     return match move FontData<'a>.readAt<Uint24>(&self._fontData, self._fieldRanges[2].start) {
       Result<Uint24, ReadError>.Success { value } => value
-      Result<Uint24, ReadError>.Failure { error } => Uint24.new(0)
+      Result<Uint24, ReadError>.Failure { .. } => Uint24.new(0)
     }
   }
 
@@ -2450,9 +2346,7 @@ impl<'a> SingleSubstFormat4<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, GlyphId24>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, GlyphId24>, ReadError>.Failure { error } => ScalarArray<
-        GlyphId24
-      >.empty()
+      Result<ScalarArray<'a, GlyphId24>, ReadError>.Failure { .. } => ScalarArray<GlyphId24>.empty()
     }
   }
 
@@ -2508,11 +2402,9 @@ impl<'a> MultipleSubstFormat2<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let substFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[1].end = end
-    let coverageOffsetValue = scalarOr<Offset32>(data, ranges[1].start, Offset32.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[2].end = end
@@ -2534,7 +2426,7 @@ impl<'a> MultipleSubstFormat2<'a> {
   pub fn substFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2547,7 +2439,7 @@ impl<'a> MultipleSubstFormat2<'a> {
   pub fn coverageOffset(self: &Self) -> Offset32 {
     return match move FontData<'a>.readAt<Offset32>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset32, ReadError>.Success { value } => value
-      Result<Offset32, ReadError>.Failure { error } => Offset32.new(0)
+      Result<Offset32, ReadError>.Failure { .. } => Offset32.new(0)
     }
   }
 
@@ -2564,7 +2456,7 @@ impl<'a> MultipleSubstFormat2<'a> {
   pub fn sequenceCount(self: &Self) -> Uint24 {
     return match move FontData<'a>.readAt<Uint24>(&self._fontData, self._fieldRanges[2].start) {
       Result<Uint24, ReadError>.Success { value } => value
-      Result<Uint24, ReadError>.Failure { error } => Uint24.new(0)
+      Result<Uint24, ReadError>.Failure { .. } => Uint24.new(0)
     }
   }
 
@@ -2581,9 +2473,7 @@ impl<'a> MultipleSubstFormat2<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, Offset24>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset24>, ReadError>.Failure { error } => ScalarArray<
-        Offset24
-      >.empty()
+      Result<ScalarArray<'a, Offset24>, ReadError>.Failure { .. } => ScalarArray<Offset24>.empty()
     }
   }
 
@@ -2647,11 +2537,9 @@ impl<'a> AlternateSubstFormat2<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let substFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[1].end = end
-    let coverageOffsetValue = scalarOr<Offset32>(data, ranges[1].start, Offset32.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[2].end = end
@@ -2673,7 +2561,7 @@ impl<'a> AlternateSubstFormat2<'a> {
   pub fn substFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2686,7 +2574,7 @@ impl<'a> AlternateSubstFormat2<'a> {
   pub fn coverageOffset(self: &Self) -> Offset32 {
     return match move FontData<'a>.readAt<Offset32>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset32, ReadError>.Success { value } => value
-      Result<Offset32, ReadError>.Failure { error } => Offset32.new(0)
+      Result<Offset32, ReadError>.Failure { .. } => Offset32.new(0)
     }
   }
 
@@ -2703,7 +2591,7 @@ impl<'a> AlternateSubstFormat2<'a> {
   pub fn alternateSetCount(self: &Self) -> Uint24 {
     return match move FontData<'a>.readAt<Uint24>(&self._fontData, self._fieldRanges[2].start) {
       Result<Uint24, ReadError>.Success { value } => value
-      Result<Uint24, ReadError>.Failure { error } => Uint24.new(0)
+      Result<Uint24, ReadError>.Failure { .. } => Uint24.new(0)
     }
   }
 
@@ -2720,9 +2608,7 @@ impl<'a> AlternateSubstFormat2<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, Offset24>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset24>, ReadError>.Failure { error } => ScalarArray<
-        Offset24
-      >.empty()
+      Result<ScalarArray<'a, Offset24>, ReadError>.Failure { .. } => ScalarArray<Offset24>.empty()
     }
   }
 
@@ -2786,11 +2672,9 @@ impl<'a> LigatureSubstFormat2<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let substFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[1].end = end
-    let coverageOffsetValue = scalarOr<Offset32>(data, ranges[1].start, Offset32.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[2].end = end
@@ -2812,7 +2696,7 @@ impl<'a> LigatureSubstFormat2<'a> {
   pub fn substFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2825,7 +2709,7 @@ impl<'a> LigatureSubstFormat2<'a> {
   pub fn coverageOffset(self: &Self) -> Offset32 {
     return match move FontData<'a>.readAt<Offset32>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset32, ReadError>.Success { value } => value
-      Result<Offset32, ReadError>.Failure { error } => Offset32.new(0)
+      Result<Offset32, ReadError>.Failure { .. } => Offset32.new(0)
     }
   }
 
@@ -2842,7 +2726,7 @@ impl<'a> LigatureSubstFormat2<'a> {
   pub fn ligatureSetCount(self: &Self) -> Uint24 {
     return match move FontData<'a>.readAt<Uint24>(&self._fontData, self._fieldRanges[2].start) {
       Result<Uint24, ReadError>.Success { value } => value
-      Result<Uint24, ReadError>.Failure { error } => Uint24.new(0)
+      Result<Uint24, ReadError>.Failure { .. } => Uint24.new(0)
     }
   }
 
@@ -2859,9 +2743,7 @@ impl<'a> LigatureSubstFormat2<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, Offset24>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset24>, ReadError>.Failure { error } => ScalarArray<
-        Offset24
-      >.empty()
+      Result<ScalarArray<'a, Offset24>, ReadError>.Failure { .. } => ScalarArray<Offset24>.empty()
     }
   }
 
@@ -2925,11 +2807,9 @@ impl<'a> ReverseChainSingleSubstFormat2<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let substFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[1].end = end
-    let coverageOffsetValue = scalarOr<Offset32>(data, ranges[1].start, Offset32.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
@@ -2971,7 +2851,7 @@ impl<'a> ReverseChainSingleSubstFormat2<'a> {
   pub fn substFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2984,7 +2864,7 @@ impl<'a> ReverseChainSingleSubstFormat2<'a> {
   pub fn coverageOffset(self: &Self) -> Offset32 {
     return match move FontData<'a>.readAt<Offset32>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset32, ReadError>.Success { value } => value
-      Result<Offset32, ReadError>.Failure { error } => Offset32.new(0)
+      Result<Offset32, ReadError>.Failure { .. } => Offset32.new(0)
     }
   }
 
@@ -3001,7 +2881,7 @@ impl<'a> ReverseChainSingleSubstFormat2<'a> {
   pub fn backtrackGlyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[2].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3018,9 +2898,7 @@ impl<'a> ReverseChainSingleSubstFormat2<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, Offset24>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset24>, ReadError>.Failure { error } => ScalarArray<
-        Offset24
-      >.empty()
+      Result<ScalarArray<'a, Offset24>, ReadError>.Failure { .. } => ScalarArray<Offset24>.empty()
     }
   }
 
@@ -3040,7 +2918,7 @@ impl<'a> ReverseChainSingleSubstFormat2<'a> {
   pub fn lookaheadGlyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[4].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3057,9 +2935,7 @@ impl<'a> ReverseChainSingleSubstFormat2<'a> {
       self._fieldRanges[5].end,
     ) {
       Result<ScalarArray<'a, Offset24>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset24>, ReadError>.Failure { error } => ScalarArray<
-        Offset24
-      >.empty()
+      Result<ScalarArray<'a, Offset24>, ReadError>.Failure { .. } => ScalarArray<Offset24>.empty()
     }
   }
 
@@ -3079,7 +2955,7 @@ impl<'a> ReverseChainSingleSubstFormat2<'a> {
   pub fn glyphCount(self: &Self) -> Uint24 {
     return match move FontData<'a>.readAt<Uint24>(&self._fontData, self._fieldRanges[6].start) {
       Result<Uint24, ReadError>.Success { value } => value
-      Result<Uint24, ReadError>.Failure { error } => Uint24.new(0)
+      Result<Uint24, ReadError>.Failure { .. } => Uint24.new(0)
     }
   }
 
@@ -3095,9 +2971,7 @@ impl<'a> ReverseChainSingleSubstFormat2<'a> {
       self._fieldRanges[7].end,
     ) {
       Result<ScalarArray<'a, GlyphId24>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, GlyphId24>, ReadError>.Failure { error } => ScalarArray<
-        GlyphId24
-      >.empty()
+      Result<ScalarArray<'a, GlyphId24>, ReadError>.Failure { .. } => ScalarArray<GlyphId24>.empty()
     }
   }
 
@@ -3176,7 +3050,7 @@ impl<'a> Sequence2<'a> {
   pub fn glyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3192,9 +3066,7 @@ impl<'a> Sequence2<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, GlyphId24>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, GlyphId24>, ReadError>.Failure { error } => ScalarArray<
-        GlyphId24
-      >.empty()
+      Result<ScalarArray<'a, GlyphId24>, ReadError>.Failure { .. } => ScalarArray<GlyphId24>.empty()
     }
   }
 
@@ -3266,7 +3138,7 @@ impl<'a> AlternateSet2<'a> {
   pub fn glyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3282,9 +3154,7 @@ impl<'a> AlternateSet2<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, GlyphId24>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, GlyphId24>, ReadError>.Failure { error } => ScalarArray<
-        GlyphId24
-      >.empty()
+      Result<ScalarArray<'a, GlyphId24>, ReadError>.Failure { .. } => ScalarArray<GlyphId24>.empty()
     }
   }
 
@@ -3356,7 +3226,7 @@ impl<'a> LigatureSet2<'a> {
   pub fn ligatureCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3373,9 +3243,7 @@ impl<'a> LigatureSet2<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, Offset24>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset24>, ReadError>.Failure { error } => ScalarArray<
-        Offset24
-      >.empty()
+      Result<ScalarArray<'a, Offset24>, ReadError>.Failure { .. } => ScalarArray<Offset24>.empty()
     }
   }
 
@@ -3440,7 +3308,6 @@ impl<'a> Ligature2<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[0].end = end
-    let ligatureGlyphValue = scalarOr<GlyphId24>(data, ranges[0].start, GlyphId24.new(0))
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
@@ -3462,7 +3329,7 @@ impl<'a> Ligature2<'a> {
   pub fn ligatureGlyph(self: &Self) -> GlyphId24 {
     return match move FontData<'a>.readAt<GlyphId24>(&self._fontData, self._fieldRanges[0].start) {
       Result<GlyphId24, ReadError>.Success { value } => value
-      Result<GlyphId24, ReadError>.Failure { error } => GlyphId24.new(0)
+      Result<GlyphId24, ReadError>.Failure { .. } => GlyphId24.new(0)
     }
   }
 
@@ -3474,7 +3341,7 @@ impl<'a> Ligature2<'a> {
   pub fn componentCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3491,9 +3358,7 @@ impl<'a> Ligature2<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ScalarArray<'a, GlyphId24>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, GlyphId24>, ReadError>.Failure { error } => ScalarArray<
-        GlyphId24
-      >.empty()
+      Result<ScalarArray<'a, GlyphId24>, ReadError>.Failure { .. } => ScalarArray<GlyphId24>.empty()
     }
   }
 

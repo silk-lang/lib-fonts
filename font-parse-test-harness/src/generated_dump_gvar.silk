@@ -8,49 +8,16 @@ import read_fonts.tables.gvar {
   GlyphVariationDataHeader,
   GlyphVariationDataHeaderExtended
 }
-import read_fonts.lib {
-  FontData,
-  FontRead,
-  ReadError,
-  ScalarArray,
-  ComputedArray,
-  VarLenArray,
-  VarLenIter,
-  ReadArgs2,
-  ReadArgs3,
-  ArrayOfOffsets,
-  ArrayOfNullableOffsets
-}
-import font_types.lib {
-  Fixed,
-  F2Dot14,
-  FWord,
-  UfWord,
-  Tag,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
-  GlyphId16,
-  GlyphId24,
-  GlyphId,
-  NameId,
-  Nullable,
-  Offset16,
-  Offset24,
-  Offset32
-}
-import dump_support { DumpPath, DumpTable, scalar, absent, readError, versionBits, bytes }
+import read_fonts.lib { FontData, ReadError, ComputedArray }
+import font_types.lib { Tag, Uint24, Offset16, Offset24, Offset32 }
+import dump_support { DumpPath, DumpTable, scalar, readError, bytes }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.io.writer { Writer, WriterError }
-import silk.num.u8
 import silk.num.u16
-import silk.num.u32
 import silk.num.u64
 import read_fonts.tables.gvar { U16Or32 }
-import read_fonts.tables.variations { Tuple, TupleVariationHeader, TupleVariationCount }
+import read_fonts.tables.variations { Tuple, TupleVariationCount }
 import generated_dump_variations { dumpTuple }
 
 pub effect fn dumpGvar<'a>(path: &mut DumpPath, value: Gvar<'a>) -> ()
@@ -65,7 +32,6 @@ pub effect fn dumpGvar<'a>(path: &mut DumpPath, value: Gvar<'a>) -> ()
   ) {
     return
   }
-  let base = Gvar<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "version")
     let fieldValue = Gvar<'a>.version(&value)
@@ -134,7 +100,6 @@ pub effect fn dumpGvar<'a>(path: &mut DumpPath, value: Gvar<'a>) -> ()
   if true {
     DumpPath.push(&mut path, "glyphVariationDataOffsets")
     let fieldValue = Gvar<'a>.glyphVariationDataOffsets(&value)
-    let targetArgs: [u64; 3] = [u16.toU64(GvarFlags.bits(&Gvar<'a>.flags(&value))), 0, 0]
     DumpPath.push(&mut path, "length")
     run scalar(&path, ComputedArray<'a, GvarFlags, U16Or32>.len(&fieldValue))
     DumpPath.pop(&mut path)
@@ -164,7 +129,6 @@ pub effect fn dumpGvarExtended<'a>(path: &mut DumpPath, value: GvarExtended<'a>)
   ) {
     return
   }
-  let base = GvarExtended<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "version")
     let fieldValue = GvarExtended<'a>.version(&value)
@@ -233,7 +197,6 @@ pub effect fn dumpGvarExtended<'a>(path: &mut DumpPath, value: GvarExtended<'a>)
   if true {
     DumpPath.push(&mut path, "glyphVariationDataOffsets")
     let fieldValue = GvarExtended<'a>.glyphVariationDataOffsets(&value)
-    let targetArgs: [u64; 3] = [u16.toU64(GvarFlags.bits(&GvarExtended<'a>.flags(&value))), 0, 0]
     DumpPath.push(&mut path, "length")
     run scalar(&path, ComputedArray<'a, GvarFlags, U16Or32>.len(&fieldValue))
     DumpPath.pop(&mut path)

@@ -23,17 +23,29 @@ import font_harness_corpus as Corpus
 import font_harness_dump as Dump
 
 type Errors = TaskError | FileError | HostInputError | OutOfMemoryError
-pub struct Observation { pub status: i32, pub json: Bytes, pub messages: Bytes, pub invalid: bool }
 
-pub effect fn profile() -> String ! HostInputError | OutOfMemoryError ? &mut HostInput | &mut Allocator {
+pub struct Observation {
+  pub status: i32,
+  pub json: Bytes,
+  pub messages: Bytes,
+  pub invalid: bool
+}
+
+pub effect fn profile() -> String
+  ! HostInputError | OutOfMemoryError
+  ? &mut HostInput | &mut Allocator {
   if let Option<Bytes>.Some { value } = move run HostInput.variableNamed("READ_FONTS_PROFILE") {
     return unsafe String.fromBytesUnchecked(move value)
   }
   return run String.copy("debug")
 }
 
-pub effect fn referenceBinary(override: string) -> String ! HostInputError | OutOfMemoryError ? &mut HostInput | &mut Allocator {
-  if override != "" { return run String.copy(override) }
+pub effect fn referenceBinary(override: string) -> String
+  ! HostInputError | OutOfMemoryError
+  ? &mut HostInput | &mut Allocator {
+  if override != "" {
+    return run String.copy(override)
+  }
   let profile = run profile()
   let mut name = run String.copy("build/rust/")
   run String.append(&mut name, String.view(&profile))
@@ -41,8 +53,12 @@ pub effect fn referenceBinary(override: string) -> String ! HostInputError | Out
   return move name
 }
 
-pub effect fn silkBinary(override: string) -> String ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
-  if override != "" { return run String.copy(override) }
+pub effect fn silkBinary(override: string) -> String
+  ! Errors
+  ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  if override != "" {
+    return run String.copy(override)
+  }
   let root = run Task.root()
   let directory = run Path.join(&root, "build/llvm")
   let entries = run FileSystem.listDirectory(&directory)
@@ -62,16 +78,28 @@ pub effect fn silkBinary(override: string) -> String ! Errors ? &mut HostInput |
     }
     at = at + 1
   }
-  if count != 1 { run Task.abort("build font-parse-test-harness first with silk task build, or pass --silk-dumper PATH") }
+  if count != 1 {
+    run Task.abort(
+      "build font-parse-test-harness first with silk task build, or pass --silk-dumper PATH",
+    )
+  }
   return move found
 }
 
-pub effect fn jobs(override: usize) -> usize ! TaskError | HostInputError | OutOfMemoryError ? &mut HostInput | &mut Allocator {
-  if override != 0 { return override }
+pub effect fn jobs(override: usize) -> usize
+  ! TaskError | HostInputError | OutOfMemoryError
+  ? &mut HostInput | &mut Allocator {
+  if override != 0 {
+    return override
+  }
   if let Option<Bytes>.Some { value } = move run HostInput.variableNamed("READ_FONTS_JOBS") {
     let text = run Corpus.utf8(value.asSlice())
     match move Format.usizeValue(String.view(&text)) {
-      Result<usize, ParseError>.Success { value: parsed } => { if parsed > 0 { return parsed } }
+      Result<usize, ParseError>.Success { value: parsed } => {
+        if parsed > 0 {
+          return parsed
+        }
+      }
       Result<usize, ParseError>.Failure { .. } => {}
     }
     run Task.abort("READ_FONTS_JOBS must be positive")
@@ -79,17 +107,23 @@ pub effect fn jobs(override: usize) -> usize ! TaskError | HostInputError | OutO
   return NativeThread.processorCount()
 }
 
-pub effect fn signed(output: &mut Bytes, number: i32) -> () ! OutOfMemoryError ? &mut Allocator {
+pub effect fn signed(output: &mut Bytes, number: i32) -> ()
+  ! OutOfMemoryError
+  ? &mut Allocator {
   let mut buffer: [u8; 20] = [0; 20]
   let length = Format.writeI64Display(i32.toI64(number), &mut buffer, 0)
   run output.append(Slice.view<u8>(&buffer, 0, length))
 }
 
-pub effect fn showLine(bytes: &[u8], eof: bool) -> String ! OutOfMemoryError ? &mut Allocator {
+pub effect fn showLine(bytes: &[u8], eof: bool) -> String
+  ! OutOfMemoryError
+  ? &mut Allocator {
   return run Text.repr(bytes, eof)
 }
 
-pub effect fn differenceJson(difference: &Dump.Difference) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+pub effect fn differenceJson(difference: &Dump.Difference) -> Bytes
+  ! OutOfMemoryError
+  ? &mut Allocator {
   let mut output = run Bytes.copy(b"{\"line\":")
   run Corpus.appendNumber(&mut output, difference.line)
   let left = run showLine(difference.left.asSlice(), difference.leftEof)
@@ -103,7 +137,8 @@ pub effect fn differenceJson(difference: &Dump.Difference) -> Bytes ! OutOfMemor
 }
 
 pub effect fn check(font: string, reference: string, silk: string, timeout: f64) -> Observation
-  ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  ! Errors
+  ? &mut HostInput | &mut Allocator | &mut FileSystem {
   let root = run Task.root()
   let fontName = run String.copy(font)
   let display = Corpus.display(&root, &fontName)
@@ -114,7 +149,9 @@ pub effect fn check(font: string, reference: string, silk: string, timeout: f64)
   run Corpus.quote(&mut json, String.view(&digest))
   let result = run Effect.result(checkOutputs(font, reference, silk, timeout, &mut json))
   match move result {
-    Result<Observation, Errors>.Success { value } => { return move value }
+    Result<Observation, Errors>.Success { value } => {
+      return move value
+    }
     Result<Observation, Errors>.Failure { error } => {
       let message = match move error {
         TaskError failure => move failure.message
@@ -132,12 +169,23 @@ pub effect fn check(font: string, reference: string, silk: string, timeout: f64)
   }
 }
 
-effect fn checkOutputs(font: string, reference: string, silk: string, timeout: f64, json: &mut Bytes) -> Observation
-  ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+effect fn checkOutputs(
+  font: string,
+  reference: string,
+  silk: string,
+  timeout: f64,
+  json: &mut Bytes,
+) -> Observation
+  ! Errors
+  ? &mut HostInput | &mut Allocator | &mut FileSystem {
   let mut rust = run Process.execute(reference, &[font], timeout, false)
-  if rust.timedOut { run Task.abort("reference dumper timed out") }
+  if rust.timedOut {
+    run Task.abort("reference dumper timed out")
+  }
   let mut port = run Process.execute(silk, &[font], timeout, false)
-  if port.timedOut { run Task.abort("Silk dumper timed out") }
+  if port.timedOut {
+    run Task.abort("Silk dumper timed out")
+  }
   let difference = run Dump.firstDifference(&mut rust.output, &mut port.output)
   let mut messages = Bytes.make()
   let mut different = false
@@ -173,12 +221,29 @@ effect fn checkOutputs(font: string, reference: string, silk: string, timeout: f
     run messages.append(b"\n")
     let errors2 = run port.errors.readAll()
     run messages.append(errors2.asSlice())
-    return Observation { status: 2, json: run Bytes.copy(json.asSlice()), messages: move messages, invalid: false }
+    return Observation {
+      status: 2,
+      json: run Bytes.copy(json.asSlice()),
+      messages: move messages,
+      invalid: false,
+    }
   }
   let info = run Dump.inspect(&mut rust.output)
-  let silkDigest = if different { let other = run Dump.inspect(&mut port.output)  move other.digest } else { run String.copy(String.view(&info.digest)) }
+  let silkDigest = if different {
+    let other = run Dump.inspect(&mut port.output)
+    move other.digest
+  } else {
+    run String.copy(String.view(&info.digest))
+  }
   run json.append(b",\"status\":")
-  run Corpus.quote(&mut json, if different { "difference" } else { "match" })
+  run Corpus.quote(
+    &mut json,
+    if different {
+      "difference"
+    } else {
+      "match"
+    },
+  )
   run json.append(b",\"rust_dump_sha256\":")
   run Corpus.quote(&mut json, String.view(&info.digest))
   run json.append(b",\"silk_dump_sha256\":")
@@ -189,18 +254,39 @@ effect fn checkOutputs(font: string, reference: string, silk: string, timeout: f
   let errors = run Dump.errorsJson(&info.errors)
   run json.append(errors.asSlice())
   run json.append(b"}")
-  return Observation { status: if different { 1 } else { 0 }, json: run Bytes.copy(json.asSlice()), messages: move messages, invalid: false }
+  return Observation {
+    status: if different {
+      1
+    } else {
+      0
+    },
+    json: run Bytes.copy(json.asSlice()),
+    messages: move messages,
+    invalid: false,
+  }
 }
 
-effect fn threadedCheck(font: string, reference: string, silk: string, timeout: f64) -> Observation ! Errors ? &mut Allocator {
+effect fn threadedCheck(font: string, reference: string, silk: string, timeout: f64) -> Observation
+  ! Errors
+  ? &mut Allocator {
   let snapshot = run unsafe NativeHostInput.environmentSnapshot()
   let mut host = OsHostInput.make(move snapshot)
   let mut files = run MachineFileSystem.make()
-  return run check(font, reference, silk, timeout) |> Effect.provideMut<HostInput>(&mut host) |> Effect.provideMut<FileSystem>(&mut files)
+  return run check(font, reference, silk, timeout)
+    |> Effect.provideMut<HostInput>(&mut host)
+    |> Effect.provideMut<FileSystem>(&mut files)
 }
 
-pub effect fn comparePaths(fonts: &List<String>, reference: string, silk: string, timeout: f64, report: string, workers: usize) -> ()
-  ! Errors | WriterError ? &mut HostInput | &mut Allocator | &mut FileSystem {
+pub effect fn comparePaths(
+  fonts: &List<String>,
+  reference: string,
+  silk: string,
+  timeout: f64,
+  report: string,
+  workers: usize,
+) -> ()
+  ! Errors | WriterError
+  ? &mut HostInput | &mut Allocator | &mut FileSystem {
   let count = run jobs(workers)
   let paths = fonts.asSlice()
   let mut observations = List<Observation>.make()
@@ -212,15 +298,31 @@ pub effect fn comparePaths(fonts: &List<String>, reference: string, silk: string
       let font = run String.copy(String.view(&paths[at]))
       let reference = run String.copy(reference)
       let silk = run String.copy(silk)
-      let handle = match move run Effect.result(NativeThread.spawn(fn() -> Result<Observation, Errors> {
-        let ownedFont = move font
-        let ownedReference = move reference
-        let ownedSilk = move silk
-        let mut allocator = Allocator.systemAllocatorProvider()
-        return run Effect.result(threadedCheck(String.view(&ownedFont), String.view(&ownedReference), String.view(&ownedSilk), timeout)) |> Effect.provideMut<Allocator>(&mut allocator)
-      })) {
-        Result<JoinHandle<Result<Observation, Errors>>, SpawnError | OutOfMemoryError>.Success { value } => move value
-        Result<JoinHandle<Result<Observation, Errors>>, SpawnError | OutOfMemoryError>.Failure { .. } => run Task.abort("cannot start harness worker")
+      let handle = match move run Effect.result(
+        NativeThread.spawn(
+          fn() -> Result<Observation, Errors> {
+            let ownedFont = move font
+            let ownedReference = move reference
+            let ownedSilk = move silk
+            let mut allocator = Allocator.systemAllocatorProvider()
+            return run Effect.result(
+              threadedCheck(
+                String.view(&ownedFont),
+                String.view(&ownedReference),
+                String.view(&ownedSilk),
+                timeout,
+              ),
+            )
+              |> Effect.provideMut<Allocator>(&mut allocator)
+          },
+        ),
+      ) {
+        Result<JoinHandle<Result<Observation, Errors>>, SpawnError | OutOfMemoryError>.Success {
+          value
+        } => move value
+        Result<JoinHandle<Result<Observation, Errors>>, SpawnError | OutOfMemoryError>.Failure {
+          ..
+        } => run Task.abort("cannot start harness worker")
       }
       run handles.append(move handle)
       started = started + 1
@@ -229,8 +331,12 @@ pub effect fn comparePaths(fonts: &List<String>, reference: string, silk: string
     while handles.length() > 0 {
       let handle = handles.remove(0)
       match move handle.join() {
-        Result<Observation, Errors>.Success { value } => { run observations.append(move value) }
-        Result<Observation, Errors>.Failure { error } => { fail move error }
+        Result<Observation, Errors>.Success { value } => {
+          run observations.append(move value)
+        }
+        Result<Observation, Errors>.Failure { error } => {
+          fail move error
+        }
       }
     }
   }
@@ -243,17 +349,27 @@ pub effect fn comparePaths(fonts: &List<String>, reference: string, silk: string
   at = 0
   while at < rows.length {
     run Process.print(rows[at].messages.asSlice())
-    if rows[at].status == 0 { matched = matched + 1 }
-    else if rows[at].status == 1 { differences = differences + 1 }
-    else { failures = failures + 1 }
-    if rows[at].status > status { status = rows[at].status }
-    if at > 0 { run results.append(b",") }
+    if rows[at].status == 0 {
+      matched = matched + 1
+    } else if rows[at].status == 1 {
+      differences = differences + 1
+    } else {
+      failures = failures + 1
+    }
+    if rows[at].status > status {
+      status = rows[at].status
+    }
+    if at > 0 {
+      run results.append(b",")
+    }
     run results.append(rows[at].json.asSlice())
     at = at + 1
   }
   run results.append(b"]")
   if report != "" {
-    let mut json = run Bytes.copy(b"{\"summary\":{\"format_version\":9,\"scope\":\"all\",\"fonts_total\":")
+    let mut json = run Bytes.copy(
+      b"{\"summary\":{\"format_version\":9,\"scope\":\"all\",\"fonts_total\":",
+    )
     run Corpus.appendNumber(&mut json, paths.length)
     run json.append(b",\"completed\":")
     run Corpus.appendNumber(&mut json, matched + differences)
@@ -274,18 +390,34 @@ pub effect fn comparePaths(fonts: &List<String>, reference: string, silk: string
     run json.append(b"}\n")
     run Corpus.save(report, json.asSlice())
   }
-  let mut summary = run Bytes.copy(if status == 0 { b"MATCH: " } else { b"FAIL: " })
+  let mut summary = run Bytes.copy(
+    if status == 0 {
+      b"MATCH: "
+    } else {
+      b"FAIL: "
+    },
+  )
   if status != 0 {
     run Corpus.appendNumber(&mut summary, differences + failures)
     run summary.append(b" of ")
   }
   run Corpus.appendNumber(&mut summary, paths.length)
-  run summary.append(if status == 0 { b" fonts; format 9\n" } else { b" fonts differ or failed\n" })
+  run summary.append(
+    if status == 0 {
+      b" fonts; format 9\n"
+    } else {
+      b" fonts differ or failed\n"
+    },
+  )
   run Process.print(summary.asSlice())
-  if status != 0 { fail TaskError { message: run String.copy("font comparison failed"), status: status } }
+  if status != 0 {
+    fail TaskError { message: run String.copy("font comparison failed"), status: status }
+  }
 }
 
-pub effect fn binaryJson(json: &mut Bytes, name: string) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+pub effect fn binaryJson(json: &mut Bytes, name: string) -> ()
+  ! Errors
+  ? &mut HostInput | &mut Allocator | &mut FileSystem {
   let root = run Task.root()
   let path = run Corpus.resolve(name)
   let text = run Corpus.pathText(&path)
@@ -297,9 +429,18 @@ pub effect fn binaryJson(json: &mut Bytes, name: string) -> () ! Errors ? &mut H
   run json.append(b"}")
 }
 
-pub effect fn compare(fonts: string, reference: string, silk: string, timeout: f64, report: string) -> ()
-  ! Errors | WriterError ? &mut HostInput | &mut Allocator | &mut FileSystem {
-  if timeout <= 0.0 { run Task.abort("timeout must be positive") }
+pub effect fn compare(
+  fonts: string,
+  reference: string,
+  silk: string,
+  timeout: f64,
+  report: string,
+) -> ()
+  ! Errors | WriterError
+  ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  if timeout <= 0.0 {
+    run Task.abort("timeout must be positive")
+  }
   let corpus = run Corpus.load(fonts)
   let reference = run referenceBinary(reference)
   let silk = run silkBinary(silk)
@@ -307,8 +448,11 @@ pub effect fn compare(fonts: string, reference: string, silk: string, timeout: f
 }
 
 pub effect fn verifyReference(fonts: string, reference: string, timeout: f64, report: string) -> ()
-  ! Errors | WriterError ? &mut HostInput | &mut Allocator | &mut FileSystem {
-  if timeout <= 0.0 { run Task.abort("timeout must be positive") }
+  ! Errors | WriterError
+  ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  if timeout <= 0.0 {
+    run Task.abort("timeout must be positive")
+  }
   let corpus = run Corpus.load(fonts)
   let binary = run referenceBinary(reference)
   let root = run Task.root()
@@ -323,9 +467,13 @@ pub effect fn verifyReference(fonts: string, reference: string, timeout: f64, re
   let mut at: usize = 0
   while at < paths.length {
     let name = Corpus.display(&root, &paths[at])
-    match move run Effect.result(verifyOne(String.view(&binary), String.view(&paths[at]), timeout)) {
+    match move run Effect.result(
+      verifyOne(String.view(&binary), String.view(&paths[at]), timeout),
+    ) {
       Result<Dump.DumpInfo, Errors>.Success { value } => {
-        if completed > 0 { run results.append(b",") }
+        if completed > 0 {
+          run results.append(b",")
+        }
         run results.append(b"{\"font\":")
         run Corpus.quote(&mut results, name)
         run results.append(b",\"input_sha256\":")
@@ -353,7 +501,9 @@ pub effect fn verifyReference(fonts: string, reference: string, timeout: f64, re
           TaskError failure => move failure.message
           _ => run String.copy("reference process or filesystem failure")
         }
-        if failed > 0 { run failures.append(b",") }
+        if failed > 0 {
+          run failures.append(b",")
+        }
         run failures.append(b"{\"font\":")
         run Corpus.quote(&mut failures, name)
         run failures.append(b",\"error\":")
@@ -399,11 +549,14 @@ pub effect fn verifyReference(fonts: string, reference: string, timeout: f64, re
   }
   run summary.append(b"\n")
   run Process.print(summary.asSlice())
-  if failed > 0 { run Task.abort("reference verification failed") }
+  if failed > 0 {
+    run Task.abort("reference verification failed")
+  }
 }
 
 effect fn verifyOne(binary: string, font: string, timeout: f64) -> Dump.DumpInfo
-  ! Errors ? &mut HostInput | &mut Allocator {
+  ! Errors
+  ? &mut HostInput | &mut Allocator {
   let mut result = run Process.execute(binary, &[font], timeout, false)
   run Process.requireSuccess(&result)
   return run Dump.inspect(&mut result.output)

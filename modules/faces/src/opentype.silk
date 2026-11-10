@@ -379,8 +379,8 @@ effect fn charstring(outline: &[Command], out: &mut List<u8>) -> ()
   while k < outline.length {
     let command = outline[k]
     let restarts = match command {
-      Command.LineTo { x, y } => true
-      Command.CubicTo { x1, y1, x2, y2, x, y } => true
+      Command.LineTo { .. } => true
+      Command.CubicTo { .. } => true
       _ => false
     }
     if closed && restarts {
@@ -653,7 +653,7 @@ effect fn gsub(
   run put(&mut out.*, 0, 2)
 
   // ScriptList: two scripts sharing one default LangSys layout.
-  let scripts = out.length()
+  drop out.length()
   run put(&mut out.*, 2, 2)
   run tag(&mut out.*, 0x44464c54)
   run put(&mut out.*, 14, 2)

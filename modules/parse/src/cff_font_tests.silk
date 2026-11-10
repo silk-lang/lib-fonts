@@ -6,7 +6,7 @@ import ps.cff.charset { Charset, Iter }
 import ps.cff.blend { BlendState }
 import ps.string { Sid }
 import ps.encoding { PredefinedEncoding }
-import ps.hinting { HintingParams, Blues }
+import ps.hinting { Blues }
 import ps.transform { Transform, ScaledFontMatrix }
 import tables.variations { ItemVariationStore }
 import table_ref { ByteRange }
@@ -14,7 +14,6 @@ import font_data { FontData }
 import font_types.lib { Fixed, F2Dot14, GlyphId }
 import silk.geometry.affine { Affine2 }
 import silk.geometry.rect { Rect }
-import model.error { Error }
 import generated_cff_fixtures {
   exampleCff2,
   notoSerifTable,
@@ -62,7 +61,7 @@ fn absent<T>(value: Option<T>) -> bool {
 
 fn failed<T, E>(value: Result<T, E>) -> bool {
   return match move value {
-    Result<T, E>.Failure { error } => true
+    Result<T, E>.Failure { .. } => true
     _ => false
   }
 }

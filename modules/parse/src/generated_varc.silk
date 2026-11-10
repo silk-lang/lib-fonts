@@ -2,14 +2,13 @@
 // Source: pinned resources/codegen_inputs; generator: modules/parse/tools/font-codegen-silk.
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 import font_data { FontData }
-import read { ReadError, FontRead, FontReadAt, ComputeSize, Format, computeSize, readAtWithArgs }
+import read { ReadError, FontRead, Format }
 import table_provider { TopLevelTable }
-import array { ScalarArray, ComputedArray, VarLenArray }
-import offset { resolve, resolveWithArgs, resolveNullableWithArgs }
-import offset_array { ArrayOfOffsets, ArrayOfNullableOffsets }
-import read_args { ReadArgs2, ReadArgs3 }
+import array { ScalarArray }
+import offset { resolveWithArgs, resolveNullableWithArgs }
+import offset_array { ArrayOfOffsets }
 import table_ref { ByteRange, MinByteRange }
-import generated_support { scalarOr, recordArray, varLenArray, varLenBytes, signedCount }
+import generated_support { scalarOr }
 import font_types.lib {
   Scalar,
   FixedSize,
@@ -17,22 +16,12 @@ import font_types.lib {
   readScalar,
   writeScalar,
   Tag,
-  Fixed,
   F2Dot14,
   F4Dot12,
   F6Dot10,
-  FWord,
-  UfWord,
   MajorMinor,
-  Version16Dot16,
-  LongDateTime,
   Uint24,
-  Int24,
   GlyphId,
-  GlyphId16,
-  GlyphId24,
-  NameId,
-  Offset16,
   Offset24,
   Offset32,
   Nullable
@@ -49,7 +38,6 @@ import silk.num.usize
 import silk.num.u8
 import silk.num.u16
 import silk.num.u32
-import silk.num.u64
 import silk.num.i16
 import silk.num.i32
 pub import generated_layout { CoverageTable, Condition }
@@ -89,39 +77,21 @@ impl<'a> Varc<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[0].end = end
-    let versionValue = scalarOr<MajorMinor>(data, ranges[0].start, MajorMinor.new(0, 0))
     ranges[1].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[1].end = end
-    let coverageOffsetValue = scalarOr<Offset32>(data, ranges[1].start, Offset32.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[2].end = end
-    let multiVarStoreOffsetValue = scalarOr<Nullable<Offset32>>(
-      data,
-      ranges[2].start,
-      Nullable<Offset32>.default(),
-    )
     ranges[3].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[3].end = end
-    let conditionListOffsetValue = scalarOr<Nullable<Offset32>>(
-      data,
-      ranges[3].start,
-      Nullable<Offset32>.default(),
-    )
     ranges[4].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[4].end = end
-    let axisIndicesListOffsetValue = scalarOr<Nullable<Offset32>>(
-      data,
-      ranges[4].start,
-      Nullable<Offset32>.default(),
-    )
     ranges[5].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[5].end = end
-    let varCompositeGlyphsOffsetValue = scalarOr<Offset32>(data, ranges[5].start, Offset32.new(0))
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -137,7 +107,7 @@ impl<'a> Varc<'a> {
   pub fn version(self: &Self) -> MajorMinor {
     return match move FontData<'a>.readAt<MajorMinor>(&self._fontData, self._fieldRanges[0].start) {
       Result<MajorMinor, ReadError>.Success { value } => value
-      Result<MajorMinor, ReadError>.Failure { error } => MajorMinor.new(0, 0)
+      Result<MajorMinor, ReadError>.Failure { .. } => MajorMinor.new(0, 0)
     }
   }
 
@@ -148,7 +118,7 @@ impl<'a> Varc<'a> {
   pub fn coverageOffset(self: &Self) -> Offset32 {
     return match move FontData<'a>.readAt<Offset32>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset32, ReadError>.Success { value } => value
-      Result<Offset32, ReadError>.Failure { error } => Offset32.new(0)
+      Result<Offset32, ReadError>.Failure { .. } => Offset32.new(0)
     }
   }
 
@@ -167,7 +137,7 @@ impl<'a> Varc<'a> {
       self._fieldRanges[2].start,
     ) {
       Result<Nullable<Offset32>, ReadError>.Success { value } => value
-      Result<Nullable<Offset32>, ReadError>.Failure { error } => Nullable<Offset32>.default()
+      Result<Nullable<Offset32>, ReadError>.Failure { .. } => Nullable<Offset32>.default()
     }
   }
 
@@ -190,7 +160,7 @@ impl<'a> Varc<'a> {
       self._fieldRanges[3].start,
     ) {
       Result<Nullable<Offset32>, ReadError>.Success { value } => value
-      Result<Nullable<Offset32>, ReadError>.Failure { error } => Nullable<Offset32>.default()
+      Result<Nullable<Offset32>, ReadError>.Failure { .. } => Nullable<Offset32>.default()
     }
   }
 
@@ -209,7 +179,7 @@ impl<'a> Varc<'a> {
       self._fieldRanges[4].start,
     ) {
       Result<Nullable<Offset32>, ReadError>.Success { value } => value
-      Result<Nullable<Offset32>, ReadError>.Failure { error } => Nullable<Offset32>.default()
+      Result<Nullable<Offset32>, ReadError>.Failure { .. } => Nullable<Offset32>.default()
     }
   }
 
@@ -225,7 +195,7 @@ impl<'a> Varc<'a> {
   pub fn varCompositeGlyphsOffset(self: &Self) -> Offset32 {
     return match move FontData<'a>.readAt<Offset32>(&self._fontData, self._fieldRanges[5].start) {
       Result<Offset32, ReadError>.Success { value } => value
-      Result<Offset32, ReadError>.Failure { error } => Offset32.new(0)
+      Result<Offset32, ReadError>.Failure { .. } => Offset32.new(0)
     }
   }
 
@@ -294,11 +264,9 @@ impl<'a> MultiItemVariationStore<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let formatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[1].end = end
-    let regionListOffsetValue = scalarOr<Offset32>(data, ranges[1].start, Offset32.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
@@ -319,7 +287,7 @@ impl<'a> MultiItemVariationStore<'a> {
   pub fn format(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -330,7 +298,7 @@ impl<'a> MultiItemVariationStore<'a> {
   pub fn regionListOffset(self: &Self) -> Offset32 {
     return match move FontData<'a>.readAt<Offset32>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset32, ReadError>.Success { value } => value
-      Result<Offset32, ReadError>.Failure { error } => Offset32.new(0)
+      Result<Offset32, ReadError>.Failure { .. } => Offset32.new(0)
     }
   }
 
@@ -346,7 +314,7 @@ impl<'a> MultiItemVariationStore<'a> {
   pub fn variationDataCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[2].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -361,9 +329,7 @@ impl<'a> MultiItemVariationStore<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, Offset32>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset32>, ReadError>.Failure { error } => ScalarArray<
-        Offset32
-      >.empty()
+      Result<ScalarArray<'a, Offset32>, ReadError>.Failure { .. } => ScalarArray<Offset32>.empty()
     }
   }
 
@@ -452,7 +418,7 @@ impl<'a> SparseVariationRegionList<'a> {
   pub fn regionCount(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[0].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -467,9 +433,7 @@ impl<'a> SparseVariationRegionList<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, Offset32>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset32>, ReadError>.Failure { error } => ScalarArray<
-        Offset32
-      >.empty()
+      Result<ScalarArray<'a, Offset32>, ReadError>.Failure { .. } => ScalarArray<Offset32>.empty()
     }
   }
 
@@ -547,7 +511,7 @@ impl<'a> SparseVariationRegion<'a> {
   pub fn regionAxisCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -562,9 +526,7 @@ impl<'a> SparseVariationRegion<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, Offset32>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset32>, ReadError>.Failure { error } => ScalarArray<
-        Offset32
-      >.empty()
+      Result<ScalarArray<'a, Offset32>, ReadError>.Failure { .. } => ScalarArray<Offset32>.empty()
     }
   }
 
@@ -633,19 +595,15 @@ impl<'a> SparseRegionAxisCoordinates<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let axisIndexValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let startValue = scalarOr<F2Dot14>(data, ranges[1].start, F2Dot14.zero())
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let peakValue = scalarOr<F2Dot14>(data, ranges[2].start, F2Dot14.zero())
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let endValue = scalarOr<F2Dot14>(data, ranges[3].start, F2Dot14.zero())
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -656,7 +614,7 @@ impl<'a> SparseRegionAxisCoordinates<'a> {
   pub fn axisIndex(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -667,7 +625,7 @@ impl<'a> SparseRegionAxisCoordinates<'a> {
   pub fn start(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[1].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -678,7 +636,7 @@ impl<'a> SparseRegionAxisCoordinates<'a> {
   pub fn peak(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[2].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -689,7 +647,7 @@ impl<'a> SparseRegionAxisCoordinates<'a> {
   pub fn end(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[3].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -745,7 +703,6 @@ impl<'a> MultiItemVariationData<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[0].end = end
-    let formatValue = scalarOr<u8>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
@@ -756,7 +713,6 @@ impl<'a> MultiItemVariationData<'a> {
     ranges[3].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[3].end = end
-    let deltaSetsOffsetValue = scalarOr<Offset32>(data, ranges[3].start, Offset32.new(0))
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -767,7 +723,7 @@ impl<'a> MultiItemVariationData<'a> {
   pub fn format(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[0].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -778,7 +734,7 @@ impl<'a> MultiItemVariationData<'a> {
   pub fn regionIndexCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -793,7 +749,7 @@ impl<'a> MultiItemVariationData<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ScalarArray<'a, u16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, u16>, ReadError>.Failure { error } => ScalarArray<u16>.empty()
+      Result<ScalarArray<'a, u16>, ReadError>.Failure { .. } => ScalarArray<u16>.empty()
     }
   }
 
@@ -804,7 +760,7 @@ impl<'a> MultiItemVariationData<'a> {
   pub fn deltaSetsOffset(self: &Self) -> Offset32 {
     return match move FontData<'a>.readAt<Offset32>(&self._fontData, self._fieldRanges[3].start) {
       Result<Offset32, ReadError>.Success { value } => value
-      Result<Offset32, ReadError>.Failure { error } => Offset32.new(0)
+      Result<Offset32, ReadError>.Failure { .. } => Offset32.new(0)
     }
   }
 
@@ -885,7 +841,7 @@ impl<'a> ConditionList<'a> {
   pub fn conditionCount(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[0].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -900,9 +856,7 @@ impl<'a> ConditionList<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, Offset32>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset32>, ReadError>.Failure { error } => ScalarArray<
-        Offset32
-      >.empty()
+      Result<ScalarArray<'a, Offset32>, ReadError>.Failure { .. } => ScalarArray<Offset32>.empty()
     }
   }
 
@@ -1514,7 +1468,7 @@ impl<'a> VarcComponent<'a> {
     let mut reserved = u32.shiftRight(raw & 4294934528, 15)
     while reserved != 0 {
       if (reserved & 1) != 0 {
-        let ignored = run varcTake(Cursor.readU32Var(&mut cursor))
+        drop run varcTake(Cursor.readU32Var(&mut cursor))
       }
       reserved = u32.shiftRight(reserved, 1)
     }
@@ -1845,7 +1799,7 @@ effect fn vzeroAxes(bytes: &mut [u8]) -> ()
   ! AssertionError<'static> {
   vcopy(&mut bytes, VarcFixtures.varcCjkFont())
   let table = run vtable(&bytes)
-  let data = Varc.offsetData(&table)
+  drop Varc.offsetData(&table)
   let base = run vtableOffset(&bytes)
   let relative = u32.toUsize(
     Offset32.toU32(Nullable<Offset32>.offset(&Varc.axisIndicesListOffset(&table)).*),

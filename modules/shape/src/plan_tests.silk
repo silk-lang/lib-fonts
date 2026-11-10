@@ -40,7 +40,7 @@ effect fn planCases() -> ()
   let result = run shape(&shaper, &mut buffer, ShapeOptions.forPlan(&plan, &features))
   run Testing.expect(
     match &result {
-      Result<(), ShapeError>.Success { value } => true
+      Result<(), ShapeError>.Success { .. } => true
       _ => false
     },
     "shape with a reusable plan",
@@ -79,9 +79,7 @@ effect fn planCases() -> ()
   let mismatch = run shape(&shaper, &mut buffer, ShapeOptions.forPlan(&plan, &[]))
   run Testing.expect(
     match &mismatch {
-      Result<(), ShapeError>.Failure {
-        error: ShapeError.DirectionMismatch { plan: planDirection, buffer: bufferDirection }
-      } => true
+      Result<(), ShapeError>.Failure { error: ShapeError.DirectionMismatch { .. } } => true
       _ => false
     },
     "a plan with a different direction is rejected",
@@ -95,9 +93,7 @@ effect fn planCases() -> ()
   let scriptMismatch = run shape(&shaper, &mut buffer, ShapeOptions.forPlan(&plan, &[]))
   run Testing.expect(
     match &scriptMismatch {
-      Result<(), ShapeError>.Failure {
-        error: ShapeError.ScriptMismatch { plan: planDirection, buffer: bufferDirection }
-      } => true
+      Result<(), ShapeError>.Failure { error: ShapeError.ScriptMismatch { .. } } => true
       _ => false
     },
     "a plan with a different script is rejected",

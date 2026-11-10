@@ -16,46 +16,12 @@ import read_fonts.tables.base {
   BaseCoordFormat2,
   BaseCoordFormat3
 }
-import read_fonts.lib {
-  FontData,
-  FontRead,
-  ReadError,
-  ScalarArray,
-  ComputedArray,
-  VarLenArray,
-  VarLenIter,
-  ReadArgs2,
-  ReadArgs3,
-  ArrayOfOffsets,
-  ArrayOfNullableOffsets
-}
-import font_types.lib {
-  Fixed,
-  F2Dot14,
-  FWord,
-  UfWord,
-  Tag,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
-  GlyphId16,
-  GlyphId24,
-  GlyphId,
-  NameId,
-  Nullable,
-  Offset16,
-  Offset24,
-  Offset32
-}
-import dump_support { DumpPath, DumpTable, scalar, absent, readError, versionBits, bytes }
+import read_fonts.lib { FontData, ReadError, ScalarArray, ComputedArray, ArrayOfOffsets }
+import font_types.lib { Tag, Nullable, Offset16, Offset32 }
+import dump_support { DumpPath, DumpTable, scalar, absent, readError }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.io.writer { Writer, WriterError }
-import silk.num.u8
-import silk.num.u16
-import silk.num.u32
 import silk.num.u64
 import read_fonts.tables.layout { DeviceOrVariationIndex }
 import read_fonts.tables.variations { ItemVariationStore }
@@ -72,7 +38,6 @@ pub effect fn dumpBase<'a>(path: &mut DumpPath, value: Base<'a>) -> ()
   ) {
     return
   }
-  let base = Base<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "version")
     let fieldValue = Base<'a>.version(&value)
@@ -177,7 +142,6 @@ pub effect fn dumpAxis<'a>(path: &mut DumpPath, value: Axis<'a>) -> ()
   ) {
     return
   }
-  let base = Axis<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "baseTagListOffset")
     let fieldValue = Axis<'a>.baseTagListOffset(&value)
@@ -237,7 +201,6 @@ pub effect fn dumpBaseTagList<'a>(path: &mut DumpPath, value: BaseTagList<'a>) -
   ) {
     return
   }
-  let base = BaseTagList<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "baseTagCount")
     let fieldValue = BaseTagList<'a>.baseTagCount(&value)
@@ -314,7 +277,6 @@ pub effect fn dumpBaseScriptRecord<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -446,7 +408,6 @@ pub effect fn dumpBaseLangSysRecord<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -491,7 +452,6 @@ pub effect fn dumpBaseValues<'a>(path: &mut DumpPath, value: BaseValues<'a>) -> 
   ) {
     return
   }
-  let base = BaseValues<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "defaultBaselineIndex")
     let fieldValue = BaseValues<'a>.defaultBaselineIndex(&value)
@@ -651,7 +611,6 @@ pub effect fn dumpFeatMinMaxRecord<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -717,7 +676,6 @@ pub effect fn dumpFeatMinMaxRecord<'a>(
 pub effect fn dumpBaseCoord<'a>(path: &mut DumpPath, value: BaseCoord<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -756,7 +714,6 @@ pub effect fn dumpBaseCoordFormat1<'a>(path: &mut DumpPath, value: BaseCoordForm
   ) {
     return
   }
-  let base = BaseCoordFormat1<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "baseCoordFormat")
     let fieldValue = BaseCoordFormat1<'a>.baseCoordFormat(&value)
@@ -783,7 +740,6 @@ pub effect fn dumpBaseCoordFormat2<'a>(path: &mut DumpPath, value: BaseCoordForm
   ) {
     return
   }
-  let base = BaseCoordFormat2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "baseCoordFormat")
     let fieldValue = BaseCoordFormat2<'a>.baseCoordFormat(&value)
@@ -822,7 +778,6 @@ pub effect fn dumpBaseCoordFormat3<'a>(path: &mut DumpPath, value: BaseCoordForm
   ) {
     return
   }
-  let base = BaseCoordFormat3<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "baseCoordFormat")
     let fieldValue = BaseCoordFormat3<'a>.baseCoordFormat(&value)

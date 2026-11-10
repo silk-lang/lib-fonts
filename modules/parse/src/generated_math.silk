@@ -2,14 +2,13 @@
 // Source: pinned resources/codegen_inputs; generator: modules/parse/tools/font-codegen-silk.
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 import font_data { FontData }
-import read { ReadError, FontRead, FontReadAt, ComputeSize, Format, computeSize, readAtWithArgs }
+import read { ReadError, FontRead, FontReadAt, ComputeSize, computeSize, readAtWithArgs }
 import table_provider { TopLevelTable }
-import array { ScalarArray, ComputedArray, VarLenArray }
-import offset { resolve, resolveWithArgs, resolveNullableWithArgs }
-import offset_array { ArrayOfOffsets, ArrayOfNullableOffsets }
-import read_args { ReadArgs2, ReadArgs3 }
+import array { ScalarArray, ComputedArray }
+import offset { resolveWithArgs, resolveNullableWithArgs }
+import offset_array { ArrayOfOffsets }
 import table_ref { ByteRange, MinByteRange }
-import generated_support { scalarOr, recordArray, varLenArray, varLenBytes, signedCount }
+import generated_support { scalarOr, recordArray }
 import font_types.lib {
   Scalar,
   FixedSize,
@@ -17,24 +16,12 @@ import font_types.lib {
   readScalar,
   writeScalar,
   Tag,
-  Fixed,
-  F2Dot14,
-  F4Dot12,
-  F6Dot10,
   FWord,
   UfWord,
   MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
   GlyphId,
   GlyphId16,
-  GlyphId24,
-  NameId,
   Offset16,
-  Offset24,
-  Offset32,
   Nullable
 }
 import silk.core.option { Option }
@@ -49,7 +36,6 @@ import silk.num.usize
 import silk.num.u8
 import silk.num.u16
 import silk.num.u32
-import silk.num.u64
 import silk.num.i16
 import silk.num.i32
 import generated_layout { CoverageTable, DeviceOrVariationIndex, Device }
@@ -83,19 +69,15 @@ impl<'a> Math<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[0].end = end
-    let versionValue = scalarOr<MajorMinor>(data, ranges[0].start, MajorMinor.new(0, 0))
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let mathConstantsOffsetValue = scalarOr<Offset16>(data, ranges[1].start, Offset16.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let mathGlyphInfoOffsetValue = scalarOr<Offset16>(data, ranges[2].start, Offset16.new(0))
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let mathVariantsOffsetValue = scalarOr<Offset16>(data, ranges[3].start, Offset16.new(0))
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -111,7 +93,7 @@ impl<'a> Math<'a> {
   pub fn version(self: &Self) -> MajorMinor {
     return match move FontData<'a>.readAt<MajorMinor>(&self._fontData, self._fieldRanges[0].start) {
       Result<MajorMinor, ReadError>.Success { value } => value
-      Result<MajorMinor, ReadError>.Failure { error } => MajorMinor.new(0, 0)
+      Result<MajorMinor, ReadError>.Failure { .. } => MajorMinor.new(0, 0)
     }
   }
 
@@ -123,7 +105,7 @@ impl<'a> Math<'a> {
   pub fn mathConstantsOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -140,7 +122,7 @@ impl<'a> Math<'a> {
   pub fn mathGlyphInfoOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, self._fieldRanges[2].start) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -157,7 +139,7 @@ impl<'a> Math<'a> {
   pub fn mathVariantsOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, self._fieldRanges[3].start) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -223,7 +205,7 @@ impl<'a> MathValueRecord<'a> {
   pub fn value(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, (self.position + 0)) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -236,7 +218,7 @@ impl<'a> MathValueRecord<'a> {
       (self.position + 2),
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -295,19 +277,15 @@ impl<'a> MathConstants<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let scriptPercentScaleDownValue = scalarOr<i16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let scriptScriptPercentScaleDownValue = scalarOr<i16>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let delimitedSubFormulaMinHeightValue = scalarOr<UfWord>(data, ranges[2].start, UfWord.new(0))
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let displayOperatorMinHeightValue = scalarOr<UfWord>(data, ranges[3].start, UfWord.new(0))
     ranges[4].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[4].end = end
@@ -464,7 +442,6 @@ impl<'a> MathConstants<'a> {
     ranges[55].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[55].end = end
-    let radicalDegreeBottomRaisePercentValue = scalarOr<i16>(data, ranges[55].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -476,7 +453,7 @@ impl<'a> MathConstants<'a> {
   pub fn scriptPercentScaleDown(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[0].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -489,7 +466,7 @@ impl<'a> MathConstants<'a> {
   pub fn scriptScriptPercentScaleDown(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[1].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -502,7 +479,7 @@ impl<'a> MathConstants<'a> {
   pub fn delimitedSubFormulaMinHeight(self: &Self) -> UfWord {
     return match move FontData<'a>.readAt<UfWord>(&self._fontData, self._fieldRanges[2].start) {
       Result<UfWord, ReadError>.Success { value } => value
-      Result<UfWord, ReadError>.Failure { error } => UfWord.new(0)
+      Result<UfWord, ReadError>.Failure { .. } => UfWord.new(0)
     }
   }
 
@@ -516,7 +493,7 @@ impl<'a> MathConstants<'a> {
   pub fn displayOperatorMinHeight(self: &Self) -> UfWord {
     return match move FontData<'a>.readAt<UfWord>(&self._fontData, self._fieldRanges[3].start) {
       Result<UfWord, ReadError>.Success { value } => value
-      Result<UfWord, ReadError>.Failure { error } => UfWord.new(0)
+      Result<UfWord, ReadError>.Failure { .. } => UfWord.new(0)
     }
   }
 
@@ -533,7 +510,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -549,7 +526,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -566,7 +543,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -583,7 +560,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -599,7 +576,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -616,7 +593,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -633,7 +610,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -649,7 +626,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -665,7 +642,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -682,7 +659,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -699,7 +676,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -715,7 +692,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -733,7 +710,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -749,7 +726,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -766,7 +743,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -783,7 +760,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -800,7 +777,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -817,7 +794,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -833,7 +810,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -850,7 +827,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -866,7 +843,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -883,7 +860,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -900,7 +877,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -917,7 +894,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -933,7 +910,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -949,7 +926,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -966,7 +943,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -983,7 +960,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -999,7 +976,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -1015,7 +992,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -1031,7 +1008,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -1047,7 +1024,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -1064,7 +1041,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -1081,7 +1058,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -1097,7 +1074,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -1114,7 +1091,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -1131,7 +1108,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -1148,7 +1125,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -1165,7 +1142,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -1181,7 +1158,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -1197,7 +1174,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -1213,7 +1190,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -1229,7 +1206,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -1245,7 +1222,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -1261,7 +1238,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -1277,7 +1254,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -1294,7 +1271,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -1310,7 +1287,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -1326,7 +1303,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -1343,7 +1320,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -1359,7 +1336,7 @@ impl<'a> MathConstants<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -1372,7 +1349,7 @@ impl<'a> MathConstants<'a> {
   pub fn radicalDegreeBottomRaisePercent(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[55].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1429,35 +1406,15 @@ impl<'a> MathGlyphInfo<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let mathItalicsCorrectionInfoOffsetValue = scalarOr<Nullable<Offset16>>(
-      data,
-      ranges[0].start,
-      Nullable<Offset16>.default(),
-    )
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let mathTopAccentAttachmentOffsetValue = scalarOr<Nullable<Offset16>>(
-      data,
-      ranges[1].start,
-      Nullable<Offset16>.default(),
-    )
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let extendedShapeCoverageOffsetValue = scalarOr<Nullable<Offset16>>(
-      data,
-      ranges[2].start,
-      Nullable<Offset16>.default(),
-    )
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let mathKernInfoOffsetValue = scalarOr<Nullable<Offset16>>(
-      data,
-      ranges[3].start,
-      Nullable<Offset16>.default(),
-    )
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -1473,7 +1430,7 @@ impl<'a> MathGlyphInfo<'a> {
       self._fieldRanges[0].start,
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -1500,7 +1457,7 @@ impl<'a> MathGlyphInfo<'a> {
       self._fieldRanges[1].start,
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -1527,7 +1484,7 @@ impl<'a> MathGlyphInfo<'a> {
       self._fieldRanges[2].start,
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -1548,7 +1505,7 @@ impl<'a> MathGlyphInfo<'a> {
       self._fieldRanges[3].start,
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -1610,7 +1567,6 @@ impl<'a> MathItalicsCorrectionInfo<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let coverageOffsetValue = scalarOr<Offset16>(data, ranges[0].start, Offset16.new(0))
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
@@ -1633,7 +1589,7 @@ impl<'a> MathItalicsCorrectionInfo<'a> {
   pub fn coverageOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, self._fieldRanges[0].start) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -1651,7 +1607,7 @@ impl<'a> MathItalicsCorrectionInfo<'a> {
   pub fn italicsCorrectionCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1668,9 +1624,11 @@ impl<'a> MathItalicsCorrectionInfo<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ComputedArray<'a, (), MathValueRecord<'a>>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, (), MathValueRecord<'a>>, ReadError>.Failure {
-        error
-      } => ComputedArray<'a, (), MathValueRecord<'a>>.empty(())
+      Result<ComputedArray<'a, (), MathValueRecord<'a>>, ReadError>.Failure { .. } => ComputedArray<
+        'a,
+        (),
+        MathValueRecord<'a>
+      >.empty(())
     }
   }
 
@@ -1727,7 +1685,6 @@ impl<'a> MathTopAccentAttachment<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let topAccentCoverageOffsetValue = scalarOr<Offset16>(data, ranges[0].start, Offset16.new(0))
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
@@ -1750,7 +1707,7 @@ impl<'a> MathTopAccentAttachment<'a> {
   pub fn topAccentCoverageOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, self._fieldRanges[0].start) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -1768,7 +1725,7 @@ impl<'a> MathTopAccentAttachment<'a> {
   pub fn topAccentAttachmentCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1785,9 +1742,11 @@ impl<'a> MathTopAccentAttachment<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ComputedArray<'a, (), MathValueRecord<'a>>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, (), MathValueRecord<'a>>, ReadError>.Failure {
-        error
-      } => ComputedArray<'a, (), MathValueRecord<'a>>.empty(())
+      Result<ComputedArray<'a, (), MathValueRecord<'a>>, ReadError>.Failure { .. } => ComputedArray<
+        'a,
+        (),
+        MathValueRecord<'a>
+      >.empty(())
     }
   }
 
@@ -1844,7 +1803,6 @@ impl<'a> MathKernInfo<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let mathKernCoverageOffsetValue = scalarOr<Offset16>(data, ranges[0].start, Offset16.new(0))
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
@@ -1864,7 +1822,7 @@ impl<'a> MathKernInfo<'a> {
   pub fn mathKernCoverageOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, self._fieldRanges[0].start) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -1882,7 +1840,7 @@ impl<'a> MathKernInfo<'a> {
   pub fn mathKernCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1899,7 +1857,7 @@ impl<'a> MathKernInfo<'a> {
     ) {
       Result<ComputedArray<'a, (), MathKernInfoRecord<'a>>, ReadError>.Success { value } => value
       Result<ComputedArray<'a, (), MathKernInfoRecord<'a>>, ReadError>.Failure {
-        error
+        ..
       } => ComputedArray<'a, (), MathKernInfoRecord<'a>>.empty(())
     }
   }
@@ -1958,7 +1916,7 @@ impl<'a> MathKernInfoRecord<'a> {
       (self.position + 0),
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -1977,7 +1935,7 @@ impl<'a> MathKernInfoRecord<'a> {
       (self.position + 2),
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -1996,7 +1954,7 @@ impl<'a> MathKernInfoRecord<'a> {
       (self.position + 4),
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -2015,7 +1973,7 @@ impl<'a> MathKernInfoRecord<'a> {
       (self.position + 6),
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -2095,7 +2053,7 @@ impl<'a> MathKern<'a> {
   pub fn heightCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2112,9 +2070,11 @@ impl<'a> MathKern<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ComputedArray<'a, (), MathValueRecord<'a>>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, (), MathValueRecord<'a>>, ReadError>.Failure {
-        error
-      } => ComputedArray<'a, (), MathValueRecord<'a>>.empty(())
+      Result<ComputedArray<'a, (), MathValueRecord<'a>>, ReadError>.Failure { .. } => ComputedArray<
+        'a,
+        (),
+        MathValueRecord<'a>
+      >.empty(())
     }
   }
 
@@ -2133,9 +2093,11 @@ impl<'a> MathKern<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ComputedArray<'a, (), MathValueRecord<'a>>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, (), MathValueRecord<'a>>, ReadError>.Failure {
-        error
-      } => ComputedArray<'a, (), MathValueRecord<'a>>.empty(())
+      Result<ComputedArray<'a, (), MathValueRecord<'a>>, ReadError>.Failure { .. } => ComputedArray<
+        'a,
+        (),
+        MathValueRecord<'a>
+      >.empty(())
     }
   }
 
@@ -2192,23 +2154,12 @@ impl<'a> MathVariants<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let minConnectorOverlapValue = scalarOr<UfWord>(data, ranges[0].start, UfWord.new(0))
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let vertGlyphCoverageOffsetValue = scalarOr<Nullable<Offset16>>(
-      data,
-      ranges[1].start,
-      Nullable<Offset16>.default(),
-    )
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let horizGlyphCoverageOffsetValue = scalarOr<Nullable<Offset16>>(
-      data,
-      ranges[2].start,
-      Nullable<Offset16>.default(),
-    )
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
@@ -2235,7 +2186,7 @@ impl<'a> MathVariants<'a> {
   pub fn minConnectorOverlap(self: &Self) -> UfWord {
     return match move FontData<'a>.readAt<UfWord>(&self._fontData, self._fieldRanges[0].start) {
       Result<UfWord, ReadError>.Success { value } => value
-      Result<UfWord, ReadError>.Failure { error } => UfWord.new(0)
+      Result<UfWord, ReadError>.Failure { .. } => UfWord.new(0)
     }
   }
 
@@ -2251,7 +2202,7 @@ impl<'a> MathVariants<'a> {
       self._fieldRanges[1].start,
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -2272,7 +2223,7 @@ impl<'a> MathVariants<'a> {
       self._fieldRanges[2].start,
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -2291,7 +2242,7 @@ impl<'a> MathVariants<'a> {
   pub fn vertGlyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[3].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2305,7 +2256,7 @@ impl<'a> MathVariants<'a> {
   pub fn horizGlyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[4].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2322,9 +2273,7 @@ impl<'a> MathVariants<'a> {
       self._fieldRanges[5].end,
     ) {
       Result<ScalarArray<'a, Offset16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { error } => ScalarArray<
-        Offset16
-      >.empty()
+      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { .. } => ScalarArray<Offset16>.empty()
     }
   }
 
@@ -2354,9 +2303,7 @@ impl<'a> MathVariants<'a> {
       self._fieldRanges[6].end,
     ) {
       Result<ScalarArray<'a, Offset16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { error } => ScalarArray<
-        Offset16
-      >.empty()
+      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { .. } => ScalarArray<Offset16>.empty()
     }
   }
 
@@ -2426,11 +2373,6 @@ impl<'a> MathGlyphConstruction<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let glyphAssemblyOffsetValue = scalarOr<Nullable<Offset16>>(
-      data,
-      ranges[0].start,
-      Nullable<Offset16>.default(),
-    )
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
@@ -2453,7 +2395,7 @@ impl<'a> MathGlyphConstruction<'a> {
       self._fieldRanges[0].start,
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -2470,7 +2412,7 @@ impl<'a> MathGlyphConstruction<'a> {
   pub fn variantCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2489,7 +2431,7 @@ impl<'a> MathGlyphConstruction<'a> {
         value
       } => value
       Result<ComputedArray<'a, (), MathGlyphVariantRecord<'a>>, ReadError>.Failure {
-        error
+        ..
       } => ComputedArray<'a, (), MathGlyphVariantRecord<'a>>.empty(())
     }
   }
@@ -2542,7 +2484,7 @@ impl<'a> MathGlyphVariantRecord<'a> {
   pub fn variantGlyph(self: &Self) -> GlyphId16 {
     return match move FontData<'a>.readAt<GlyphId16>(&self._fontData, (self.position + 0)) {
       Result<GlyphId16, ReadError>.Success { value } => value
-      Result<GlyphId16, ReadError>.Failure { error } => GlyphId16.new(0)
+      Result<GlyphId16, ReadError>.Failure { .. } => GlyphId16.new(0)
     }
   }
 
@@ -2551,7 +2493,7 @@ impl<'a> MathGlyphVariantRecord<'a> {
   pub fn advanceMeasurement(self: &Self) -> UfWord {
     return match move FontData<'a>.readAt<UfWord>(&self._fontData, (self.position + 2)) {
       Result<UfWord, ReadError>.Success { value } => value
-      Result<UfWord, ReadError>.Failure { error } => UfWord.new(0)
+      Result<UfWord, ReadError>.Failure { .. } => UfWord.new(0)
     }
   }
 }
@@ -2626,7 +2568,7 @@ impl<'a> GlyphAssembly<'a> {
       (),
     ) {
       Result<MathValueRecord<'a>, ReadError>.Success { value } => value
-      Result<MathValueRecord<'a>, ReadError>.Failure { error } => MathValueRecord<'a>.default()
+      Result<MathValueRecord<'a>, ReadError>.Failure { .. } => MathValueRecord<'a>.default()
     }
   }
 
@@ -2638,7 +2580,7 @@ impl<'a> GlyphAssembly<'a> {
   pub fn partCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2655,9 +2597,11 @@ impl<'a> GlyphAssembly<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ComputedArray<'a, (), GlyphPartRecord<'a>>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, (), GlyphPartRecord<'a>>, ReadError>.Failure {
-        error
-      } => ComputedArray<'a, (), GlyphPartRecord<'a>>.empty(())
+      Result<ComputedArray<'a, (), GlyphPartRecord<'a>>, ReadError>.Failure { .. } => ComputedArray<
+        'a,
+        (),
+        GlyphPartRecord<'a>
+      >.empty(())
     }
   }
 
@@ -2709,7 +2653,7 @@ impl<'a> GlyphPartRecord<'a> {
   pub fn glyphId(self: &Self) -> GlyphId16 {
     return match move FontData<'a>.readAt<GlyphId16>(&self._fontData, (self.position + 0)) {
       Result<GlyphId16, ReadError>.Success { value } => value
-      Result<GlyphId16, ReadError>.Failure { error } => GlyphId16.new(0)
+      Result<GlyphId16, ReadError>.Failure { .. } => GlyphId16.new(0)
     }
   }
 
@@ -2718,7 +2662,7 @@ impl<'a> GlyphPartRecord<'a> {
   pub fn startConnectorLength(self: &Self) -> UfWord {
     return match move FontData<'a>.readAt<UfWord>(&self._fontData, (self.position + 2)) {
       Result<UfWord, ReadError>.Success { value } => value
-      Result<UfWord, ReadError>.Failure { error } => UfWord.new(0)
+      Result<UfWord, ReadError>.Failure { .. } => UfWord.new(0)
     }
   }
 
@@ -2727,7 +2671,7 @@ impl<'a> GlyphPartRecord<'a> {
   pub fn endConnectorLength(self: &Self) -> UfWord {
     return match move FontData<'a>.readAt<UfWord>(&self._fontData, (self.position + 4)) {
       Result<UfWord, ReadError>.Success { value } => value
-      Result<UfWord, ReadError>.Failure { error } => UfWord.new(0)
+      Result<UfWord, ReadError>.Failure { .. } => UfWord.new(0)
     }
   }
 
@@ -2736,7 +2680,7 @@ impl<'a> GlyphPartRecord<'a> {
   pub fn fullAdvance(self: &Self) -> UfWord {
     return match move FontData<'a>.readAt<UfWord>(&self._fontData, (self.position + 6)) {
       Result<UfWord, ReadError>.Success { value } => value
-      Result<UfWord, ReadError>.Failure { error } => UfWord.new(0)
+      Result<UfWord, ReadError>.Failure { .. } => UfWord.new(0)
     }
   }
 
@@ -2744,7 +2688,7 @@ impl<'a> GlyphPartRecord<'a> {
   pub fn partFlags(self: &Self) -> PartFlags {
     return match move FontData<'a>.readAt<PartFlags>(&self._fontData, (self.position + 8)) {
       Result<PartFlags, ReadError>.Success { value } => value
-      Result<PartFlags, ReadError>.Failure { error } => PartFlags.empty()
+      Result<PartFlags, ReadError>.Failure { .. } => PartFlags.empty()
     }
   }
 }
@@ -3663,7 +3607,7 @@ impl<'a> MathGlyphInfo<'a> {
     if let Option<CoverageTable<'a>>.Some { value } = move mathOptional(
       MathGlyphInfo.extendedShapeCoverage(self),
     ) {
-      if let Option<u32>.Some { value: index } = move CoverageTable.get(&value, glyph) {
+      if let Option<u32>.Some { .. } = move CoverageTable.get(&value, glyph) {
         return true
       }
     }

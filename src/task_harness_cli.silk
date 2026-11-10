@@ -11,10 +11,39 @@ import silk.text.string { String }
 import silk.core.option { Option }
 
 pub union HarnessTasks {
-  Compare { pub fonts: String, pub reference: String, pub silkDumper: String, pub timeout: Seconds, pub report: String },
-  VerifyReference { pub fonts: String, pub reference: String, pub timeout: Seconds, pub report: String },
-  CheckMalformed { pub fonts: String, pub reference: String, pub silkDumper: String, pub seed: i64, pub jobs: Option<usize>, pub longTimeout: Seconds, pub cache: String, pub campaignFailures: String, pub requiredReport: String },
-  CheckRobustness { pub fonts: String, pub silkDumper: String, pub robustnessMutations: usize, pub seed: i64, pub robustnessTimeout: Seconds, pub jobs: Option<usize>, pub robustnessFailures: String },
+  Compare {
+    pub fonts: String,
+    pub reference: String,
+    pub silkDumper: String,
+    pub timeout: Seconds,
+    pub report: String
+  },
+  VerifyReference {
+    pub fonts: String,
+    pub reference: String,
+    pub timeout: Seconds,
+    pub report: String
+  },
+  CheckMalformed {
+    pub fonts: String,
+    pub reference: String,
+    pub silkDumper: String,
+    pub seed: i64,
+    pub jobs: Option<usize>,
+    pub longTimeout: Seconds,
+    pub cache: String,
+    pub campaignFailures: String,
+    pub requiredReport: String
+  },
+  CheckRobustness {
+    pub fonts: String,
+    pub silkDumper: String,
+    pub robustnessMutations: usize,
+    pub seed: i64,
+    pub robustnessTimeout: Seconds,
+    pub jobs: Option<usize>,
+    pub robustnessFailures: String
+  },
   TestHarness,
 }
 
@@ -28,17 +57,59 @@ impl CommandLine for HarnessTasks {
       |> Command.option("reference", Opt.about("Reference dumper path"))
       |> Command.option("silkDumper", Opt.about("Silk dumper path"))
       |> Command.variant("VerifyReference", "Validate complete reference dumps")
-      |> Command.option("longTimeout", Opt.about("Seconds per dumper") |> Opt.long("timeout") |> Opt.default("600"))
-      |> Command.option("requiredReport", Opt.about("Write the JSON report") |> Opt.long("report") |> Opt.required)
-      |> Command.variant("CheckMalformed", "Run the cached deterministic differential mutation campaign")
+      |> Command.option(
+        "longTimeout",
+        Opt.about("Seconds per dumper")
+          |> Opt.long("timeout")
+          |> Opt.default("600"),
+      )
+      |> Command.option(
+        "requiredReport",
+        Opt.about("Write the JSON report")
+          |> Opt.long("report")
+          |> Opt.required,
+      )
+      |> Command.variant(
+        "CheckMalformed",
+        "Run the cached deterministic differential mutation campaign",
+      )
       |> Command.option("seed", Opt.about("Deterministic mutation seed") |> Opt.default("20261026"))
-      |> Command.option("jobs", Opt.about("Workers; omitted uses READ_FONTS_JOBS or available CPUs"))
-      |> Command.option("cache", Opt.about("Mutation cache directory") |> Opt.default("build/malformed-cache"))
-      |> Command.option("campaignFailures", Opt.about("Save differential failures here") |> Opt.long("failures") |> Opt.default("build/malformed-failures"))
-      |> Command.variant("CheckRobustness", "Require complete bounded dumps for corpus fonts and corruptions")
-      |> Command.option("robustnessMutations", Opt.about("Corruptions per font; 0 selects clean inputs only") |> Opt.long("mutations-per-font") |> Opt.default("4"))
-      |> Command.option("robustnessTimeout", Opt.about("Seconds per dump") |> Opt.long("timeout") |> Opt.default("60"))
-      |> Command.option("robustnessFailures", Opt.about("Save failed inputs here") |> Opt.long("failures") |> Opt.default("build/robustness-failures"))
+      |> Command.option(
+        "jobs",
+        Opt.about("Workers; omitted uses READ_FONTS_JOBS or available CPUs"),
+      )
+      |> Command.option(
+        "cache",
+        Opt.about("Mutation cache directory") |> Opt.default("build/malformed-cache"),
+      )
+      |> Command.option(
+        "campaignFailures",
+        Opt.about("Save differential failures here")
+          |> Opt.long("failures")
+          |> Opt.default("build/malformed-failures"),
+      )
+      |> Command.variant(
+        "CheckRobustness",
+        "Require complete bounded dumps for corpus fonts and corruptions",
+      )
+      |> Command.option(
+        "robustnessMutations",
+        Opt.about("Corruptions per font; 0 selects clean inputs only")
+          |> Opt.long("mutations-per-font")
+          |> Opt.default("4"),
+      )
+      |> Command.option(
+        "robustnessTimeout",
+        Opt.about("Seconds per dump")
+          |> Opt.long("timeout")
+          |> Opt.default("60"),
+      )
+      |> Command.option(
+        "robustnessFailures",
+        Opt.about("Save failed inputs here")
+          |> Opt.long("failures")
+          |> Opt.default("build/robustness-failures"),
+      )
       |> Command.variant("TestHarness", "Run corpus, dump-validation and mutation unit tests")
   }
 }
@@ -48,13 +119,59 @@ impl TaskSet for HarnessTasks {
     ! TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError
     ? &mut HostInput | &mut Allocator | &mut ChildProcess | &mut FileSystem {
     let task = match move self {
-      HarnessTasks.Compare { fonts, reference, silkDumper, timeout, report } => Tasks.Compare { fonts: move fonts, reference: move reference, silkDumper: move silkDumper, timeout: timeout.value, report: move report }
-      HarnessTasks.VerifyReference { fonts, reference, timeout, report } => Tasks.VerifyReference { fonts: move fonts, reference: move reference, timeout: timeout.value, report: move report }
-      HarnessTasks.CheckMalformed { fonts, reference, silkDumper, seed, jobs, longTimeout, cache, campaignFailures, requiredReport } => Tasks.CheckMalformed { fonts: move fonts, reference: move reference, silkDumper: move silkDumper, seed: move seed, jobs: move jobs, longTimeout: longTimeout.value, cache: move cache, campaignFailures: move campaignFailures, requiredReport: move requiredReport }
-      HarnessTasks.CheckRobustness { fonts, silkDumper, robustnessMutations, seed, robustnessTimeout, jobs, robustnessFailures } => Tasks.CheckRobustness { fonts: move fonts, silkDumper: move silkDumper, robustnessMutations: move robustnessMutations, seed: move seed, robustnessTimeout: robustnessTimeout.value, jobs: move jobs, robustnessFailures: move robustnessFailures }
+      HarnessTasks.Compare { fonts, reference, silkDumper, timeout, report } => Tasks.Compare {
+        fonts: move fonts,
+        reference: move reference,
+        silkDumper: move silkDumper,
+        timeout: timeout.value,
+        report: move report,
+      }
+      HarnessTasks.VerifyReference { fonts, reference, timeout, report } => Tasks.VerifyReference {
+        fonts: move fonts,
+        reference: move reference,
+        timeout: timeout.value,
+        report: move report,
+      }
+      HarnessTasks.CheckMalformed {
+        fonts,
+        reference,
+        silkDumper,
+        seed,
+        jobs,
+        longTimeout,
+        cache,
+        campaignFailures,
+        requiredReport
+      } => Tasks.CheckMalformed {
+        fonts: move fonts,
+        reference: move reference,
+        silkDumper: move silkDumper,
+        seed: move seed,
+        jobs: move jobs,
+        longTimeout: longTimeout.value,
+        cache: move cache,
+        campaignFailures: move campaignFailures,
+        requiredReport: move requiredReport,
+      }
+      HarnessTasks.CheckRobustness {
+        fonts,
+        silkDumper,
+        robustnessMutations,
+        seed,
+        robustnessTimeout,
+        jobs,
+        robustnessFailures
+      } => Tasks.CheckRobustness {
+        fonts: move fonts,
+        silkDumper: move silkDumper,
+        robustnessMutations: move robustnessMutations,
+        seed: move seed,
+        robustnessTimeout: robustnessTimeout.value,
+        jobs: move jobs,
+        robustnessFailures: move robustnessFailures,
+      }
       HarnessTasks.TestHarness => Tasks.TestHarness
     }
     run TaskSet.perform(move task)
   }
 }
-

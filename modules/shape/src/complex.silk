@@ -1,11 +1,10 @@
 //! Script-specific feature staging and syllable reordering.
 import trace
 import buffer { Buffer, Glyph, reverseRange }
-import font { ConfiguredShaper, FontFuncs, Shaper, ShaperData }
+import font { ConfiguredShaper, FontFuncs, ShaperData }
 import view { View }
 import syllable
 import generated_machines as data
-import unicode
 import arabic
 import indic
 import plan { OtPlan }

@@ -14,46 +14,14 @@ import read_fonts.tables.variations {
   ItemVariationStore,
   ItemVariationData
 }
-import read_fonts.lib {
-  FontData,
-  FontRead,
-  ReadError,
-  ScalarArray,
-  ComputedArray,
-  VarLenArray,
-  VarLenIter,
-  ReadArgs2,
-  ReadArgs3,
-  ArrayOfOffsets,
-  ArrayOfNullableOffsets
-}
-import font_types.lib {
-  Fixed,
-  F2Dot14,
-  FWord,
-  UfWord,
-  Tag,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
-  GlyphId16,
-  GlyphId24,
-  GlyphId,
-  NameId,
-  Nullable,
-  Offset16,
-  Offset24,
-  Offset32
-}
-import dump_support { DumpPath, DumpTable, scalar, absent, readError, versionBits, bytes }
+import read_fonts.lib { FontData, ReadError, ScalarArray, ComputedArray, ArrayOfNullableOffsets }
+import font_types.lib { F2Dot14, Nullable, Offset32 }
+import dump_support { DumpPath, DumpTable, scalar, absent, readError }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.io.writer { Writer, WriterError }
 import silk.num.u8
 import silk.num.u16
-import silk.num.u32
 import silk.num.u64
 
 pub effect fn dumpTupleVariationHeader<'a>(
@@ -164,7 +132,6 @@ pub effect fn dumpTupleVariationHeader<'a>(
 pub effect fn dumpTuple<'a>(path: &mut DumpPath, value: Tuple<'a>, base: FontData<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -206,7 +173,6 @@ pub effect fn dumpDeltaSetIndexMapFormat0<'a>(
   ) {
     return
   }
-  let base = DeltaSetIndexMapFormat0<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = DeltaSetIndexMapFormat0<'a>.format(&value)
@@ -259,7 +225,6 @@ pub effect fn dumpDeltaSetIndexMapFormat1<'a>(
   ) {
     return
   }
-  let base = DeltaSetIndexMapFormat1<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = DeltaSetIndexMapFormat1<'a>.format(&value)
@@ -300,7 +265,6 @@ pub effect fn dumpDeltaSetIndexMapFormat1<'a>(
 pub effect fn dumpDeltaSetIndexMap<'a>(path: &mut DumpPath, value: DeltaSetIndexMap<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -379,7 +343,6 @@ pub effect fn dumpVariationRegion<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -417,7 +380,6 @@ pub effect fn dumpRegionAxisCoordinates<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -454,7 +416,6 @@ pub effect fn dumpItemVariationStore<'a>(path: &mut DumpPath, value: ItemVariati
   ) {
     return
   }
-  let base = ItemVariationStore<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = ItemVariationStore<'a>.format(&value)
@@ -560,7 +521,6 @@ pub effect fn dumpItemVariationData<'a>(path: &mut DumpPath, value: ItemVariatio
   ) {
     return
   }
-  let base = ItemVariationData<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "itemCount")
     let fieldValue = ItemVariationData<'a>.itemCount(&value)

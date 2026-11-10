@@ -9,7 +9,6 @@ import harfrust.lib {
   Language
 }
 import font_types.lib { InvalidTag }
-import silk.core.ownership { Copy }
 import silk.collections.list { List }
 import silk.text.string { String, Split }
 import silk.core.option { Option }

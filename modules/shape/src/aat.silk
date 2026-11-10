@@ -5,17 +5,15 @@ import aat_map
 import aat_insert
 import trace
 import buffer { Buffer, Glyph, reverseRange }
-import font { ConfiguredShaper, FontFuncs, Shaper, table }
+import font { ConfiguredShaper, FontFuncs }
 import feature { Feature }
 import plan { featureValue }
 import direction { Direction }
 import scale { Scale, add }
-import font_types.lib { Tag, GlyphId }
-import read_fonts.lib { ReadError, TableProvider }
+import read_fonts.lib { ReadError }
 import read_fonts.tables.aat { TypedLookup }
 import silk.mem.allocator { Allocator, OutOfMemoryError }
 import silk.collections.list { List }
-import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.num.u8
 import silk.num.u16

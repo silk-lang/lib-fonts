@@ -2,56 +2,19 @@
 // Source: pinned resources/codegen_inputs; generator: modules/parse/tools/font-codegen-silk.
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 import font_data { FontData }
-import read { ReadError, FontRead, FontReadAt, ComputeSize, Format, computeSize, readAtWithArgs }
+import read { ReadError, FontRead }
 import table_provider { TopLevelTable }
-import array { ScalarArray, ComputedArray, VarLenArray }
-import offset { resolve, resolveWithArgs, resolveNullableWithArgs }
-import offset_array { ArrayOfOffsets, ArrayOfNullableOffsets }
-import read_args { ReadArgs2, ReadArgs3 }
+import array { ScalarArray, VarLenArray }
 import table_ref { ByteRange, MinByteRange }
-import generated_support { scalarOr, recordArray, varLenArray, varLenBytes, signedCount }
-import font_types.lib {
-  Scalar,
-  FixedSize,
-  rawByteLen,
-  readScalar,
-  writeScalar,
-  Tag,
-  Fixed,
-  F2Dot14,
-  F4Dot12,
-  F6Dot10,
-  FWord,
-  UfWord,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
-  GlyphId,
-  GlyphId16,
-  GlyphId24,
-  NameId,
-  Offset16,
-  Offset24,
-  Offset32,
-  Nullable
-}
+import generated_support { scalarOr, varLenArray }
+import font_types.lib { Tag, Fixed, FWord, Version16Dot16, GlyphId, GlyphId16 }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.core.ownership { Copy }
-import silk.core.equal { Equal }
-import silk.core.order { Order, Ordering }
-import silk.text.format { Debug, Formatter }
-import silk.io.writer { Writer, WriterError }
-import silk.core.ops { BitAnd, BitOr, BitXor, Not, Subtract }
 import silk.num.usize
 import silk.num.u8
 import silk.num.u16
 import silk.num.u32
-import silk.num.u64
-import silk.num.i16
-import silk.num.i32
 import tables.post_string { PString }
 
 /// [post (PostScript)](https://docs.microsoft.com/en-us/typography/opentype/spec/post#header) table
@@ -87,35 +50,27 @@ impl<'a> Post<'a> {
     ranges[1].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[1].end = end
-    let italicAngleValue = scalarOr<Fixed>(data, ranges[1].start, Fixed.zero())
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let underlinePositionValue = scalarOr<FWord>(data, ranges[2].start, FWord.new(0))
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let underlineThicknessValue = scalarOr<FWord>(data, ranges[3].start, FWord.new(0))
     ranges[4].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[4].end = end
-    let isFixedPitchValue = scalarOr<u32>(data, ranges[4].start, 0)
     ranges[5].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[5].end = end
-    let minMemType42Value = scalarOr<u32>(data, ranges[5].start, 0)
     ranges[6].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[6].end = end
-    let maxMemType42Value = scalarOr<u32>(data, ranges[6].start, 0)
     ranges[7].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[7].end = end
-    let minMemType1Value = scalarOr<u32>(data, ranges[7].start, 0)
     ranges[8].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[8].end = end
-    let maxMemType1Value = scalarOr<u32>(data, ranges[8].start, 0)
     ranges[9].start = end
     if Version16Dot16.compatible(&versionValue, Version16Dot16.new(2, 0)) {
       end = usize.saturatingAdd(end, 2)
@@ -152,7 +107,7 @@ impl<'a> Post<'a> {
       self._fieldRanges[0].start,
     ) {
       Result<Version16Dot16, ReadError>.Success { value } => value
-      Result<Version16Dot16, ReadError>.Failure { error } => Version16Dot16.new(0, 0)
+      Result<Version16Dot16, ReadError>.Failure { .. } => Version16Dot16.new(0, 0)
     }
   }
 
@@ -166,7 +121,7 @@ impl<'a> Post<'a> {
   pub fn italicAngle(self: &Self) -> Fixed {
     return match move FontData<'a>.readAt<Fixed>(&self._fontData, self._fieldRanges[1].start) {
       Result<Fixed, ReadError>.Success { value } => value
-      Result<Fixed, ReadError>.Failure { error } => Fixed.zero()
+      Result<Fixed, ReadError>.Failure { .. } => Fixed.zero()
     }
   }
 
@@ -184,7 +139,7 @@ impl<'a> Post<'a> {
   pub fn underlinePosition(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[2].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -199,7 +154,7 @@ impl<'a> Post<'a> {
   pub fn underlineThickness(self: &Self) -> FWord {
     return match move FontData<'a>.readAt<FWord>(&self._fontData, self._fieldRanges[3].start) {
       Result<FWord, ReadError>.Success { value } => value
-      Result<FWord, ReadError>.Failure { error } => FWord.new(0)
+      Result<FWord, ReadError>.Failure { .. } => FWord.new(0)
     }
   }
 
@@ -212,7 +167,7 @@ impl<'a> Post<'a> {
   pub fn isFixedPitch(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[4].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -224,7 +179,7 @@ impl<'a> Post<'a> {
   pub fn minMemType42(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[5].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -236,7 +191,7 @@ impl<'a> Post<'a> {
   pub fn maxMemType42(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[6].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -249,7 +204,7 @@ impl<'a> Post<'a> {
   pub fn minMemType1(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[7].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -262,7 +217,7 @@ impl<'a> Post<'a> {
   pub fn maxMemType1(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[8].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -278,7 +233,7 @@ impl<'a> Post<'a> {
     }
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[9].start) {
       Result<u16, ReadError>.Success { value } => Option<u16>.some(value)
-      Result<u16, ReadError>.Failure { error } => Option<u16>.None
+      Result<u16, ReadError>.Failure { .. } => Option<u16>.None
     }
   }
 
@@ -299,7 +254,7 @@ impl<'a> Post<'a> {
       Result<ScalarArray<'a, u16>, ReadError>.Success { value } => Option<
         ScalarArray<'a, u16>
       >.some(value)
-      Result<ScalarArray<'a, u16>, ReadError>.Failure { error } => Option<ScalarArray<'a, u16>>.None
+      Result<ScalarArray<'a, u16>, ReadError>.Failure { .. } => Option<ScalarArray<'a, u16>>.None
     }
   }
 
@@ -320,7 +275,7 @@ impl<'a> Post<'a> {
       Result<VarLenArray<'a, PString<'a>>, ReadError>.Success { value } => Option<
         VarLenArray<'a, PString<'a>>
       >.some(value)
-      Result<VarLenArray<'a, PString<'a>>, ReadError>.Failure { error } => Option<
+      Result<VarLenArray<'a, PString<'a>>, ReadError>.Failure { .. } => Option<
         VarLenArray<'a, PString<'a>>
       >.None
     }

@@ -53,14 +53,14 @@ test effect fn malformedExtendedTablesDoNotFallBackToLegacy() -> ()
   )
   run Testing.expect(
     match move FontRef.selectedMaxp(&font) {
-      Result<SelectedMaxp, ReadError>.Failure { error } => true
+      Result<SelectedMaxp, ReadError>.Failure { .. } => true
       _ => false
     },
     "malformed wide maxp stays an error",
   )
   run Testing.expect(
     match move FontRef.selectedHhea(&font) {
-      Result<SelectedHhea, ReadError>.Failure { error } => true
+      Result<SelectedHhea, ReadError>.Failure { .. } => true
       _ => false
     },
     "malformed wide hhea stays an error",
@@ -77,7 +77,7 @@ test effect fn malformedExtendedTablesDoNotFallBackToLegacy() -> ()
   )
   run Testing.expect(
     match move FontRef.hGlyphMetricRecords(&missing) {
-      Result<GlyphMetricRecords, ReadError>.Failure { error } => true
+      Result<GlyphMetricRecords, ReadError>.Failure { .. } => true
       _ => false
     },
     "present HMTX requires HHEA",

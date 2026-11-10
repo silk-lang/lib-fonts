@@ -10,10 +10,9 @@ import model.name {
 }
 import generated_model_fixtures { hvarNames, notoSansJp, tinos, postSimple }
 import generated_cff_fixtures { notoSerifFont }
-import lib { FontRef, FontData, TableProvider, ReadError }
+import lib { FontRef, FontData, TableProvider }
 import tables.cff { Cff }
 import ps.cff.font { CffFontRef }
-import model.error { Error }
 import font_types.lib { GlyphId, Tag }
 import silk.core.option { Option }
 import silk.core.result { Result }
@@ -213,7 +212,7 @@ test effect fn postNamesAgreeBetweenLookupAndIteration() -> ()
   run Testing.expect(GlyphNames.len(&iter) == u32.toUsize(count), "initial exact size")
   drop run some(GlyphNames.next(&mut iter))
   let mut remaining: u32 = 0
-  while let Option<GlyphNameEntry>.Some { value } = GlyphNames.next(&mut iter) {
+  while let Option<GlyphNameEntry>.Some { .. } = GlyphNames.next(&mut iter) {
     remaining = remaining + 1
   }
   run Testing.expect(remaining == count - 1, "remaining exact size")

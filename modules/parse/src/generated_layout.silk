@@ -2,14 +2,12 @@
 // Source: pinned resources/codegen_inputs; generator: modules/parse/tools/font-codegen-silk.
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 import font_data { FontData }
-import read { ReadError, FontRead, FontReadAt, ComputeSize, Format, computeSize, readAtWithArgs }
-import table_provider { TopLevelTable }
-import array { ScalarArray, ComputedArray, VarLenArray }
+import read { ReadError, FontRead, FontReadAt, ComputeSize, Format, computeSize }
+import array { ScalarArray, ComputedArray }
 import offset { resolve, resolveWithArgs, resolveNullableWithArgs }
 import offset_array { ArrayOfOffsets, ArrayOfNullableOffsets }
-import read_args { ReadArgs2, ReadArgs3 }
 import table_ref { ByteRange, MinByteRange }
-import generated_support { scalarOr, recordArray, varLenArray, varLenBytes, signedCount }
+import generated_support { scalarOr, recordArray }
 import font_types.lib {
   Scalar,
   FixedSize,
@@ -17,17 +15,9 @@ import font_types.lib {
   readScalar,
   writeScalar,
   Tag,
-  Fixed,
   F2Dot14,
-  F4Dot12,
-  F6Dot10,
-  FWord,
-  UfWord,
   MajorMinor,
-  Version16Dot16,
-  LongDateTime,
   Uint24,
-  Int24,
   GlyphId,
   GlyphId16,
   GlyphId24,
@@ -98,7 +88,7 @@ impl<'a> ScriptList<'a> {
   pub fn scriptCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -114,7 +104,7 @@ impl<'a> ScriptList<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ComputedArray<'a, (), ScriptRecord<'a>>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, (), ScriptRecord<'a>>, ReadError>.Failure { error } => ComputedArray<
+      Result<ComputedArray<'a, (), ScriptRecord<'a>>, ReadError>.Failure { .. } => ComputedArray<
         'a,
         (),
         ScriptRecord<'a>
@@ -170,7 +160,7 @@ impl<'a> ScriptRecord<'a> {
   pub fn scriptTag(self: &Self) -> Tag {
     return match move FontData<'a>.readAt<Tag>(&self._fontData, (self.position + 0)) {
       Result<Tag, ReadError>.Success { value } => value
-      Result<Tag, ReadError>.Failure { error } => Tag.default()
+      Result<Tag, ReadError>.Failure { .. } => Tag.default()
     }
   }
 
@@ -178,7 +168,7 @@ impl<'a> ScriptRecord<'a> {
   pub fn scriptOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, (self.position + 4)) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -235,11 +225,6 @@ impl<'a> Script<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let defaultLangSysOffsetValue = scalarOr<Nullable<Offset16>>(
-      data,
-      ranges[0].start,
-      Nullable<Offset16>.default(),
-    )
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
@@ -262,7 +247,7 @@ impl<'a> Script<'a> {
       self._fieldRanges[0].start,
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -280,7 +265,7 @@ impl<'a> Script<'a> {
   pub fn langSysCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -296,9 +281,11 @@ impl<'a> Script<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ComputedArray<'a, (), LangSysRecord<'a>>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, (), LangSysRecord<'a>>, ReadError>.Failure {
-        error
-      } => ComputedArray<'a, (), LangSysRecord<'a>>.empty(())
+      Result<ComputedArray<'a, (), LangSysRecord<'a>>, ReadError>.Failure { .. } => ComputedArray<
+        'a,
+        (),
+        LangSysRecord<'a>
+      >.empty(())
     }
   }
 
@@ -349,7 +336,7 @@ impl<'a> LangSysRecord<'a> {
   pub fn langSysTag(self: &Self) -> Tag {
     return match move FontData<'a>.readAt<Tag>(&self._fontData, (self.position + 0)) {
       Result<Tag, ReadError>.Success { value } => value
-      Result<Tag, ReadError>.Failure { error } => Tag.default()
+      Result<Tag, ReadError>.Failure { .. } => Tag.default()
     }
   }
 
@@ -357,7 +344,7 @@ impl<'a> LangSysRecord<'a> {
   pub fn langSysOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, (self.position + 4)) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -414,11 +401,9 @@ impl<'a> LangSys<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let lookupOrderOffsetValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let requiredFeatureIndexValue = scalarOr<u16>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
@@ -442,7 +427,7 @@ impl<'a> LangSys<'a> {
   pub fn requiredFeatureIndex(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -455,7 +440,7 @@ impl<'a> LangSys<'a> {
   pub fn featureIndexCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[2].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -471,7 +456,7 @@ impl<'a> LangSys<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, u16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, u16>, ReadError>.Failure { error } => ScalarArray<u16>.empty()
+      Result<ScalarArray<'a, u16>, ReadError>.Failure { .. } => ScalarArray<u16>.empty()
     }
   }
 
@@ -543,7 +528,7 @@ impl<'a> FeatureList<'a> {
   pub fn featureCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -560,9 +545,11 @@ impl<'a> FeatureList<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ComputedArray<'a, (), FeatureRecord<'a>>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, (), FeatureRecord<'a>>, ReadError>.Failure {
-        error
-      } => ComputedArray<'a, (), FeatureRecord<'a>>.empty(())
+      Result<ComputedArray<'a, (), FeatureRecord<'a>>, ReadError>.Failure { .. } => ComputedArray<
+        'a,
+        (),
+        FeatureRecord<'a>
+      >.empty(())
     }
   }
 
@@ -614,7 +601,7 @@ impl<'a> FeatureRecord<'a> {
   pub fn featureTag(self: &Self) -> Tag {
     return match move FontData<'a>.readAt<Tag>(&self._fontData, (self.position + 0)) {
       Result<Tag, ReadError>.Success { value } => value
-      Result<Tag, ReadError>.Failure { error } => Tag.default()
+      Result<Tag, ReadError>.Failure { .. } => Tag.default()
     }
   }
 
@@ -622,7 +609,7 @@ impl<'a> FeatureRecord<'a> {
   pub fn featureOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, (self.position + 4)) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -685,15 +672,9 @@ impl<'a> Feature<'a> {
     }
     let mut ranges: [ByteRange; 3] = [ByteRange { start: 0, end: 0 }; 3]
     let mut end: usize = 0
-    let featureTagValue = featureTag
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let featureParamsOffsetValue = scalarOr<Nullable<Offset16>>(
-      data,
-      ranges[0].start,
-      Nullable<Offset16>.default(),
-    )
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
@@ -717,7 +698,7 @@ impl<'a> Feature<'a> {
       self._fieldRanges[0].start,
     ) {
       Result<Nullable<Offset16>, ReadError>.Success { value } => value
-      Result<Nullable<Offset16>, ReadError>.Failure { error } => Nullable<Offset16>.default()
+      Result<Nullable<Offset16>, ReadError>.Failure { .. } => Nullable<Offset16>.default()
     }
   }
 
@@ -738,7 +719,7 @@ impl<'a> Feature<'a> {
   pub fn lookupIndexCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -755,7 +736,7 @@ impl<'a> Feature<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ScalarArray<'a, u16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, u16>, ReadError>.Failure { error } => ScalarArray<u16>.empty()
+      Result<ScalarArray<'a, u16>, ReadError>.Failure { .. } => ScalarArray<u16>.empty()
     }
   }
 
@@ -827,7 +808,7 @@ impl<'a, T> LookupList<'a, T> {
   pub fn lookupCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -844,9 +825,7 @@ impl<'a, T> LookupList<'a, T> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, Offset16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { error } => ScalarArray<
-        Offset16
-      >.empty()
+      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { .. } => ScalarArray<Offset16>.empty()
     }
   }
 
@@ -917,7 +896,6 @@ impl<'a, T> Lookup<'a, T> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let lookupTypeValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
@@ -934,7 +912,6 @@ impl<'a, T> Lookup<'a, T> {
       end = usize.saturatingAdd(end, 2)
     }
     ranges[4].end = end
-    let markFilteringSetValue = scalarOr<u16>(data, ranges[4].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -946,7 +923,7 @@ impl<'a, T> Lookup<'a, T> {
   pub fn lookupType(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -958,7 +935,7 @@ impl<'a, T> Lookup<'a, T> {
   pub fn lookupFlag(self: &Self) -> LookupFlag {
     return match move FontData<'a>.readAt<LookupFlag>(&self._fontData, self._fieldRanges[1].start) {
       Result<LookupFlag, ReadError>.Success { value } => value
-      Result<LookupFlag, ReadError>.Failure { error } => LookupFlag.new(0)
+      Result<LookupFlag, ReadError>.Failure { .. } => LookupFlag.new(0)
     }
   }
 
@@ -970,7 +947,7 @@ impl<'a, T> Lookup<'a, T> {
   pub fn subTableCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[2].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -987,9 +964,7 @@ impl<'a, T> Lookup<'a, T> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, Offset16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { error } => ScalarArray<
-        Offset16
-      >.empty()
+      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { .. } => ScalarArray<Offset16>.empty()
     }
   }
 
@@ -1014,7 +989,7 @@ impl<'a, T> Lookup<'a, T> {
     }
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[4].start) {
       Result<u16, ReadError>.Success { value } => Option<u16>.some(value)
-      Result<u16, ReadError>.Failure { error } => Option<u16>.None
+      Result<u16, ReadError>.Failure { .. } => Option<u16>.None
     }
   }
 
@@ -1081,7 +1056,6 @@ impl<'a> CoverageFormat1<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let coverageFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
@@ -1100,7 +1074,7 @@ impl<'a> CoverageFormat1<'a> {
   pub fn coverageFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1112,7 +1086,7 @@ impl<'a> CoverageFormat1<'a> {
   pub fn glyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1128,9 +1102,7 @@ impl<'a> CoverageFormat1<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ScalarArray<'a, GlyphId16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, GlyphId16>, ReadError>.Failure { error } => ScalarArray<
-        GlyphId16
-      >.empty()
+      Result<ScalarArray<'a, GlyphId16>, ReadError>.Failure { .. } => ScalarArray<GlyphId16>.empty()
     }
   }
 
@@ -1186,7 +1158,6 @@ impl<'a> CoverageFormat2<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let coverageFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
@@ -1205,7 +1176,7 @@ impl<'a> CoverageFormat2<'a> {
   pub fn coverageFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1217,7 +1188,7 @@ impl<'a> CoverageFormat2<'a> {
   pub fn rangeCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1233,7 +1204,7 @@ impl<'a> CoverageFormat2<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ComputedArray<'a, (), RangeRecord<'a>>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, (), RangeRecord<'a>>, ReadError>.Failure { error } => ComputedArray<
+      Result<ComputedArray<'a, (), RangeRecord<'a>>, ReadError>.Failure { .. } => ComputedArray<
         'a,
         (),
         RangeRecord<'a>
@@ -1295,7 +1266,7 @@ impl<'a> RangeRecord<'a> {
   pub fn startGlyphId(self: &Self) -> GlyphId16 {
     return match move FontData<'a>.readAt<GlyphId16>(&self._fontData, (self.position + 0)) {
       Result<GlyphId16, ReadError>.Success { value } => value
-      Result<GlyphId16, ReadError>.Failure { error } => GlyphId16.new(0)
+      Result<GlyphId16, ReadError>.Failure { .. } => GlyphId16.new(0)
     }
   }
 
@@ -1303,7 +1274,7 @@ impl<'a> RangeRecord<'a> {
   pub fn endGlyphId(self: &Self) -> GlyphId16 {
     return match move FontData<'a>.readAt<GlyphId16>(&self._fontData, (self.position + 2)) {
       Result<GlyphId16, ReadError>.Success { value } => value
-      Result<GlyphId16, ReadError>.Failure { error } => GlyphId16.new(0)
+      Result<GlyphId16, ReadError>.Failure { .. } => GlyphId16.new(0)
     }
   }
 
@@ -1311,7 +1282,7 @@ impl<'a> RangeRecord<'a> {
   pub fn startCoverageIndex(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 4)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 }
@@ -1490,11 +1461,9 @@ impl<'a> ClassDefFormat1<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let classFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let startGlyphIdValue = scalarOr<GlyphId16>(data, ranges[1].start, GlyphId16.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
@@ -1513,7 +1482,7 @@ impl<'a> ClassDefFormat1<'a> {
   pub fn classFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1525,7 +1494,7 @@ impl<'a> ClassDefFormat1<'a> {
   pub fn startGlyphId(self: &Self) -> GlyphId16 {
     return match move FontData<'a>.readAt<GlyphId16>(&self._fontData, self._fieldRanges[1].start) {
       Result<GlyphId16, ReadError>.Success { value } => value
-      Result<GlyphId16, ReadError>.Failure { error } => GlyphId16.new(0)
+      Result<GlyphId16, ReadError>.Failure { .. } => GlyphId16.new(0)
     }
   }
 
@@ -1537,7 +1506,7 @@ impl<'a> ClassDefFormat1<'a> {
   pub fn glyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[2].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1553,7 +1522,7 @@ impl<'a> ClassDefFormat1<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, u16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, u16>, ReadError>.Failure { error } => ScalarArray<u16>.empty()
+      Result<ScalarArray<'a, u16>, ReadError>.Failure { .. } => ScalarArray<u16>.empty()
     }
   }
 
@@ -1609,7 +1578,6 @@ impl<'a> ClassDefFormat2<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let classFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
@@ -1628,7 +1596,7 @@ impl<'a> ClassDefFormat2<'a> {
   pub fn classFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1640,7 +1608,7 @@ impl<'a> ClassDefFormat2<'a> {
   pub fn classRangeCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1657,7 +1625,7 @@ impl<'a> ClassDefFormat2<'a> {
     ) {
       Result<ComputedArray<'a, (), ClassRangeRecord<'a>>, ReadError>.Success { value } => value
       Result<ComputedArray<'a, (), ClassRangeRecord<'a>>, ReadError>.Failure {
-        error
+        ..
       } => ComputedArray<'a, (), ClassRangeRecord<'a>>.empty(())
     }
   }
@@ -1716,7 +1684,7 @@ impl<'a> ClassRangeRecord<'a> {
   pub fn startGlyphId(self: &Self) -> GlyphId16 {
     return match move FontData<'a>.readAt<GlyphId16>(&self._fontData, (self.position + 0)) {
       Result<GlyphId16, ReadError>.Success { value } => value
-      Result<GlyphId16, ReadError>.Failure { error } => GlyphId16.new(0)
+      Result<GlyphId16, ReadError>.Failure { .. } => GlyphId16.new(0)
     }
   }
 
@@ -1724,7 +1692,7 @@ impl<'a> ClassRangeRecord<'a> {
   pub fn endGlyphId(self: &Self) -> GlyphId16 {
     return match move FontData<'a>.readAt<GlyphId16>(&self._fontData, (self.position + 2)) {
       Result<GlyphId16, ReadError>.Success { value } => value
-      Result<GlyphId16, ReadError>.Failure { error } => GlyphId16.new(0)
+      Result<GlyphId16, ReadError>.Failure { .. } => GlyphId16.new(0)
     }
   }
 
@@ -1732,7 +1700,7 @@ impl<'a> ClassRangeRecord<'a> {
   pub fn class(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 4)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 }
@@ -1906,7 +1874,7 @@ impl<'a> SequenceLookupRecord<'a> {
   pub fn sequenceIndex(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 0)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -1914,7 +1882,7 @@ impl<'a> SequenceLookupRecord<'a> {
   pub fn lookupListIndex(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 2)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 }
@@ -1966,11 +1934,9 @@ impl<'a> SequenceContextFormat1<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let formatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let coverageOffsetValue = scalarOr<Offset16>(data, ranges[1].start, Offset16.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
@@ -1989,7 +1955,7 @@ impl<'a> SequenceContextFormat1<'a> {
   pub fn format(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2002,7 +1968,7 @@ impl<'a> SequenceContextFormat1<'a> {
   pub fn coverageOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -2019,7 +1985,7 @@ impl<'a> SequenceContextFormat1<'a> {
   pub fn seqRuleSetCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[2].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2036,7 +2002,7 @@ impl<'a> SequenceContextFormat1<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, Nullable<Offset16>>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Nullable<Offset16>>, ReadError>.Failure { error } => ScalarArray<
+      Result<ScalarArray<'a, Nullable<Offset16>>, ReadError>.Failure { .. } => ScalarArray<
         Nullable<Offset16>
       >.empty()
     }
@@ -2124,7 +2090,7 @@ impl<'a> SequenceRuleSet<'a> {
   pub fn seqRuleCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2141,9 +2107,7 @@ impl<'a> SequenceRuleSet<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, Offset16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { error } => ScalarArray<
-        Offset16
-      >.empty()
+      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { .. } => ScalarArray<Offset16>.empty()
     }
   }
 
@@ -2233,7 +2197,7 @@ impl<'a> SequenceRule<'a> {
   pub fn glyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2245,7 +2209,7 @@ impl<'a> SequenceRule<'a> {
   pub fn seqLookupCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2261,9 +2225,7 @@ impl<'a> SequenceRule<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ScalarArray<'a, GlyphId16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, GlyphId16>, ReadError>.Failure { error } => ScalarArray<
-        GlyphId16
-      >.empty()
+      Result<ScalarArray<'a, GlyphId16>, ReadError>.Failure { .. } => ScalarArray<GlyphId16>.empty()
     }
   }
 
@@ -2280,7 +2242,7 @@ impl<'a> SequenceRule<'a> {
     ) {
       Result<ComputedArray<'a, (), SequenceLookupRecord<'a>>, ReadError>.Success { value } => value
       Result<ComputedArray<'a, (), SequenceLookupRecord<'a>>, ReadError>.Failure {
-        error
+        ..
       } => ComputedArray<'a, (), SequenceLookupRecord<'a>>.empty(())
     }
   }
@@ -2331,15 +2293,12 @@ impl<'a> SequenceContextFormat2<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let formatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let coverageOffsetValue = scalarOr<Offset16>(data, ranges[1].start, Offset16.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let classDefOffsetValue = scalarOr<Offset16>(data, ranges[2].start, Offset16.new(0))
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
@@ -2361,7 +2320,7 @@ impl<'a> SequenceContextFormat2<'a> {
   pub fn format(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2374,7 +2333,7 @@ impl<'a> SequenceContextFormat2<'a> {
   pub fn coverageOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -2392,7 +2351,7 @@ impl<'a> SequenceContextFormat2<'a> {
   pub fn classDefOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, self._fieldRanges[2].start) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -2409,7 +2368,7 @@ impl<'a> SequenceContextFormat2<'a> {
   pub fn classSeqRuleSetCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[3].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2426,7 +2385,7 @@ impl<'a> SequenceContextFormat2<'a> {
       self._fieldRanges[4].end,
     ) {
       Result<ScalarArray<'a, Nullable<Offset16>>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Nullable<Offset16>>, ReadError>.Failure { error } => ScalarArray<
+      Result<ScalarArray<'a, Nullable<Offset16>>, ReadError>.Failure { .. } => ScalarArray<
         Nullable<Offset16>
       >.empty()
     }
@@ -2519,7 +2478,7 @@ impl<'a> ClassSequenceRuleSet<'a> {
   pub fn classSeqRuleCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2536,9 +2495,7 @@ impl<'a> ClassSequenceRuleSet<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, Offset16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { error } => ScalarArray<
-        Offset16
-      >.empty()
+      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { .. } => ScalarArray<Offset16>.empty()
     }
   }
 
@@ -2628,7 +2585,7 @@ impl<'a> ClassSequenceRule<'a> {
   pub fn glyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2640,7 +2597,7 @@ impl<'a> ClassSequenceRule<'a> {
   pub fn seqLookupCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2657,7 +2614,7 @@ impl<'a> ClassSequenceRule<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ScalarArray<'a, u16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, u16>, ReadError>.Failure { error } => ScalarArray<u16>.empty()
+      Result<ScalarArray<'a, u16>, ReadError>.Failure { .. } => ScalarArray<u16>.empty()
     }
   }
 
@@ -2674,7 +2631,7 @@ impl<'a> ClassSequenceRule<'a> {
     ) {
       Result<ComputedArray<'a, (), SequenceLookupRecord<'a>>, ReadError>.Success { value } => value
       Result<ComputedArray<'a, (), SequenceLookupRecord<'a>>, ReadError>.Failure {
-        error
+        ..
       } => ComputedArray<'a, (), SequenceLookupRecord<'a>>.empty(())
     }
   }
@@ -2725,7 +2682,6 @@ impl<'a> SequenceContextFormat3<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let formatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
@@ -2751,7 +2707,7 @@ impl<'a> SequenceContextFormat3<'a> {
   pub fn format(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2763,7 +2719,7 @@ impl<'a> SequenceContextFormat3<'a> {
   pub fn glyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2775,7 +2731,7 @@ impl<'a> SequenceContextFormat3<'a> {
   pub fn seqLookupCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[2].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -2792,9 +2748,7 @@ impl<'a> SequenceContextFormat3<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, Offset16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { error } => ScalarArray<
-        Offset16
-      >.empty()
+      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { .. } => ScalarArray<Offset16>.empty()
     }
   }
 
@@ -2819,7 +2773,7 @@ impl<'a> SequenceContextFormat3<'a> {
     ) {
       Result<ComputedArray<'a, (), SequenceLookupRecord<'a>>, ReadError>.Success { value } => value
       Result<ComputedArray<'a, (), SequenceLookupRecord<'a>>, ReadError>.Failure {
-        error
+        ..
       } => ComputedArray<'a, (), SequenceLookupRecord<'a>>.empty(())
     }
   }
@@ -3043,11 +2997,9 @@ impl<'a> ChainedSequenceContextFormat1<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let formatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let coverageOffsetValue = scalarOr<Offset16>(data, ranges[1].start, Offset16.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
@@ -3069,7 +3021,7 @@ impl<'a> ChainedSequenceContextFormat1<'a> {
   pub fn format(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3082,7 +3034,7 @@ impl<'a> ChainedSequenceContextFormat1<'a> {
   pub fn coverageOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -3099,7 +3051,7 @@ impl<'a> ChainedSequenceContextFormat1<'a> {
   pub fn chainedSeqRuleSetCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[2].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3116,7 +3068,7 @@ impl<'a> ChainedSequenceContextFormat1<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, Nullable<Offset16>>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Nullable<Offset16>>, ReadError>.Failure { error } => ScalarArray<
+      Result<ScalarArray<'a, Nullable<Offset16>>, ReadError>.Failure { .. } => ScalarArray<
         Nullable<Offset16>
       >.empty()
     }
@@ -3212,7 +3164,7 @@ impl<'a> ChainedSequenceRuleSet<'a> {
   pub fn chainedSeqRuleCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3229,9 +3181,7 @@ impl<'a> ChainedSequenceRuleSet<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, Offset16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { error } => ScalarArray<
-        Offset16
-      >.empty()
+      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { .. } => ScalarArray<Offset16>.empty()
     }
   }
 
@@ -3341,7 +3291,7 @@ impl<'a> ChainedSequenceRule<'a> {
   pub fn backtrackGlyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3357,9 +3307,7 @@ impl<'a> ChainedSequenceRule<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, GlyphId16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, GlyphId16>, ReadError>.Failure { error } => ScalarArray<
-        GlyphId16
-      >.empty()
+      Result<ScalarArray<'a, GlyphId16>, ReadError>.Failure { .. } => ScalarArray<GlyphId16>.empty()
     }
   }
 
@@ -3371,7 +3319,7 @@ impl<'a> ChainedSequenceRule<'a> {
   pub fn inputGlyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[2].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3387,9 +3335,7 @@ impl<'a> ChainedSequenceRule<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, GlyphId16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, GlyphId16>, ReadError>.Failure { error } => ScalarArray<
-        GlyphId16
-      >.empty()
+      Result<ScalarArray<'a, GlyphId16>, ReadError>.Failure { .. } => ScalarArray<GlyphId16>.empty()
     }
   }
 
@@ -3401,7 +3347,7 @@ impl<'a> ChainedSequenceRule<'a> {
   pub fn lookaheadGlyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[4].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3417,9 +3363,7 @@ impl<'a> ChainedSequenceRule<'a> {
       self._fieldRanges[5].end,
     ) {
       Result<ScalarArray<'a, GlyphId16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, GlyphId16>, ReadError>.Failure { error } => ScalarArray<
-        GlyphId16
-      >.empty()
+      Result<ScalarArray<'a, GlyphId16>, ReadError>.Failure { .. } => ScalarArray<GlyphId16>.empty()
     }
   }
 
@@ -3431,7 +3375,7 @@ impl<'a> ChainedSequenceRule<'a> {
   pub fn seqLookupCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[6].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3448,7 +3392,7 @@ impl<'a> ChainedSequenceRule<'a> {
     ) {
       Result<ComputedArray<'a, (), SequenceLookupRecord<'a>>, ReadError>.Success { value } => value
       Result<ComputedArray<'a, (), SequenceLookupRecord<'a>>, ReadError>.Failure {
-        error
+        ..
       } => ComputedArray<'a, (), SequenceLookupRecord<'a>>.empty(())
     }
   }
@@ -3499,23 +3443,18 @@ impl<'a> ChainedSequenceContextFormat2<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let formatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let coverageOffsetValue = scalarOr<Offset16>(data, ranges[1].start, Offset16.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let backtrackClassDefOffsetValue = scalarOr<Offset16>(data, ranges[2].start, Offset16.new(0))
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let inputClassDefOffsetValue = scalarOr<Offset16>(data, ranges[3].start, Offset16.new(0))
     ranges[4].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[4].end = end
-    let lookaheadClassDefOffsetValue = scalarOr<Offset16>(data, ranges[4].start, Offset16.new(0))
     ranges[5].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[5].end = end
@@ -3537,7 +3476,7 @@ impl<'a> ChainedSequenceContextFormat2<'a> {
   pub fn format(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3550,7 +3489,7 @@ impl<'a> ChainedSequenceContextFormat2<'a> {
   pub fn coverageOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -3568,7 +3507,7 @@ impl<'a> ChainedSequenceContextFormat2<'a> {
   pub fn backtrackClassDefOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, self._fieldRanges[2].start) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -3586,7 +3525,7 @@ impl<'a> ChainedSequenceContextFormat2<'a> {
   pub fn inputClassDefOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, self._fieldRanges[3].start) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -3604,7 +3543,7 @@ impl<'a> ChainedSequenceContextFormat2<'a> {
   pub fn lookaheadClassDefOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, self._fieldRanges[4].start) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -3621,7 +3560,7 @@ impl<'a> ChainedSequenceContextFormat2<'a> {
   pub fn chainedClassSeqRuleSetCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[5].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3638,7 +3577,7 @@ impl<'a> ChainedSequenceContextFormat2<'a> {
       self._fieldRanges[6].end,
     ) {
       Result<ScalarArray<'a, Nullable<Offset16>>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Nullable<Offset16>>, ReadError>.Failure { error } => ScalarArray<
+      Result<ScalarArray<'a, Nullable<Offset16>>, ReadError>.Failure { .. } => ScalarArray<
         Nullable<Offset16>
       >.empty()
     }
@@ -3734,7 +3673,7 @@ impl<'a> ChainedClassSequenceRuleSet<'a> {
   pub fn chainedClassSeqRuleCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3751,9 +3690,7 @@ impl<'a> ChainedClassSequenceRuleSet<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, Offset16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { error } => ScalarArray<
-        Offset16
-      >.empty()
+      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { .. } => ScalarArray<Offset16>.empty()
     }
   }
 
@@ -3868,7 +3805,7 @@ impl<'a> ChainedClassSequenceRule<'a> {
   pub fn backtrackGlyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3884,7 +3821,7 @@ impl<'a> ChainedClassSequenceRule<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, u16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, u16>, ReadError>.Failure { error } => ScalarArray<u16>.empty()
+      Result<ScalarArray<'a, u16>, ReadError>.Failure { .. } => ScalarArray<u16>.empty()
     }
   }
 
@@ -3896,7 +3833,7 @@ impl<'a> ChainedClassSequenceRule<'a> {
   pub fn inputGlyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[2].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3913,7 +3850,7 @@ impl<'a> ChainedClassSequenceRule<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, u16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, u16>, ReadError>.Failure { error } => ScalarArray<u16>.empty()
+      Result<ScalarArray<'a, u16>, ReadError>.Failure { .. } => ScalarArray<u16>.empty()
     }
   }
 
@@ -3925,7 +3862,7 @@ impl<'a> ChainedClassSequenceRule<'a> {
   pub fn lookaheadGlyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[4].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3941,7 +3878,7 @@ impl<'a> ChainedClassSequenceRule<'a> {
       self._fieldRanges[5].end,
     ) {
       Result<ScalarArray<'a, u16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, u16>, ReadError>.Failure { error } => ScalarArray<u16>.empty()
+      Result<ScalarArray<'a, u16>, ReadError>.Failure { .. } => ScalarArray<u16>.empty()
     }
   }
 
@@ -3953,7 +3890,7 @@ impl<'a> ChainedClassSequenceRule<'a> {
   pub fn seqLookupCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[6].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -3970,7 +3907,7 @@ impl<'a> ChainedClassSequenceRule<'a> {
     ) {
       Result<ComputedArray<'a, (), SequenceLookupRecord<'a>>, ReadError>.Success { value } => value
       Result<ComputedArray<'a, (), SequenceLookupRecord<'a>>, ReadError>.Failure {
-        error
+        ..
       } => ComputedArray<'a, (), SequenceLookupRecord<'a>>.empty(())
     }
   }
@@ -4021,7 +3958,6 @@ impl<'a> ChainedSequenceContextFormat3<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let formatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
@@ -4067,7 +4003,7 @@ impl<'a> ChainedSequenceContextFormat3<'a> {
   pub fn format(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -4079,7 +4015,7 @@ impl<'a> ChainedSequenceContextFormat3<'a> {
   pub fn backtrackGlyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -4095,9 +4031,7 @@ impl<'a> ChainedSequenceContextFormat3<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ScalarArray<'a, Offset16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { error } => ScalarArray<
-        Offset16
-      >.empty()
+      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { .. } => ScalarArray<Offset16>.empty()
     }
   }
 
@@ -4117,7 +4051,7 @@ impl<'a> ChainedSequenceContextFormat3<'a> {
   pub fn inputGlyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[3].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -4133,9 +4067,7 @@ impl<'a> ChainedSequenceContextFormat3<'a> {
       self._fieldRanges[4].end,
     ) {
       Result<ScalarArray<'a, Offset16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { error } => ScalarArray<
-        Offset16
-      >.empty()
+      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { .. } => ScalarArray<Offset16>.empty()
     }
   }
 
@@ -4155,7 +4087,7 @@ impl<'a> ChainedSequenceContextFormat3<'a> {
   pub fn lookaheadGlyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[5].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -4171,9 +4103,7 @@ impl<'a> ChainedSequenceContextFormat3<'a> {
       self._fieldRanges[6].end,
     ) {
       Result<ScalarArray<'a, Offset16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { error } => ScalarArray<
-        Offset16
-      >.empty()
+      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { .. } => ScalarArray<Offset16>.empty()
     }
   }
 
@@ -4193,7 +4123,7 @@ impl<'a> ChainedSequenceContextFormat3<'a> {
   pub fn seqLookupCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[7].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -4210,7 +4140,7 @@ impl<'a> ChainedSequenceContextFormat3<'a> {
     ) {
       Result<ComputedArray<'a, (), SequenceLookupRecord<'a>>, ReadError>.Success { value } => value
       Result<ComputedArray<'a, (), SequenceLookupRecord<'a>>, ReadError>.Failure {
-        error
+        ..
       } => ComputedArray<'a, (), SequenceLookupRecord<'a>>.empty(())
     }
   }
@@ -4518,7 +4448,7 @@ impl<'a> Device<'a> {
   pub fn startSize(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -4530,7 +4460,7 @@ impl<'a> Device<'a> {
   pub fn endSize(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -4545,7 +4475,7 @@ impl<'a> Device<'a> {
       self._fieldRanges[2].start,
     ) {
       Result<DeltaFormat, ReadError>.Success { value } => value
-      Result<DeltaFormat, ReadError>.Failure { error } => DeltaFormat.Local2BitDeltas
+      Result<DeltaFormat, ReadError>.Failure { .. } => DeltaFormat.Local2BitDeltas
     }
   }
 
@@ -4561,7 +4491,7 @@ impl<'a> Device<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, u16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, u16>, ReadError>.Failure { error } => ScalarArray<u16>.empty()
+      Result<ScalarArray<'a, u16>, ReadError>.Failure { .. } => ScalarArray<u16>.empty()
     }
   }
 
@@ -4618,15 +4548,12 @@ impl<'a> VariationIndex<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let deltaSetOuterIndexValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let deltaSetInnerIndexValue = scalarOr<u16>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let deltaFormatValue = scalarOr<DeltaFormat>(data, ranges[2].start, DeltaFormat.Local2BitDeltas)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -4639,7 +4566,7 @@ impl<'a> VariationIndex<'a> {
   pub fn deltaSetOuterIndex(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -4652,7 +4579,7 @@ impl<'a> VariationIndex<'a> {
   pub fn deltaSetInnerIndex(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -4667,7 +4594,7 @@ impl<'a> VariationIndex<'a> {
       self._fieldRanges[2].start,
     ) {
       Result<DeltaFormat, ReadError>.Success { value } => value
-      Result<DeltaFormat, ReadError>.Failure { error } => DeltaFormat.Local2BitDeltas
+      Result<DeltaFormat, ReadError>.Failure { .. } => DeltaFormat.Local2BitDeltas
     }
   }
 
@@ -4811,7 +4738,7 @@ impl<'a> FeatureVariations<'a> {
   pub fn version(self: &Self) -> MajorMinor {
     return match move FontData<'a>.readAt<MajorMinor>(&self._fontData, self._fieldRanges[0].start) {
       Result<MajorMinor, ReadError>.Success { value } => value
-      Result<MajorMinor, ReadError>.Failure { error } => MajorMinor.new(0, 0)
+      Result<MajorMinor, ReadError>.Failure { .. } => MajorMinor.new(0, 0)
     }
   }
 
@@ -4823,7 +4750,7 @@ impl<'a> FeatureVariations<'a> {
   pub fn featureVariationRecordCount(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[1].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -4842,7 +4769,7 @@ impl<'a> FeatureVariations<'a> {
         value
       } => value
       Result<ComputedArray<'a, (), FeatureVariationRecord<'a>>, ReadError>.Failure {
-        error
+        ..
       } => ComputedArray<'a, (), FeatureVariationRecord<'a>>.empty(())
     }
   }
@@ -4858,7 +4785,7 @@ impl<'a> FeatureVariations<'a> {
     }
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[3].start) {
       Result<u32, ReadError>.Success { value } => Option<u32>.some(value)
-      Result<u32, ReadError>.Failure { error } => Option<u32>.None
+      Result<u32, ReadError>.Failure { .. } => Option<u32>.None
     }
   }
 
@@ -4918,7 +4845,7 @@ impl<'a> FeatureVariationRecord<'a> {
       (self.position + 0),
     ) {
       Result<Nullable<Offset32>, ReadError>.Success { value } => value
-      Result<Nullable<Offset32>, ReadError>.Failure { error } => Nullable<Offset32>.default()
+      Result<Nullable<Offset32>, ReadError>.Failure { .. } => Nullable<Offset32>.default()
     }
   }
 
@@ -4937,7 +4864,7 @@ impl<'a> FeatureVariationRecord<'a> {
       (self.position + 4),
     ) {
       Result<Nullable<Offset32>, ReadError>.Success { value } => value
-      Result<Nullable<Offset32>, ReadError>.Failure { error } => Nullable<Offset32>.default()
+      Result<Nullable<Offset32>, ReadError>.Failure { .. } => Nullable<Offset32>.default()
     }
   }
 
@@ -4990,7 +4917,7 @@ impl<'a> LookupVariationRecord<'a> {
   pub fn featureIndex(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 0)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -4998,7 +4925,7 @@ impl<'a> LookupVariationRecord<'a> {
   pub fn featureLookupsOffset(self: &Self) -> Offset32 {
     return match move FontData<'a>.readAt<Offset32>(&self._fontData, (self.position + 2)) {
       Result<Offset32, ReadError>.Success { value } => value
-      Result<Offset32, ReadError>.Failure { error } => Offset32.new(0)
+      Result<Offset32, ReadError>.Failure { .. } => Offset32.new(0)
     }
   }
 
@@ -5055,15 +4982,9 @@ impl<'a> FeatureLookups<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[0].end = end
-    let versionValue = scalarOr<MajorMinor>(data, ranges[0].start, MajorMinor.new(0, 0))
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let flagsValue = scalarOr<FeatureLookupsFlags>(
-      data,
-      ranges[1].start,
-      FeatureLookupsFlags.empty(),
-    )
     ranges[2].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[2].end = end
@@ -5084,7 +5005,7 @@ impl<'a> FeatureLookups<'a> {
   pub fn version(self: &Self) -> MajorMinor {
     return match move FontData<'a>.readAt<MajorMinor>(&self._fontData, self._fieldRanges[0].start) {
       Result<MajorMinor, ReadError>.Success { value } => value
-      Result<MajorMinor, ReadError>.Failure { error } => MajorMinor.new(0, 0)
+      Result<MajorMinor, ReadError>.Failure { .. } => MajorMinor.new(0, 0)
     }
   }
 
@@ -5098,7 +5019,7 @@ impl<'a> FeatureLookups<'a> {
       self._fieldRanges[1].start,
     ) {
       Result<FeatureLookupsFlags, ReadError>.Success { value } => value
-      Result<FeatureLookupsFlags, ReadError>.Failure { error } => FeatureLookupsFlags.empty()
+      Result<FeatureLookupsFlags, ReadError>.Failure { .. } => FeatureLookupsFlags.empty()
     }
   }
 
@@ -5109,7 +5030,7 @@ impl<'a> FeatureLookups<'a> {
   pub fn lookupConditionCount(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[2].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -5125,7 +5046,7 @@ impl<'a> FeatureLookups<'a> {
     ) {
       Result<ComputedArray<'a, (), LookupConditionRecord<'a>>, ReadError>.Success { value } => value
       Result<ComputedArray<'a, (), LookupConditionRecord<'a>>, ReadError>.Failure {
-        error
+        ..
       } => ComputedArray<'a, (), LookupConditionRecord<'a>>.empty(())
     }
   }
@@ -5349,7 +5270,7 @@ impl<'a> LookupConditionRecord<'a> {
       (self.position + 0),
     ) {
       Result<Nullable<Offset32>, ReadError>.Success { value } => value
-      Result<Nullable<Offset32>, ReadError>.Failure { error } => Nullable<Offset32>.default()
+      Result<Nullable<Offset32>, ReadError>.Failure { .. } => Nullable<Offset32>.default()
     }
   }
 
@@ -5362,7 +5283,7 @@ impl<'a> LookupConditionRecord<'a> {
   pub fn lookupIndexListOffset(self: &Self) -> Offset32 {
     return match move FontData<'a>.readAt<Offset32>(&self._fontData, (self.position + 4)) {
       Result<Offset32, ReadError>.Success { value } => value
-      Result<Offset32, ReadError>.Failure { error } => Offset32.new(0)
+      Result<Offset32, ReadError>.Failure { .. } => Offset32.new(0)
     }
   }
 
@@ -5436,7 +5357,7 @@ impl<'a> LookupIndexList<'a> {
   pub fn lookupIndexCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -5451,7 +5372,7 @@ impl<'a> LookupIndexList<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, u16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, u16>, ReadError>.Failure { error } => ScalarArray<u16>.empty()
+      Result<ScalarArray<'a, u16>, ReadError>.Failure { .. } => ScalarArray<u16>.empty()
     }
   }
 
@@ -5523,7 +5444,7 @@ impl<'a> ConditionSet<'a> {
   pub fn conditionCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -5540,9 +5461,7 @@ impl<'a> ConditionSet<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, Offset32>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset32>, ReadError>.Failure { error } => ScalarArray<
-        Offset32
-      >.empty()
+      Result<ScalarArray<'a, Offset32>, ReadError>.Failure { .. } => ScalarArray<Offset32>.empty()
     }
   }
 
@@ -5753,19 +5672,15 @@ impl<'a> ConditionFormat1<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let formatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let axisIndexValue = scalarOr<u16>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let filterRangeMinValueValue = scalarOr<F2Dot14>(data, ranges[2].start, F2Dot14.zero())
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let filterRangeMaxValueValue = scalarOr<F2Dot14>(data, ranges[3].start, F2Dot14.zero())
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -5777,7 +5692,7 @@ impl<'a> ConditionFormat1<'a> {
   pub fn format(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -5790,7 +5705,7 @@ impl<'a> ConditionFormat1<'a> {
   pub fn axisIndex(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -5803,7 +5718,7 @@ impl<'a> ConditionFormat1<'a> {
   pub fn filterRangeMinValue(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[2].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -5816,7 +5731,7 @@ impl<'a> ConditionFormat1<'a> {
   pub fn filterRangeMaxValue(self: &Self) -> F2Dot14 {
     return match move FontData<'a>.readAt<F2Dot14>(&self._fontData, self._fieldRanges[3].start) {
       Result<F2Dot14, ReadError>.Success { value } => value
-      Result<F2Dot14, ReadError>.Failure { error } => F2Dot14.zero()
+      Result<F2Dot14, ReadError>.Failure { .. } => F2Dot14.zero()
     }
   }
 
@@ -5872,15 +5787,12 @@ impl<'a> ConditionFormat2<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let formatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let defaultValueValue = scalarOr<i16>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[2].end = end
-    let varIndexValue = scalarOr<u32>(data, ranges[2].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -5892,7 +5804,7 @@ impl<'a> ConditionFormat2<'a> {
   pub fn format(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -5904,7 +5816,7 @@ impl<'a> ConditionFormat2<'a> {
   pub fn defaultValue(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[1].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -5916,7 +5828,7 @@ impl<'a> ConditionFormat2<'a> {
   pub fn varIndex(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[2].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -5972,7 +5884,6 @@ impl<'a> ConditionFormat3<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let formatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[1].end = end
@@ -5991,7 +5902,7 @@ impl<'a> ConditionFormat3<'a> {
   pub fn format(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6003,7 +5914,7 @@ impl<'a> ConditionFormat3<'a> {
   pub fn conditionCount(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[1].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6019,9 +5930,7 @@ impl<'a> ConditionFormat3<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ScalarArray<'a, Offset24>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset24>, ReadError>.Failure { error } => ScalarArray<
-        Offset24
-      >.empty()
+      Result<ScalarArray<'a, Offset24>, ReadError>.Failure { .. } => ScalarArray<Offset24>.empty()
     }
   }
 
@@ -6085,7 +5994,6 @@ impl<'a> ConditionFormat4<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let formatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 1)
     ranges[1].end = end
@@ -6104,7 +6012,7 @@ impl<'a> ConditionFormat4<'a> {
   pub fn format(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6116,7 +6024,7 @@ impl<'a> ConditionFormat4<'a> {
   pub fn conditionCount(self: &Self) -> u8 {
     return match move FontData<'a>.readAt<u8>(&self._fontData, self._fieldRanges[1].start) {
       Result<u8, ReadError>.Success { value } => value
-      Result<u8, ReadError>.Failure { error } => 0
+      Result<u8, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6132,9 +6040,7 @@ impl<'a> ConditionFormat4<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ScalarArray<'a, Offset24>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset24>, ReadError>.Failure { error } => ScalarArray<
-        Offset24
-      >.empty()
+      Result<ScalarArray<'a, Offset24>, ReadError>.Failure { .. } => ScalarArray<Offset24>.empty()
     }
   }
 
@@ -6198,15 +6104,9 @@ impl<'a> ConditionFormat5<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let formatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let conditionOffsetValue = scalarOr<Offset24>(
-      data,
-      ranges[1].start,
-      Offset24.new(Uint24.new(0)),
-    )
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -6218,7 +6118,7 @@ impl<'a> ConditionFormat5<'a> {
   pub fn format(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6230,7 +6130,7 @@ impl<'a> ConditionFormat5<'a> {
   pub fn conditionOffset(self: &Self) -> Offset24 {
     return match move FontData<'a>.readAt<Offset24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset24, ReadError>.Success { value } => value
-      Result<Offset24, ReadError>.Failure { error } => Offset24.new(Uint24.new(0))
+      Result<Offset24, ReadError>.Failure { .. } => Offset24.new(Uint24.new(0))
     }
   }
 
@@ -6298,7 +6198,6 @@ impl<'a> FeatureTableSubstitution<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[0].end = end
-    let versionValue = scalarOr<MajorMinor>(data, ranges[0].start, MajorMinor.new(0, 0))
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
@@ -6317,7 +6216,7 @@ impl<'a> FeatureTableSubstitution<'a> {
   pub fn version(self: &Self) -> MajorMinor {
     return match move FontData<'a>.readAt<MajorMinor>(&self._fontData, self._fieldRanges[0].start) {
       Result<MajorMinor, ReadError>.Success { value } => value
-      Result<MajorMinor, ReadError>.Failure { error } => MajorMinor.new(0, 0)
+      Result<MajorMinor, ReadError>.Failure { .. } => MajorMinor.new(0, 0)
     }
   }
 
@@ -6329,7 +6228,7 @@ impl<'a> FeatureTableSubstitution<'a> {
   pub fn substitutionCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6348,7 +6247,7 @@ impl<'a> FeatureTableSubstitution<'a> {
         value
       } => value
       Result<ComputedArray<'a, (), FeatureTableSubstitutionRecord<'a>>, ReadError>.Failure {
-        error
+        ..
       } => ComputedArray<'a, (), FeatureTableSubstitutionRecord<'a>>.empty(())
     }
   }
@@ -6401,7 +6300,7 @@ impl<'a> FeatureTableSubstitutionRecord<'a> {
   pub fn featureIndex(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 0)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6410,7 +6309,7 @@ impl<'a> FeatureTableSubstitutionRecord<'a> {
   pub fn alternateFeatureOffset(self: &Self) -> Offset32 {
     return match move FontData<'a>.readAt<Offset32>(&self._fontData, (self.position + 2)) {
       Result<Offset32, ReadError>.Success { value } => value
-      Result<Offset32, ReadError>.Failure { error } => Offset32.new(0)
+      Result<Offset32, ReadError>.Failure { .. } => Offset32.new(0)
     }
   }
 }
@@ -6461,23 +6360,18 @@ impl<'a> SizeParams<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let designSizeValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let identifierValue = scalarOr<u16>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let nameEntryValue = scalarOr<u16>(data, ranges[2].start, 0)
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let rangeStartValue = scalarOr<u16>(data, ranges[3].start, 0)
     ranges[4].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[4].end = end
-    let rangeEndValue = scalarOr<u16>(data, ranges[4].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -6492,7 +6386,7 @@ impl<'a> SizeParams<'a> {
   pub fn designSize(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6509,7 +6403,7 @@ impl<'a> SizeParams<'a> {
   pub fn identifier(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6530,7 +6424,7 @@ impl<'a> SizeParams<'a> {
   pub fn nameEntry(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[2].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6546,7 +6440,7 @@ impl<'a> SizeParams<'a> {
   pub fn rangeStart(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[3].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6557,7 +6451,7 @@ impl<'a> SizeParams<'a> {
   pub fn rangeEnd(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[4].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6613,11 +6507,9 @@ impl<'a> StylisticSetParams<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let versionValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let uiNameIdValue = scalarOr<NameId>(data, ranges[1].start, NameId.default())
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -6628,7 +6520,7 @@ impl<'a> StylisticSetParams<'a> {
   pub fn version(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6648,7 +6540,7 @@ impl<'a> StylisticSetParams<'a> {
   pub fn uiNameId(self: &Self) -> NameId {
     return match move FontData<'a>.readAt<NameId>(&self._fontData, self._fieldRanges[1].start) {
       Result<NameId, ReadError>.Success { value } => value
-      Result<NameId, ReadError>.Failure { error } => NameId.default()
+      Result<NameId, ReadError>.Failure { .. } => NameId.default()
     }
   }
 
@@ -6705,27 +6597,21 @@ impl<'a> CharacterVariantParams<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let formatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let featUiLabelNameIdValue = scalarOr<NameId>(data, ranges[1].start, NameId.default())
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let featUiTooltipTextNameIdValue = scalarOr<NameId>(data, ranges[2].start, NameId.default())
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let sampleTextNameIdValue = scalarOr<NameId>(data, ranges[3].start, NameId.default())
     ranges[4].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[4].end = end
-    let numNamedParametersValue = scalarOr<u16>(data, ranges[4].start, 0)
     ranges[5].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[5].end = end
-    let firstParamUiLabelNameIdValue = scalarOr<NameId>(data, ranges[5].start, NameId.default())
     ranges[6].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[6].end = end
@@ -6744,7 +6630,7 @@ impl<'a> CharacterVariantParams<'a> {
   pub fn format(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6758,7 +6644,7 @@ impl<'a> CharacterVariantParams<'a> {
   pub fn featUiLabelNameId(self: &Self) -> NameId {
     return match move FontData<'a>.readAt<NameId>(&self._fontData, self._fieldRanges[1].start) {
       Result<NameId, ReadError>.Success { value } => value
-      Result<NameId, ReadError>.Failure { error } => NameId.default()
+      Result<NameId, ReadError>.Failure { .. } => NameId.default()
     }
   }
 
@@ -6772,7 +6658,7 @@ impl<'a> CharacterVariantParams<'a> {
   pub fn featUiTooltipTextNameId(self: &Self) -> NameId {
     return match move FontData<'a>.readAt<NameId>(&self._fontData, self._fieldRanges[2].start) {
       Result<NameId, ReadError>.Success { value } => value
-      Result<NameId, ReadError>.Failure { error } => NameId.default()
+      Result<NameId, ReadError>.Failure { .. } => NameId.default()
     }
   }
 
@@ -6785,7 +6671,7 @@ impl<'a> CharacterVariantParams<'a> {
   pub fn sampleTextNameId(self: &Self) -> NameId {
     return match move FontData<'a>.readAt<NameId>(&self._fontData, self._fieldRanges[3].start) {
       Result<NameId, ReadError>.Success { value } => value
-      Result<NameId, ReadError>.Failure { error } => NameId.default()
+      Result<NameId, ReadError>.Failure { .. } => NameId.default()
     }
   }
 
@@ -6797,7 +6683,7 @@ impl<'a> CharacterVariantParams<'a> {
   pub fn numNamedParameters(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[4].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6811,7 +6697,7 @@ impl<'a> CharacterVariantParams<'a> {
   pub fn firstParamUiLabelNameId(self: &Self) -> NameId {
     return match move FontData<'a>.readAt<NameId>(&self._fontData, self._fieldRanges[5].start) {
       Result<NameId, ReadError>.Success { value } => value
-      Result<NameId, ReadError>.Failure { error } => NameId.default()
+      Result<NameId, ReadError>.Failure { .. } => NameId.default()
     }
   }
 
@@ -6824,7 +6710,7 @@ impl<'a> CharacterVariantParams<'a> {
   pub fn charCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[6].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6841,7 +6727,7 @@ impl<'a> CharacterVariantParams<'a> {
       self._fieldRanges[7].end,
     ) {
       Result<ScalarArray<'a, Uint24>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Uint24>, ReadError>.Failure { error } => ScalarArray<Uint24>.empty()
+      Result<ScalarArray<'a, Uint24>, ReadError>.Failure { .. } => ScalarArray<Uint24>.empty()
     }
   }
 
@@ -6897,7 +6783,6 @@ impl<'a> CoverageFormat3<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let coverageFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
@@ -6919,7 +6804,7 @@ impl<'a> CoverageFormat3<'a> {
   pub fn coverageFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -6931,7 +6816,7 @@ impl<'a> CoverageFormat3<'a> {
   pub fn glyphCount(self: &Self) -> Uint24 {
     return match move FontData<'a>.readAt<Uint24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Uint24, ReadError>.Success { value } => value
-      Result<Uint24, ReadError>.Failure { error } => Uint24.new(0)
+      Result<Uint24, ReadError>.Failure { .. } => Uint24.new(0)
     }
   }
 
@@ -6947,9 +6832,7 @@ impl<'a> CoverageFormat3<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ScalarArray<'a, GlyphId24>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, GlyphId24>, ReadError>.Failure { error } => ScalarArray<
-        GlyphId24
-      >.empty()
+      Result<ScalarArray<'a, GlyphId24>, ReadError>.Failure { .. } => ScalarArray<GlyphId24>.empty()
     }
   }
 
@@ -7005,7 +6888,6 @@ impl<'a> CoverageFormat4<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let coverageFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
@@ -7027,7 +6909,7 @@ impl<'a> CoverageFormat4<'a> {
   pub fn coverageFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -7039,7 +6921,7 @@ impl<'a> CoverageFormat4<'a> {
   pub fn rangeCount(self: &Self) -> Uint24 {
     return match move FontData<'a>.readAt<Uint24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Uint24, ReadError>.Success { value } => value
-      Result<Uint24, ReadError>.Failure { error } => Uint24.new(0)
+      Result<Uint24, ReadError>.Failure { .. } => Uint24.new(0)
     }
   }
 
@@ -7055,7 +6937,7 @@ impl<'a> CoverageFormat4<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ComputedArray<'a, (), RangeRecord2<'a>>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, (), RangeRecord2<'a>>, ReadError>.Failure { error } => ComputedArray<
+      Result<ComputedArray<'a, (), RangeRecord2<'a>>, ReadError>.Failure { .. } => ComputedArray<
         'a,
         (),
         RangeRecord2<'a>
@@ -7117,7 +6999,7 @@ impl<'a> RangeRecord2<'a> {
   pub fn startGlyphId(self: &Self) -> GlyphId24 {
     return match move FontData<'a>.readAt<GlyphId24>(&self._fontData, (self.position + 0)) {
       Result<GlyphId24, ReadError>.Success { value } => value
-      Result<GlyphId24, ReadError>.Failure { error } => GlyphId24.new(0)
+      Result<GlyphId24, ReadError>.Failure { .. } => GlyphId24.new(0)
     }
   }
 
@@ -7125,7 +7007,7 @@ impl<'a> RangeRecord2<'a> {
   pub fn endGlyphId(self: &Self) -> GlyphId24 {
     return match move FontData<'a>.readAt<GlyphId24>(&self._fontData, (self.position + 3)) {
       Result<GlyphId24, ReadError>.Success { value } => value
-      Result<GlyphId24, ReadError>.Failure { error } => GlyphId24.new(0)
+      Result<GlyphId24, ReadError>.Failure { .. } => GlyphId24.new(0)
     }
   }
 
@@ -7133,7 +7015,7 @@ impl<'a> RangeRecord2<'a> {
   pub fn startCoverageIndex(self: &Self) -> Uint24 {
     return match move FontData<'a>.readAt<Uint24>(&self._fontData, (self.position + 6)) {
       Result<Uint24, ReadError>.Success { value } => value
-      Result<Uint24, ReadError>.Failure { error } => Uint24.new(0)
+      Result<Uint24, ReadError>.Failure { .. } => Uint24.new(0)
     }
   }
 }
@@ -7178,11 +7060,9 @@ impl<'a> ClassDefFormat3<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let classFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
-    let startGlyphIdValue = scalarOr<GlyphId24>(data, ranges[1].start, GlyphId24.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[2].end = end
@@ -7204,7 +7084,7 @@ impl<'a> ClassDefFormat3<'a> {
   pub fn classFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -7216,7 +7096,7 @@ impl<'a> ClassDefFormat3<'a> {
   pub fn startGlyphId(self: &Self) -> GlyphId24 {
     return match move FontData<'a>.readAt<GlyphId24>(&self._fontData, self._fieldRanges[1].start) {
       Result<GlyphId24, ReadError>.Success { value } => value
-      Result<GlyphId24, ReadError>.Failure { error } => GlyphId24.new(0)
+      Result<GlyphId24, ReadError>.Failure { .. } => GlyphId24.new(0)
     }
   }
 
@@ -7228,7 +7108,7 @@ impl<'a> ClassDefFormat3<'a> {
   pub fn glyphCount(self: &Self) -> Uint24 {
     return match move FontData<'a>.readAt<Uint24>(&self._fontData, self._fieldRanges[2].start) {
       Result<Uint24, ReadError>.Success { value } => value
-      Result<Uint24, ReadError>.Failure { error } => Uint24.new(0)
+      Result<Uint24, ReadError>.Failure { .. } => Uint24.new(0)
     }
   }
 
@@ -7244,7 +7124,7 @@ impl<'a> ClassDefFormat3<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, Uint24>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Uint24>, ReadError>.Failure { error } => ScalarArray<Uint24>.empty()
+      Result<ScalarArray<'a, Uint24>, ReadError>.Failure { .. } => ScalarArray<Uint24>.empty()
     }
   }
 
@@ -7300,7 +7180,6 @@ impl<'a> ClassDefFormat4<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let classFormatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[1].end = end
@@ -7322,7 +7201,7 @@ impl<'a> ClassDefFormat4<'a> {
   pub fn classFormat(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -7334,7 +7213,7 @@ impl<'a> ClassDefFormat4<'a> {
   pub fn classRangeCount(self: &Self) -> Uint24 {
     return match move FontData<'a>.readAt<Uint24>(&self._fontData, self._fieldRanges[1].start) {
       Result<Uint24, ReadError>.Success { value } => value
-      Result<Uint24, ReadError>.Failure { error } => Uint24.new(0)
+      Result<Uint24, ReadError>.Failure { .. } => Uint24.new(0)
     }
   }
 
@@ -7351,7 +7230,7 @@ impl<'a> ClassDefFormat4<'a> {
     ) {
       Result<ComputedArray<'a, (), ClassRangeRecord2<'a>>, ReadError>.Success { value } => value
       Result<ComputedArray<'a, (), ClassRangeRecord2<'a>>, ReadError>.Failure {
-        error
+        ..
       } => ComputedArray<'a, (), ClassRangeRecord2<'a>>.empty(())
     }
   }
@@ -7410,7 +7289,7 @@ impl<'a> ClassRangeRecord2<'a> {
   pub fn startGlyphId(self: &Self) -> GlyphId24 {
     return match move FontData<'a>.readAt<GlyphId24>(&self._fontData, (self.position + 0)) {
       Result<GlyphId24, ReadError>.Success { value } => value
-      Result<GlyphId24, ReadError>.Failure { error } => GlyphId24.new(0)
+      Result<GlyphId24, ReadError>.Failure { .. } => GlyphId24.new(0)
     }
   }
 
@@ -7418,7 +7297,7 @@ impl<'a> ClassRangeRecord2<'a> {
   pub fn endGlyphId(self: &Self) -> GlyphId24 {
     return match move FontData<'a>.readAt<GlyphId24>(&self._fontData, (self.position + 3)) {
       Result<GlyphId24, ReadError>.Success { value } => value
-      Result<GlyphId24, ReadError>.Failure { error } => GlyphId24.new(0)
+      Result<GlyphId24, ReadError>.Failure { .. } => GlyphId24.new(0)
     }
   }
 
@@ -7426,7 +7305,7 @@ impl<'a> ClassRangeRecord2<'a> {
   pub fn class(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 6)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 }
@@ -7471,11 +7350,9 @@ impl<'a> SequenceContextFormat4<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let formatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[1].end = end
-    let coverageOffsetValue = scalarOr<Offset32>(data, ranges[1].start, Offset32.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[2].end = end
@@ -7497,7 +7374,7 @@ impl<'a> SequenceContextFormat4<'a> {
   pub fn format(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -7510,7 +7387,7 @@ impl<'a> SequenceContextFormat4<'a> {
   pub fn coverageOffset(self: &Self) -> Offset32 {
     return match move FontData<'a>.readAt<Offset32>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset32, ReadError>.Success { value } => value
-      Result<Offset32, ReadError>.Failure { error } => Offset32.new(0)
+      Result<Offset32, ReadError>.Failure { .. } => Offset32.new(0)
     }
   }
 
@@ -7527,7 +7404,7 @@ impl<'a> SequenceContextFormat4<'a> {
   pub fn seqRuleSetCount(self: &Self) -> Uint24 {
     return match move FontData<'a>.readAt<Uint24>(&self._fontData, self._fieldRanges[2].start) {
       Result<Uint24, ReadError>.Success { value } => value
-      Result<Uint24, ReadError>.Failure { error } => Uint24.new(0)
+      Result<Uint24, ReadError>.Failure { .. } => Uint24.new(0)
     }
   }
 
@@ -7544,7 +7421,7 @@ impl<'a> SequenceContextFormat4<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, Nullable<Offset24>>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Nullable<Offset24>>, ReadError>.Failure { error } => ScalarArray<
+      Result<ScalarArray<'a, Nullable<Offset24>>, ReadError>.Failure { .. } => ScalarArray<
         Nullable<Offset24>
       >.empty()
     }
@@ -7637,7 +7514,7 @@ impl<'a> SequenceRuleSet2<'a> {
   pub fn seqRuleCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -7654,9 +7531,7 @@ impl<'a> SequenceRuleSet2<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, Offset16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { error } => ScalarArray<
-        Offset16
-      >.empty()
+      Result<ScalarArray<'a, Offset16>, ReadError>.Failure { .. } => ScalarArray<Offset16>.empty()
     }
   }
 
@@ -7746,7 +7621,7 @@ impl<'a> SequenceRule2<'a> {
   pub fn glyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -7758,7 +7633,7 @@ impl<'a> SequenceRule2<'a> {
   pub fn seqLookupCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -7774,9 +7649,7 @@ impl<'a> SequenceRule2<'a> {
       self._fieldRanges[2].end,
     ) {
       Result<ScalarArray<'a, GlyphId24>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, GlyphId24>, ReadError>.Failure { error } => ScalarArray<
-        GlyphId24
-      >.empty()
+      Result<ScalarArray<'a, GlyphId24>, ReadError>.Failure { .. } => ScalarArray<GlyphId24>.empty()
     }
   }
 
@@ -7793,7 +7666,7 @@ impl<'a> SequenceRule2<'a> {
     ) {
       Result<ComputedArray<'a, (), SequenceLookupRecord<'a>>, ReadError>.Success { value } => value
       Result<ComputedArray<'a, (), SequenceLookupRecord<'a>>, ReadError>.Failure {
-        error
+        ..
       } => ComputedArray<'a, (), SequenceLookupRecord<'a>>.empty(())
     }
   }
@@ -7844,15 +7717,12 @@ impl<'a> SequenceContextFormat5<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let formatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[1].end = end
-    let coverageOffsetValue = scalarOr<Offset32>(data, ranges[1].start, Offset32.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[2].end = end
-    let classDefOffsetValue = scalarOr<Offset32>(data, ranges[2].start, Offset32.new(0))
     ranges[3].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[3].end = end
@@ -7874,7 +7744,7 @@ impl<'a> SequenceContextFormat5<'a> {
   pub fn format(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -7887,7 +7757,7 @@ impl<'a> SequenceContextFormat5<'a> {
   pub fn coverageOffset(self: &Self) -> Offset32 {
     return match move FontData<'a>.readAt<Offset32>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset32, ReadError>.Success { value } => value
-      Result<Offset32, ReadError>.Failure { error } => Offset32.new(0)
+      Result<Offset32, ReadError>.Failure { .. } => Offset32.new(0)
     }
   }
 
@@ -7905,7 +7775,7 @@ impl<'a> SequenceContextFormat5<'a> {
   pub fn classDefOffset(self: &Self) -> Offset32 {
     return match move FontData<'a>.readAt<Offset32>(&self._fontData, self._fieldRanges[2].start) {
       Result<Offset32, ReadError>.Success { value } => value
-      Result<Offset32, ReadError>.Failure { error } => Offset32.new(0)
+      Result<Offset32, ReadError>.Failure { .. } => Offset32.new(0)
     }
   }
 
@@ -7922,7 +7792,7 @@ impl<'a> SequenceContextFormat5<'a> {
   pub fn classSeqRuleSetCount(self: &Self) -> Uint24 {
     return match move FontData<'a>.readAt<Uint24>(&self._fontData, self._fieldRanges[3].start) {
       Result<Uint24, ReadError>.Success { value } => value
-      Result<Uint24, ReadError>.Failure { error } => Uint24.new(0)
+      Result<Uint24, ReadError>.Failure { .. } => Uint24.new(0)
     }
   }
 
@@ -7939,7 +7809,7 @@ impl<'a> SequenceContextFormat5<'a> {
       self._fieldRanges[4].end,
     ) {
       Result<ScalarArray<'a, Nullable<Offset24>>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Nullable<Offset24>>, ReadError>.Failure { error } => ScalarArray<
+      Result<ScalarArray<'a, Nullable<Offset24>>, ReadError>.Failure { .. } => ScalarArray<
         Nullable<Offset24>
       >.empty()
     }
@@ -8032,7 +7902,7 @@ impl<'a> ClassSequenceRuleSet2<'a> {
   pub fn classSeqRuleCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -8049,9 +7919,7 @@ impl<'a> ClassSequenceRuleSet2<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, Offset24>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset24>, ReadError>.Failure { error } => ScalarArray<
-        Offset24
-      >.empty()
+      Result<ScalarArray<'a, Offset24>, ReadError>.Failure { .. } => ScalarArray<Offset24>.empty()
     }
   }
 
@@ -8109,7 +7977,6 @@ impl<'a> SequenceContextFormat6<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let formatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
@@ -8135,7 +8002,7 @@ impl<'a> SequenceContextFormat6<'a> {
   pub fn format(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -8147,7 +8014,7 @@ impl<'a> SequenceContextFormat6<'a> {
   pub fn glyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -8159,7 +8026,7 @@ impl<'a> SequenceContextFormat6<'a> {
   pub fn seqLookupCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[2].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -8176,9 +8043,7 @@ impl<'a> SequenceContextFormat6<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, Offset24>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset24>, ReadError>.Failure { error } => ScalarArray<
-        Offset24
-      >.empty()
+      Result<ScalarArray<'a, Offset24>, ReadError>.Failure { .. } => ScalarArray<Offset24>.empty()
     }
   }
 
@@ -8203,7 +8068,7 @@ impl<'a> SequenceContextFormat6<'a> {
     ) {
       Result<ComputedArray<'a, (), SequenceLookupRecord<'a>>, ReadError>.Success { value } => value
       Result<ComputedArray<'a, (), SequenceLookupRecord<'a>>, ReadError>.Failure {
-        error
+        ..
       } => ComputedArray<'a, (), SequenceLookupRecord<'a>>.empty(())
     }
   }
@@ -8260,11 +8125,9 @@ impl<'a> ChainedSequenceContextFormat4<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let formatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[1].end = end
-    let coverageOffsetValue = scalarOr<Offset32>(data, ranges[1].start, Offset32.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 3)
     ranges[2].end = end
@@ -8286,7 +8149,7 @@ impl<'a> ChainedSequenceContextFormat4<'a> {
   pub fn format(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -8299,7 +8162,7 @@ impl<'a> ChainedSequenceContextFormat4<'a> {
   pub fn coverageOffset(self: &Self) -> Offset32 {
     return match move FontData<'a>.readAt<Offset32>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset32, ReadError>.Success { value } => value
-      Result<Offset32, ReadError>.Failure { error } => Offset32.new(0)
+      Result<Offset32, ReadError>.Failure { .. } => Offset32.new(0)
     }
   }
 
@@ -8316,7 +8179,7 @@ impl<'a> ChainedSequenceContextFormat4<'a> {
   pub fn chainedSeqRuleSetCount(self: &Self) -> Uint24 {
     return match move FontData<'a>.readAt<Uint24>(&self._fontData, self._fieldRanges[2].start) {
       Result<Uint24, ReadError>.Success { value } => value
-      Result<Uint24, ReadError>.Failure { error } => Uint24.new(0)
+      Result<Uint24, ReadError>.Failure { .. } => Uint24.new(0)
     }
   }
 
@@ -8333,7 +8196,7 @@ impl<'a> ChainedSequenceContextFormat4<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, Nullable<Offset24>>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Nullable<Offset24>>, ReadError>.Failure { error } => ScalarArray<
+      Result<ScalarArray<'a, Nullable<Offset24>>, ReadError>.Failure { .. } => ScalarArray<
         Nullable<Offset24>
       >.empty()
     }
@@ -8429,7 +8292,7 @@ impl<'a> ChainedSequenceRuleSet2<'a> {
   pub fn chainedSeqRuleCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -8446,9 +8309,7 @@ impl<'a> ChainedSequenceRuleSet2<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, Offset24>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset24>, ReadError>.Failure { error } => ScalarArray<
-        Offset24
-      >.empty()
+      Result<ScalarArray<'a, Offset24>, ReadError>.Failure { .. } => ScalarArray<Offset24>.empty()
     }
   }
 
@@ -8563,7 +8424,7 @@ impl<'a> ChainedSequenceRule2<'a> {
   pub fn backtrackGlyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -8579,9 +8440,7 @@ impl<'a> ChainedSequenceRule2<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, GlyphId24>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, GlyphId24>, ReadError>.Failure { error } => ScalarArray<
-        GlyphId24
-      >.empty()
+      Result<ScalarArray<'a, GlyphId24>, ReadError>.Failure { .. } => ScalarArray<GlyphId24>.empty()
     }
   }
 
@@ -8593,7 +8452,7 @@ impl<'a> ChainedSequenceRule2<'a> {
   pub fn inputGlyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[2].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -8609,9 +8468,7 @@ impl<'a> ChainedSequenceRule2<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, GlyphId24>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, GlyphId24>, ReadError>.Failure { error } => ScalarArray<
-        GlyphId24
-      >.empty()
+      Result<ScalarArray<'a, GlyphId24>, ReadError>.Failure { .. } => ScalarArray<GlyphId24>.empty()
     }
   }
 
@@ -8623,7 +8480,7 @@ impl<'a> ChainedSequenceRule2<'a> {
   pub fn lookaheadGlyphCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[4].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -8639,9 +8496,7 @@ impl<'a> ChainedSequenceRule2<'a> {
       self._fieldRanges[5].end,
     ) {
       Result<ScalarArray<'a, GlyphId24>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, GlyphId24>, ReadError>.Failure { error } => ScalarArray<
-        GlyphId24
-      >.empty()
+      Result<ScalarArray<'a, GlyphId24>, ReadError>.Failure { .. } => ScalarArray<GlyphId24>.empty()
     }
   }
 
@@ -8653,7 +8508,7 @@ impl<'a> ChainedSequenceRule2<'a> {
   pub fn seqLookupCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[6].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -8670,7 +8525,7 @@ impl<'a> ChainedSequenceRule2<'a> {
     ) {
       Result<ComputedArray<'a, (), SequenceLookupRecord<'a>>, ReadError>.Success { value } => value
       Result<ComputedArray<'a, (), SequenceLookupRecord<'a>>, ReadError>.Failure {
-        error
+        ..
       } => ComputedArray<'a, (), SequenceLookupRecord<'a>>.empty(())
     }
   }
@@ -8721,23 +8576,18 @@ impl<'a> ChainedSequenceContextFormat5<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let formatValue = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[1].end = end
-    let coverageOffsetValue = scalarOr<Offset32>(data, ranges[1].start, Offset32.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[2].end = end
-    let backtrackClassDefOffsetValue = scalarOr<Offset32>(data, ranges[2].start, Offset32.new(0))
     ranges[3].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[3].end = end
-    let inputClassDefOffsetValue = scalarOr<Offset32>(data, ranges[3].start, Offset32.new(0))
     ranges[4].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[4].end = end
-    let lookaheadClassDefOffsetValue = scalarOr<Offset32>(data, ranges[4].start, Offset32.new(0))
     ranges[5].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[5].end = end
@@ -8759,7 +8609,7 @@ impl<'a> ChainedSequenceContextFormat5<'a> {
   pub fn format(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -8772,7 +8622,7 @@ impl<'a> ChainedSequenceContextFormat5<'a> {
   pub fn coverageOffset(self: &Self) -> Offset32 {
     return match move FontData<'a>.readAt<Offset32>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset32, ReadError>.Success { value } => value
-      Result<Offset32, ReadError>.Failure { error } => Offset32.new(0)
+      Result<Offset32, ReadError>.Failure { .. } => Offset32.new(0)
     }
   }
 
@@ -8790,7 +8640,7 @@ impl<'a> ChainedSequenceContextFormat5<'a> {
   pub fn backtrackClassDefOffset(self: &Self) -> Offset32 {
     return match move FontData<'a>.readAt<Offset32>(&self._fontData, self._fieldRanges[2].start) {
       Result<Offset32, ReadError>.Success { value } => value
-      Result<Offset32, ReadError>.Failure { error } => Offset32.new(0)
+      Result<Offset32, ReadError>.Failure { .. } => Offset32.new(0)
     }
   }
 
@@ -8808,7 +8658,7 @@ impl<'a> ChainedSequenceContextFormat5<'a> {
   pub fn inputClassDefOffset(self: &Self) -> Offset32 {
     return match move FontData<'a>.readAt<Offset32>(&self._fontData, self._fieldRanges[3].start) {
       Result<Offset32, ReadError>.Success { value } => value
-      Result<Offset32, ReadError>.Failure { error } => Offset32.new(0)
+      Result<Offset32, ReadError>.Failure { .. } => Offset32.new(0)
     }
   }
 
@@ -8826,7 +8676,7 @@ impl<'a> ChainedSequenceContextFormat5<'a> {
   pub fn lookaheadClassDefOffset(self: &Self) -> Offset32 {
     return match move FontData<'a>.readAt<Offset32>(&self._fontData, self._fieldRanges[4].start) {
       Result<Offset32, ReadError>.Success { value } => value
-      Result<Offset32, ReadError>.Failure { error } => Offset32.new(0)
+      Result<Offset32, ReadError>.Failure { .. } => Offset32.new(0)
     }
   }
 
@@ -8843,7 +8693,7 @@ impl<'a> ChainedSequenceContextFormat5<'a> {
   pub fn chainedClassSeqRuleSetCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[5].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -8860,7 +8710,7 @@ impl<'a> ChainedSequenceContextFormat5<'a> {
       self._fieldRanges[6].end,
     ) {
       Result<ScalarArray<'a, Nullable<Offset24>>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Nullable<Offset24>>, ReadError>.Failure { error } => ScalarArray<
+      Result<ScalarArray<'a, Nullable<Offset24>>, ReadError>.Failure { .. } => ScalarArray<
         Nullable<Offset24>
       >.empty()
     }
@@ -8956,7 +8806,7 @@ impl<'a> ChainedClassSequenceRuleSet2<'a> {
   pub fn chainedClassSeqRuleCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -8973,9 +8823,7 @@ impl<'a> ChainedClassSequenceRuleSet2<'a> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, Offset24>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset24>, ReadError>.Failure { error } => ScalarArray<
-        Offset24
-      >.empty()
+      Result<ScalarArray<'a, Offset24>, ReadError>.Failure { .. } => ScalarArray<Offset24>.empty()
     }
   }
 
@@ -9060,7 +8908,7 @@ impl<'a, T> LookupList2<'a, T> {
   pub fn lookupCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[0].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -9077,9 +8925,7 @@ impl<'a, T> LookupList2<'a, T> {
       self._fieldRanges[1].end,
     ) {
       Result<ScalarArray<'a, Offset32>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, Offset32>, ReadError>.Failure { error } => ScalarArray<
-        Offset32
-      >.empty()
+      Result<ScalarArray<'a, Offset32>, ReadError>.Failure { .. } => ScalarArray<Offset32>.empty()
     }
   }
 
@@ -9452,7 +9298,7 @@ fn rangeAt<'a, T: FontReadAt<'a, ()> + ComputeSize<()> + LayoutRangeRecord>(
     Result<T, ReadError>.Success { value } => Option<LayoutRange>.some(
       LayoutRangeRecord.range(&value),
     )
-    Result<T, ReadError>.Failure { error } => Option<LayoutRange>.None
+    Result<T, ReadError>.Failure { .. } => Option<LayoutRange>.None
   }
 }
 
@@ -10037,9 +9883,9 @@ impl<'a> ClassDef<'a> {
 
   pub fn cost(self: &Self) -> u32 {
     return match &self.* {
-      ClassDef<'a>.Format1 { value } => 1
+      ClassDef<'a>.Format1 { .. } => 1
       ClassDef<'a>.Format2 { value } => ClassDefFormat2<'a>.cost(&value)
-      ClassDef<'a>.Format3 { value } => 1
+      ClassDef<'a>.Format3 { .. } => 1
       ClassDef<'a>.Format4 { value } => bitStorage(
         Uint24.toU32(ClassDefFormat4<'a>.classRangeCount(&value)),
       )
@@ -10284,7 +10130,7 @@ impl<'a> CoverageFormat1<'a> {
     ) {
       let mut iter = IntSet<GlyphId>.iter(glyphs)
       while let Option<GlyphId>.Some { value } = IntSetIter<GlyphId>.next(&mut iter) {
-        if let Option<u16>.Some { value: index } = CoverageFormat1<'a>.get(self, value) {
+        if let Option<u16>.Some { .. } = CoverageFormat1<'a>.get(self, value) {
           return true
         }
       }
@@ -10312,7 +10158,7 @@ impl<'a> CoverageFormat1<'a> {
     ) {
       let mut iter = IntSet<GlyphId>.iter(glyphs)
       while let Option<GlyphId>.Some { value } = IntSetIter<GlyphId>.next(&mut iter) {
-        if let Option<u16>.Some { value: index } = CoverageFormat1<'a>.get(self, value) {
+        if let Option<u16>.Some { .. } = CoverageFormat1<'a>.get(self, value) {
           drop run IntSet<GlyphId>.insert(&mut out, value)
         }
       }
@@ -10340,7 +10186,7 @@ impl<'a> CoverageFormat2<'a> {
     ) {
       let mut iter = IntSet<GlyphId>.iter(glyphs)
       while let Option<GlyphId>.Some { value } = IntSetIter<GlyphId>.next(&mut iter) {
-        if let Option<u16>.Some { value: index } = CoverageFormat2<'a>.get(self, value) {
+        if let Option<u16>.Some { .. } = CoverageFormat2<'a>.get(self, value) {
           return true
         }
       }
@@ -10372,7 +10218,7 @@ impl<'a> CoverageFormat2<'a> {
     ) {
       let mut iter = IntSet<GlyphId>.iter(glyphs)
       while let Option<GlyphId>.Some { value } = IntSetIter<GlyphId>.next(&mut iter) {
-        if let Option<u16>.Some { value: index } = CoverageFormat2<'a>.get(self, value) {
+        if let Option<u16>.Some { .. } = CoverageFormat2<'a>.get(self, value) {
           drop run IntSet<GlyphId>.insert(&mut out, value)
         }
       }
@@ -10644,7 +10490,7 @@ impl<'a> ClassDefFormat2<'a> {
         glyph = GlyphId.new(range.end)
         at = at + 1
       }
-      if let Option<GlyphId>.Some { value } = IntSet<GlyphId>.nextAfter(glyphs, glyph) {
+      if let Option<GlyphId>.Some { .. } = IntSet<GlyphId>.nextAfter(glyphs, glyph) {
         drop run IntSet<u16>.insert(&mut out, 0)
       }
     }
@@ -10770,7 +10616,7 @@ impl<'a> ClassDefFormat2<'a> {
         at = at + 1
       }
       if hasPrevious {
-        if let Option<GlyphId>.Some { value } = IntSet<GlyphId>.nextAfter(glyphs, previous) {
+        if let Option<GlyphId>.Some { .. } = IntSet<GlyphId>.nextAfter(glyphs, previous) {
           return true
         }
       }
@@ -11006,7 +10852,7 @@ impl<'a> ScriptList<'a> {
       let mid = lo + (hi - lo) / 2
       let record = match move ComputedArray<'a, (), ScriptRecord<'a>>.get(&records, mid) {
         Result<ScriptRecord<'a>, ReadError>.Success { value } => value
-        Result<ScriptRecord<'a>, ReadError>.Failure { error } => {
+        Result<ScriptRecord<'a>, ReadError>.Failure { .. } => {
           return Option<u16>.None
         }
       }
@@ -11021,7 +10867,7 @@ impl<'a> ScriptList<'a> {
     }
     let record = match move ComputedArray<'a, (), ScriptRecord<'a>>.get(&records, lo - 1) {
       Result<ScriptRecord<'a>, ReadError>.Success { value } => value
-      Result<ScriptRecord<'a>, ReadError>.Failure { error } => {
+      Result<ScriptRecord<'a>, ReadError>.Failure { .. } => {
         return Option<u16>.None
       }
     }
@@ -11037,7 +10883,7 @@ impl<'a> ScriptList<'a> {
       u16.toUsize(index),
     ) {
       Result<ScriptRecord<'a>, ReadError>.Success { value } => value
-      Result<ScriptRecord<'a>, ReadError>.Failure { error } => {
+      Result<ScriptRecord<'a>, ReadError>.Failure { .. } => {
         return Result<TaggedElement<Script<'a>>, ReadError>.failResult(ReadError.OutOfBounds)
       }
     }
@@ -11063,7 +10909,7 @@ impl<'a> Script<'a> {
       let mid = lo + (hi - lo) / 2
       let record = match move ComputedArray<'a, (), LangSysRecord<'a>>.get(&records, mid) {
         Result<LangSysRecord<'a>, ReadError>.Success { value } => value
-        Result<LangSysRecord<'a>, ReadError>.Failure { error } => {
+        Result<LangSysRecord<'a>, ReadError>.Failure { .. } => {
           return Option<u16>.None
         }
       }
@@ -11078,7 +10924,7 @@ impl<'a> Script<'a> {
     }
     let record = match move ComputedArray<'a, (), LangSysRecord<'a>>.get(&records, lo - 1) {
       Result<LangSysRecord<'a>, ReadError>.Success { value } => value
-      Result<LangSysRecord<'a>, ReadError>.Failure { error } => {
+      Result<LangSysRecord<'a>, ReadError>.Failure { .. } => {
         return Option<u16>.None
       }
     }
@@ -11094,7 +10940,7 @@ impl<'a> Script<'a> {
       u16.toUsize(index),
     ) {
       Result<LangSysRecord<'a>, ReadError>.Success { value } => value
-      Result<LangSysRecord<'a>, ReadError>.Failure { error } => {
+      Result<LangSysRecord<'a>, ReadError>.Failure { .. } => {
         return Result<TaggedElement<LangSys<'a>>, ReadError>.failResult(ReadError.OutOfBounds)
       }
     }
@@ -11147,7 +10993,7 @@ impl<'a> FeatureList<'a> {
       u16.toUsize(index),
     ) {
       Result<FeatureRecord<'a>, ReadError>.Success { value } => value
-      Result<FeatureRecord<'a>, ReadError>.Failure { error } => {
+      Result<FeatureRecord<'a>, ReadError>.Failure { .. } => {
         return Result<TaggedElement<Feature<'a>>, ReadError>.failResult(ReadError.OutOfBounds)
       }
     }
@@ -11369,10 +11215,10 @@ fn evaluateConditionOffset<'a>(
   }
   let condition = match move Condition<'a>.read(data) {
     Result<Condition<'a>, ReadError>.Success { value } => value
-    Result<Condition<'a>, ReadError>.Failure { error: ReadError.InvalidFormat { value } } => {
+    Result<Condition<'a>, ReadError>.Failure { error: ReadError.InvalidFormat { .. } } => {
       return Result<bool, Error>.succeed(false)
     }
-    Result<Condition<'a>, ReadError>.Failure { error } => {
+    Result<Condition<'a>, ReadError>.Failure { .. } => {
       return Result<bool, Error>.failResult(Error.Malformed)
     }
   }
@@ -11524,7 +11370,7 @@ impl<'a> FeatureVariations<'a> {
         index,
       ) {
         Result<FeatureVariationRecord<'a>, ReadError>.Success { value } => value
-        Result<FeatureVariationRecord<'a>, ReadError>.Failure { error } => {
+        Result<FeatureVariationRecord<'a>, ReadError>.Failure { .. } => {
           continue
         }
       }
@@ -11539,7 +11385,7 @@ impl<'a> FeatureVariations<'a> {
       }
       let set = match move setResult {
         Result<ConditionSet<'a>, ReadError>.Success { value } => value
-        Result<ConditionSet<'a>, ReadError>.Failure { error } => {
+        Result<ConditionSet<'a>, ReadError>.Failure { .. } => {
           continue
         }
       }
@@ -11549,7 +11395,7 @@ impl<'a> FeatureVariations<'a> {
         fn(index: u32) -> Result<f64, Error> {
           return match move delta(index) {
             Result<f64, E>.Success { value } => Result<f64, Error>.succeed(value)
-            Result<f64, E>.Failure { error } => Result<f64, Error>.failResult(Error.Malformed)
+            Result<f64, E>.Failure { .. } => Result<f64, Error>.failResult(Error.Malformed)
           }
         },
       )
@@ -11642,11 +11488,11 @@ impl SelectedFeatureVariations {
     }
     let mut store = Option<ItemVariationStore<'a>>.None
     let hasSub = match &sub {
-      Option<FeatureVariations<'a>>.Some { value } => true
+      Option<FeatureVariations<'a>>.Some { .. } => true
       _ => false
     }
     let hasPos = match &pos {
-      Option<FeatureVariations<'a>>.Some { value } => true
+      Option<FeatureVariations<'a>>.Some { .. } => true
       _ => false
     }
     if hasSub || hasPos {
@@ -11687,7 +11533,7 @@ fn containsLookupVariations<'a>(value: &Option<FeatureVariations<'a>>) -> bool {
     Option<FeatureVariations<'a>>.Some {
       value: table
     } => match move FeatureVariations.lookupVariations(&table) {
-      Option<LookupVariations<'a>>.Some { value: found } => true
+      Option<LookupVariations<'a>>.Some { .. } => true
       _ => false
     }
     _ => false
@@ -11780,9 +11626,9 @@ impl<'a> FeatureVariations<'a> {
       Result<ComputedArray<'a, (), LookupVariationRecord<'a>>, ReadError>.Success {
         value
       } => Option<ComputedArray<'a, (), LookupVariationRecord<'a>>>.some(value)
-      Result<ComputedArray<'a, (), LookupVariationRecord<'a>>, ReadError>.Failure {
-        error
-      } => Option<ComputedArray<'a, (), LookupVariationRecord<'a>>>.None
+      Result<ComputedArray<'a, (), LookupVariationRecord<'a>>, ReadError>.Failure { .. } => Option<
+        ComputedArray<'a, (), LookupVariationRecord<'a>>
+      >.None
     }
   }
 
@@ -11801,7 +11647,7 @@ impl<'a> FeatureVariations<'a> {
     while i < ComputedArray<'a, (), LookupVariationRecord<'a>>.len(&records) {
       let record = match move ComputedArray<'a, (), LookupVariationRecord<'a>>.get(&records, i) {
         Result<LookupVariationRecord<'a>, ReadError>.Success { value } => value
-        Result<LookupVariationRecord<'a>, ReadError>.Failure { error } => {
+        Result<LookupVariationRecord<'a>, ReadError>.Failure { .. } => {
           return Option<LookupVariations<'a>>.None
         }
       }
@@ -11836,7 +11682,7 @@ impl<'a> LookupVariations<'a> {
         mid,
       ) {
         Result<LookupVariationRecord<'a>, ReadError>.Success { value } => value
-        Result<LookupVariationRecord<'a>, ReadError>.Failure { error } => {
+        Result<LookupVariationRecord<'a>, ReadError>.Failure { .. } => {
           return Option<FeatureLookups<'a>>.None
         }
       }
@@ -11854,7 +11700,7 @@ impl<'a> LookupVariations<'a> {
       }
       let table = match move LookupVariationRecord<'a>.featureLookups(&record, self.data) {
         Result<FeatureLookups<'a>, ReadError>.Success { value } => value
-        Result<FeatureLookups<'a>, ReadError>.Failure { error } => {
+        Result<FeatureLookups<'a>, ReadError>.Failure { .. } => {
           return Option<FeatureLookups<'a>>.None
         }
       }
@@ -11910,7 +11756,7 @@ impl<'a> LookupVariations<'a> {
     let mut mappedDelta = fn(index: u32) -> Result<f64, Error> {
       return match move delta(index) {
         Result<f64, E>.Success { value } => Result<f64, Error>.succeed(value)
-        Result<f64, E>.Failure { error } => Result<f64, Error>.failResult(Error.Malformed)
+        Result<f64, E>.Failure { .. } => Result<f64, Error>.failResult(Error.Malformed)
       }
     }
     let records = FeatureLookups<'a>.lookupConditionRecords(&table)
@@ -11923,7 +11769,7 @@ impl<'a> LookupVariations<'a> {
         index,
       ) {
         Result<LookupConditionRecord<'a>, ReadError>.Success { value } => value
-        Result<LookupConditionRecord<'a>, ReadError>.Failure { error } => {
+        Result<LookupConditionRecord<'a>, ReadError>.Failure { .. } => {
           continue
         }
       }

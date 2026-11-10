@@ -9,7 +9,7 @@ mod math;
 pub(crate) fn generate_dump(items: &Items, silk: bool) -> syn::Result<String> {
     let code = dump::generate(items, silk)?;
     if silk {
-        return Ok(code);
+        return Ok(prune_bindings(&code));
     }
     let tokens = code
         .parse::<proc_macro2::TokenStream>()
@@ -41,7 +41,57 @@ pub(crate) fn generate(items: &Items) -> syn::Result<String> {
     if items.parse_module_path.segments.last().unwrap().ident == "math" {
         math::constants(&cx, &mut out)?;
     }
-    Ok(out)
+    Ok(prune_bindings(&out))
+}
+
+/// Removes generator-emitted bindings that no later line of their block uses.
+/// Only side-effect-free right-hand sides are candidates, so a removal never
+/// changes behavior; validating reads that return early are always kept.
+fn prune_bindings(code: &str) -> String {
+    let lines: Vec<&str> = code.lines().collect();
+    let mut out = String::with_capacity(code.len());
+    for (index, line) in lines.iter().enumerate() {
+        if let Some(name) = pure_binding(line) {
+            let indent = line.len() - line.trim_start().len();
+            let used = lines[index + 1..]
+                .iter()
+                .filter(|l| !l.trim().is_empty())
+                .take_while(|l| l.len() - l.trim_start().len() >= indent)
+                .any(|l| uses(l, name));
+            if !used {
+                continue;
+            }
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+    out
+}
+
+fn pure_binding(line: &str) -> Option<&str> {
+    let rest = line.trim_start().strip_prefix("let ")?;
+    let rest = rest.strip_prefix("mut ").unwrap_or(rest);
+    let end = rest.find([' ', ':', '='])?;
+    let (name, tail) = rest.split_at(end);
+    let rhs = tail.split_once(" = ")?.1.trim_end();
+    let pure = rhs.starts_with("scalarOr<")
+        || rhs.starts_with("DumpPath.arguments(")
+        || rhs.ends_with(".offsetData(&value)")
+        || (name == "end" && rhs == "0")
+        // Dump target arguments are built only from generated field accessors.
+        || name == "targetArgs"
+        || (!rhs.is_empty() && rhs.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_'));
+    pure.then_some(name)
+}
+
+fn uses(line: &str, name: &str) -> bool {
+    let bytes = line.as_bytes();
+    let ident = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    line.match_indices(name).any(|(at, _)| {
+        let before = at.checked_sub(1).map(|i| bytes[i]);
+        let after = bytes.get(at + name.len()).copied();
+        !before.is_some_and(|b| ident(b) || b == b'.') && !after.is_some_and(ident)
+    })
 }
 
 fn camel(name: &str) -> String {
@@ -331,7 +381,7 @@ impl Context<'_> {
         } else {
             self.fallback(field)?
         };
-        writeln!(out, "    return match move {read} {{ Result<{typ}, ReadError>.Success {{ value }} => {success} Result<{typ}, ReadError>.Failure {{ error }} => {fallback} }}\n  }}").unwrap();
+        writeln!(out, "    return match move {read} {{ Result<{typ}, ReadError>.Success {{ value }} => {success} Result<{typ}, ReadError>.Failure {{ .. }} => {fallback} }}\n  }}").unwrap();
         self.offset_getter(out, owner, field, record)?;
         Ok(())
     }

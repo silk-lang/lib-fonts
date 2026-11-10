@@ -1,5 +1,5 @@
 import language { Language, LanguageTags, subtagMatches }
-import script { Script, ScriptTags }
+import script { Script }
 import script
 import generated_language_cases as Cases
 import generated_scripts as Scripts
@@ -8,7 +8,6 @@ import font_types.lib { Tag }
 import silk.text.string { String }
 import silk.collections.slice { Slice }
 import silk.core.option { Option }
-import silk.core.result { Result }
 import silk.testing.testing { Testing, AssertionError }
 import silk.mem.allocator { Allocator, OutOfMemoryError }
 import silk.core.effect { Effect }

@@ -1,11 +1,10 @@
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 // Seven upstream IntSet-dependent layout regressions that needed IntSet first.
 import generated_layout { ClassDef, ClassDefFormat1, ClassDefFormat2 }
-import collections.int_set { IntSet, IntSetIter }
+import collections.int_set { IntSet }
 import font_types.lib { GlyphId }
 import font_data { FontData }
 import read { ReadError }
-import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.testing.testing { Testing, AssertionError }
 import silk.mem.allocator { Allocator, OutOfMemoryError }
@@ -434,14 +433,14 @@ effect fn classdefEmptyFormatsAgreeBody() -> ()
   let b = run must(ClassDef.read(FontData.new(&[0, 2, 0, 0])))
   run Testing.expect(
     match a {
-      ClassDef.Format1 { value } => true
+      ClassDef.Format1 { .. } => true
       _ => false
     },
     "upstream layout intersection expectation",
   )
   run Testing.expect(
     match b {
-      ClassDef.Format2 { value } => true
+      ClassDef.Format2 { .. } => true
       _ => false
     },
     "upstream layout intersection expectation",

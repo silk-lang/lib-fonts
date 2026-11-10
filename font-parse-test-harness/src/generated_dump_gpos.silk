@@ -66,61 +66,28 @@ import read_fonts.lib {
   ReadError,
   ScalarArray,
   ComputedArray,
-  VarLenArray,
-  VarLenIter,
   ReadArgs2,
   ReadArgs3,
   ArrayOfOffsets,
   ArrayOfNullableOffsets
 }
-import font_types.lib {
-  Fixed,
-  F2Dot14,
-  FWord,
-  UfWord,
-  Tag,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
-  GlyphId16,
-  GlyphId24,
-  GlyphId,
-  NameId,
-  Nullable,
-  Offset16,
-  Offset24,
-  Offset32
-}
-import dump_support { DumpPath, DumpTable, scalar, absent, readError, versionBits, bytes }
+import font_types.lib { Tag, Uint24, GlyphId16, GlyphId24, Nullable, Offset16, Offset24, Offset32 }
+import dump_support { DumpPath, DumpTable, scalar, absent, readError, bytes }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.io.writer { Writer, WriterError }
 import silk.num.u8
 import silk.num.u16
-import silk.num.u32
 import silk.num.u64
 import read_fonts.tables.layout {
-  Lookup,
-  LookupList,
-  LookupList2,
   ScriptList,
   FeatureList,
   FeatureVariations,
   CoverageTable,
   ClassDef,
-  DeviceOrVariationIndex,
-  SequenceContext,
-  ChainedSequenceContext,
-  LookupFlag
+  DeviceOrVariationIndex
 }
-import read_fonts.tables.gpos {
-  OriginalPositionLookupList,
-  PositionLookupList2,
-  PositionSequenceContext,
-  PositionChainContext
-}
+import read_fonts.tables.gpos { OriginalPositionLookupList, PositionLookupList2 }
 
 pub effect fn dumpGpos<'a>(path: &mut DumpPath, value: Gpos<'a>) -> ()
   ! WriterError
@@ -134,7 +101,6 @@ pub effect fn dumpGpos<'a>(path: &mut DumpPath, value: Gpos<'a>) -> ()
   ) {
     return
   }
-  let base = Gpos<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "version")
     let fieldValue = Gpos<'a>.version(&value)
@@ -347,7 +313,6 @@ pub effect fn dumpGpos<'a>(path: &mut DumpPath, value: Gpos<'a>) -> ()
 pub effect fn dumpPositionLookup<'a>(path: &mut DumpPath, value: PositionLookup<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -413,7 +378,6 @@ pub effect fn dumpPositionLookup<'a>(path: &mut DumpPath, value: PositionLookup<
 pub effect fn dumpAnchorTable<'a>(path: &mut DumpPath, value: AnchorTable<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -452,7 +416,6 @@ pub effect fn dumpAnchorFormat1<'a>(path: &mut DumpPath, value: AnchorFormat1<'a
   ) {
     return
   }
-  let base = AnchorFormat1<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "anchorFormat")
     let fieldValue = AnchorFormat1<'a>.anchorFormat(&value)
@@ -485,7 +448,6 @@ pub effect fn dumpAnchorFormat2<'a>(path: &mut DumpPath, value: AnchorFormat2<'a
   ) {
     return
   }
-  let base = AnchorFormat2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "anchorFormat")
     let fieldValue = AnchorFormat2<'a>.anchorFormat(&value)
@@ -524,7 +486,6 @@ pub effect fn dumpAnchorFormat3<'a>(path: &mut DumpPath, value: AnchorFormat3<'a
   ) {
     return
   }
-  let base = AnchorFormat3<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "anchorFormat")
     let fieldValue = AnchorFormat3<'a>.anchorFormat(&value)
@@ -650,7 +611,6 @@ pub effect fn dumpMarkRecord<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -686,7 +646,6 @@ pub effect fn dumpMarkRecord<'a>(
 pub effect fn dumpSinglePos<'a>(path: &mut DumpPath, value: SinglePos<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -862,7 +821,6 @@ pub effect fn dumpSinglePosFormat2<'a>(path: &mut DumpPath, value: SinglePosForm
 pub effect fn dumpPairPos<'a>(path: &mut DumpPath, value: PairPos<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -907,7 +865,6 @@ pub effect fn dumpPairPosFormat1<'a>(path: &mut DumpPath, value: PairPosFormat1<
   ) {
     return
   }
-  let base = PairPosFormat1<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "posFormat")
     let fieldValue = PairPosFormat1<'a>.posFormat(&value)
@@ -1401,7 +1358,6 @@ pub effect fn dumpEntryExitRecord<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -1470,7 +1426,6 @@ pub effect fn dumpMarkBasePosFormat1<'a>(path: &mut DumpPath, value: MarkBasePos
   ) {
     return
   }
-  let base = MarkBasePosFormat1<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "posFormat")
     let fieldValue = MarkBasePosFormat1<'a>.posFormat(&value)
@@ -1617,7 +1572,6 @@ pub effect fn dumpBaseRecord<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -1687,7 +1641,6 @@ pub effect fn dumpMarkLigPosFormat1<'a>(path: &mut DumpPath, value: MarkLigPosFo
   ) {
     return
   }
-  let base = MarkLigPosFormat1<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "posFormat")
     let fieldValue = MarkLigPosFormat1<'a>.posFormat(&value)
@@ -1794,7 +1747,6 @@ pub effect fn dumpLigatureArray<'a>(path: &mut DumpPath, value: LigatureArray<'a
   ) {
     return
   }
-  let base = LigatureArray<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "ligatureCount")
     let fieldValue = LigatureArray<'a>.ligatureCount(&value)
@@ -1902,7 +1854,6 @@ pub effect fn dumpComponentRecord<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -1972,7 +1923,6 @@ pub effect fn dumpMarkMarkPosFormat1<'a>(path: &mut DumpPath, value: MarkMarkPos
   ) {
     return
   }
-  let base = MarkMarkPosFormat1<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "posFormat")
     let fieldValue = MarkMarkPosFormat1<'a>.posFormat(&value)
@@ -2119,7 +2069,6 @@ pub effect fn dumpMark2Record<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -2192,7 +2141,6 @@ pub effect fn dumpExtensionPosFormat1<'a, T: FontRead<'a, ()> + DumpTable<'a>>(
   ) {
     return
   }
-  let base = ExtensionPosFormat1<'a, T>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "posFormat")
     let fieldValue = ExtensionPosFormat1<'a, T>.posFormat(&value)
@@ -2227,7 +2175,6 @@ pub effect fn dumpExtensionPosFormat1<'a, T: FontRead<'a, ()> + DumpTable<'a>>(
 pub effect fn dumpExtensionSubtable<'a>(path: &mut DumpPath, value: ExtensionSubtable<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -2436,7 +2383,6 @@ pub effect fn dumpPairPosFormat3<'a>(path: &mut DumpPath, value: PairPosFormat3<
   ) {
     return
   }
-  let base = PairPosFormat3<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "posFormat")
     let fieldValue = PairPosFormat3<'a>.posFormat(&value)
@@ -2855,7 +2801,6 @@ pub effect fn dumpEntryExitRecord2<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -2924,7 +2869,6 @@ pub effect fn dumpMarkBasePosFormat2<'a>(path: &mut DumpPath, value: MarkBasePos
   ) {
     return
   }
-  let base = MarkBasePosFormat2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "posFormat")
     let fieldValue = MarkBasePosFormat2<'a>.posFormat(&value)
@@ -3071,7 +3015,6 @@ pub effect fn dumpBaseRecord2<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -3141,7 +3084,6 @@ pub effect fn dumpMarkLigPosFormat2<'a>(path: &mut DumpPath, value: MarkLigPosFo
   ) {
     return
   }
-  let base = MarkLigPosFormat2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "posFormat")
     let fieldValue = MarkLigPosFormat2<'a>.posFormat(&value)
@@ -3248,7 +3190,6 @@ pub effect fn dumpLigatureArray2<'a>(path: &mut DumpPath, value: LigatureArray2<
   ) {
     return
   }
-  let base = LigatureArray2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "ligatureCount")
     let fieldValue = LigatureArray2<'a>.ligatureCount(&value)
@@ -3356,7 +3297,6 @@ pub effect fn dumpComponentRecord2<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -3426,7 +3366,6 @@ pub effect fn dumpMarkMarkPosFormat2<'a>(path: &mut DumpPath, value: MarkMarkPos
   ) {
     return
   }
-  let base = MarkMarkPosFormat2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "posFormat")
     let fieldValue = MarkMarkPosFormat2<'a>.posFormat(&value)
@@ -3573,7 +3512,6 @@ pub effect fn dumpMark2Record2<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -3682,7 +3620,6 @@ pub effect fn dumpMarkRecord2<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -3718,7 +3655,6 @@ pub effect fn dumpMarkRecord2<'a>(
 pub effect fn dumpCursivePos<'a>(path: &mut DumpPath, value: CursivePos<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -3742,7 +3678,6 @@ pub effect fn dumpCursivePos<'a>(path: &mut DumpPath, value: CursivePos<'a>) -> 
 pub effect fn dumpMarkBasePos<'a>(path: &mut DumpPath, value: MarkBasePos<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -3766,7 +3701,6 @@ pub effect fn dumpMarkBasePos<'a>(path: &mut DumpPath, value: MarkBasePos<'a>) -
 pub effect fn dumpMarkLigPos<'a>(path: &mut DumpPath, value: MarkLigPos<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -3790,7 +3724,6 @@ pub effect fn dumpMarkLigPos<'a>(path: &mut DumpPath, value: MarkLigPos<'a>) -> 
 pub effect fn dumpMarkMarkPos<'a>(path: &mut DumpPath, value: MarkMarkPos<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return

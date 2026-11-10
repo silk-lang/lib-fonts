@@ -16,44 +16,12 @@ import read_fonts.tables.bitmap {
   IndexSubtable5,
   BdtComponent
 }
-import read_fonts.lib {
-  FontData,
-  FontRead,
-  ReadError,
-  ScalarArray,
-  ComputedArray,
-  VarLenArray,
-  VarLenIter,
-  ReadArgs2,
-  ReadArgs3,
-  ArrayOfOffsets,
-  ArrayOfNullableOffsets
-}
-import font_types.lib {
-  Fixed,
-  F2Dot14,
-  FWord,
-  UfWord,
-  Tag,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
-  GlyphId16,
-  GlyphId24,
-  GlyphId,
-  NameId,
-  Nullable,
-  Offset16,
-  Offset24,
-  Offset32
-}
-import dump_support { DumpPath, DumpTable, scalar, absent, readError, versionBits, bytes }
+import read_fonts.lib { FontData, ReadError, ScalarArray, ComputedArray }
+import font_types.lib { GlyphId16, Offset32 }
+import dump_support { DumpPath, DumpTable, scalar, readError }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.io.writer { Writer, WriterError }
-import silk.num.u8
 import silk.num.u16
 import silk.num.u32
 import silk.num.u64
@@ -66,7 +34,6 @@ pub effect fn dumpBitmapSize<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -157,7 +124,6 @@ pub effect fn dumpSbitLineMetrics<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -243,7 +209,6 @@ pub effect fn dumpBigGlyphMetrics<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -305,7 +270,6 @@ pub effect fn dumpSmallGlyphMetrics<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -385,7 +349,6 @@ pub effect fn dumpIndexSubtableRecord<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -440,7 +403,6 @@ pub effect fn dumpIndexSubtable1<'a>(path: &mut DumpPath, value: IndexSubtable1<
   ) {
     return
   }
-  let base = IndexSubtable1<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "indexFormat")
     let fieldValue = IndexSubtable1<'a>.indexFormat(&value)
@@ -537,7 +499,6 @@ pub effect fn dumpIndexSubtable3<'a>(path: &mut DumpPath, value: IndexSubtable3<
   ) {
     return
   }
-  let base = IndexSubtable3<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "indexFormat")
     let fieldValue = IndexSubtable3<'a>.indexFormat(&value)
@@ -642,7 +603,6 @@ pub effect fn dumpGlyphIdOffsetPair<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -741,7 +701,6 @@ pub effect fn dumpBdtComponent<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return

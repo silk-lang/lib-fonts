@@ -57,7 +57,7 @@ test effect fn rejectsShortData() -> ()
     _ => false
   }
   let b = match move full {
-    Option<TableDataRef<'static, Header<'static>>>.Some { value } => true
+    Option<TableDataRef<'static, Header<'static>>>.Some { .. } => true
     _ => false
   }
   run Testing.expect(a && b, "exact fixed header bound")

@@ -230,7 +230,7 @@ test effect fn parseSubtable6Short() -> ()
   )
   run Testing.expect(
     match &table {
-      KerxSubtable6<'static>.ShortValues { rows, columns, array, vector } => true
+      KerxSubtable6<'static>.ShortValues { .. } => true
       _ => false
     },
     "value width",
@@ -263,7 +263,7 @@ test effect fn parseSubtable6Long() -> ()
   )
   run Testing.expect(
     match &table {
-      KerxSubtable6<'static>.LongValues { rows, columns, array, vector } => true
+      KerxSubtable6<'static>.LongValues { .. } => true
       _ => false
     },
     "value width",
@@ -296,7 +296,7 @@ test effect fn parseSubtable6LongVector() -> ()
   )
   run Testing.expect(
     match &table {
-      KerxSubtable6<'static>.LongValues { rows, columns, array, vector } => true
+      KerxSubtable6<'static>.LongValues { .. } => true
       _ => false
     },
     "value width",

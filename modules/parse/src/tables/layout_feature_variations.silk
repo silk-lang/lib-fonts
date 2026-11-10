@@ -30,11 +30,11 @@ impl SelectedFeatureVariations {
     }
     let mut store = Option<ItemVariationStore<'a>>.None
     let hasSub = match &sub {
-      Option<FeatureVariations<'a>>.Some { value } => true
+      Option<FeatureVariations<'a>>.Some { .. } => true
       _ => false
     }
     let hasPos = match &pos {
-      Option<FeatureVariations<'a>>.Some { value } => true
+      Option<FeatureVariations<'a>>.Some { .. } => true
       _ => false
     }
     if hasSub || hasPos {
@@ -75,7 +75,7 @@ fn containsLookupVariations<'a>(value: &Option<FeatureVariations<'a>>) -> bool {
     Option<FeatureVariations<'a>>.Some {
       value: table
     } => match move FeatureVariations.lookupVariations(&table) {
-      Option<LookupVariations<'a>>.Some { value: found } => true
+      Option<LookupVariations<'a>>.Some { .. } => true
       _ => false
     }
     _ => false
@@ -168,9 +168,9 @@ impl<'a> FeatureVariations<'a> {
       Result<ComputedArray<'a, (), LookupVariationRecord<'a>>, ReadError>.Success {
         value
       } => Option<ComputedArray<'a, (), LookupVariationRecord<'a>>>.some(value)
-      Result<ComputedArray<'a, (), LookupVariationRecord<'a>>, ReadError>.Failure {
-        error
-      } => Option<ComputedArray<'a, (), LookupVariationRecord<'a>>>.None
+      Result<ComputedArray<'a, (), LookupVariationRecord<'a>>, ReadError>.Failure { .. } => Option<
+        ComputedArray<'a, (), LookupVariationRecord<'a>>
+      >.None
     }
   }
 
@@ -189,7 +189,7 @@ impl<'a> FeatureVariations<'a> {
     while i < ComputedArray<'a, (), LookupVariationRecord<'a>>.len(&records) {
       let record = match move ComputedArray<'a, (), LookupVariationRecord<'a>>.get(&records, i) {
         Result<LookupVariationRecord<'a>, ReadError>.Success { value } => value
-        Result<LookupVariationRecord<'a>, ReadError>.Failure { error } => {
+        Result<LookupVariationRecord<'a>, ReadError>.Failure { .. } => {
           return Option<LookupVariations<'a>>.None
         }
       }
@@ -224,7 +224,7 @@ impl<'a> LookupVariations<'a> {
         mid,
       ) {
         Result<LookupVariationRecord<'a>, ReadError>.Success { value } => value
-        Result<LookupVariationRecord<'a>, ReadError>.Failure { error } => {
+        Result<LookupVariationRecord<'a>, ReadError>.Failure { .. } => {
           return Option<FeatureLookups<'a>>.None
         }
       }
@@ -242,7 +242,7 @@ impl<'a> LookupVariations<'a> {
       }
       let table = match move LookupVariationRecord<'a>.featureLookups(&record, self.data) {
         Result<FeatureLookups<'a>, ReadError>.Success { value } => value
-        Result<FeatureLookups<'a>, ReadError>.Failure { error } => {
+        Result<FeatureLookups<'a>, ReadError>.Failure { .. } => {
           return Option<FeatureLookups<'a>>.None
         }
       }
@@ -298,7 +298,7 @@ impl<'a> LookupVariations<'a> {
     let mut mappedDelta = fn(index: u32) -> Result<f64, Error> {
       return match move delta(index) {
         Result<f64, E>.Success { value } => Result<f64, Error>.succeed(value)
-        Result<f64, E>.Failure { error } => Result<f64, Error>.failResult(Error.Malformed)
+        Result<f64, E>.Failure { .. } => Result<f64, Error>.failResult(Error.Malformed)
       }
     }
     let records = FeatureLookups<'a>.lookupConditionRecords(&table)
@@ -311,7 +311,7 @@ impl<'a> LookupVariations<'a> {
         index,
       ) {
         Result<LookupConditionRecord<'a>, ReadError>.Success { value } => value
-        Result<LookupConditionRecord<'a>, ReadError>.Failure { error } => {
+        Result<LookupConditionRecord<'a>, ReadError>.Failure { .. } => {
           continue
         }
       }

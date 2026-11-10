@@ -1,14 +1,12 @@
 //! Shaped-line cache, gamma correction and text goldens at 1x and 2x.
 import face { FontFace }
 import cache { GlyphCache }
-import lines { LineCache, LineId, ShapedGlyph }
+import lines { LineCache }
 import gamma { TextGamma }
 import fixtures { Canvas, Textures, drawText, readFile, writeFile, SANS }
 import raster_tests { must }
 import atlas.atlas { Atlas, AtlasError, AtlasOptions }
 import harfrust.lib { Buffer, GlyphPosition, ShaperData, ShapeError, ShapeOptions, shape }
-import silk.collections.bytes { Bytes }
-import silk.collections.list { List }
 import silk.core.effect { Effect }
 import silk.core.option { Option }
 import silk.core.result { Result }
@@ -19,7 +17,6 @@ import silk.testing.testing { Testing, AssertionError }
 import silk.num.f32
 import silk.num.i32
 import silk.num.i64
-import silk.num.u8
 import silk.num.u32
 import silk.num.usize
 
@@ -46,7 +43,7 @@ effect fn lineCacheHitsAndDrops() -> ()
   let shaped = run shape(&shaper, &mut buffer, ShapeOptions.new())
   run Testing.expect(
     match &shaped {
-      Result<(), ShapeError>.Success { value } => true
+      Result<(), ShapeError>.Success { .. } => true
       _ => false
     },
     "shapes",

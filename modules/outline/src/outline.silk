@@ -162,7 +162,7 @@ impl<'a> Outlines<'a> {
           &mut sink,
         )
         Result<LoadedOutline, Error | OutOfMemoryError>.Failure { error } => match move error {
-          Error problem => false
+          Error _ => false
           OutOfMemoryError problem => {
             fail move problem
           }
@@ -190,7 +190,7 @@ impl<'a> Outlines<'a> {
         Option<f32>.None,
         &mut sink,
       ) {
-        Result<Option<f32>, Error>.Success { value } => true
+        Result<Option<f32>, Error>.Success { .. } => true
         _ => false
       }
     }

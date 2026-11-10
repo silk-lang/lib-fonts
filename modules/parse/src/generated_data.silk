@@ -43,7 +43,7 @@ fn stringAt(data: &'static [u8], offsets: &'static [u8], index: usize) -> Option
     Slice.view<u8>(data, u32.toUsize(start), u32.toUsize(end - start)),
   ) {
     Result<string<'static>, InvalidUtf8>.Success { value } => Option<string<'static>>.some(value)
-    Result<string<'static>, InvalidUtf8>.Failure { error } => Option<string<'static>>.None
+    Result<string<'static>, InvalidUtf8>.Failure { .. } => Option<string<'static>>.None
   }
 }
 

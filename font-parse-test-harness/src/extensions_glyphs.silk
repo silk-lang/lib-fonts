@@ -19,7 +19,6 @@ import read_fonts.tables.variations {
   TupleDeltaIter
 }
 import font_types.lib { GlyphId, F2Dot14, Fixed }
-import silk.geometry.point { Point2 }
 import dump_support { DumpPath, scalar, absent, readError }
 import generated_dump_glyf
 import generated_dump_gvar
@@ -86,8 +85,8 @@ effect fn dumpLoca<'a>(
   run scalar(
     &path,
     match table {
-      Loca<'a>.Short { data } => "Short"
-      Loca<'a>.Long { data } => "Long"
+      Loca<'a>.Short { .. } => "Short"
+      Loca<'a>.Long { .. } => "Long"
     },
   )
   DumpPath.pop(&mut path)

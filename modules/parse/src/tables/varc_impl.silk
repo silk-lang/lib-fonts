@@ -239,7 +239,7 @@ impl<'a> VarcComponent<'a> {
     let mut reserved = u32.shiftRight(raw & 4294934528, 15)
     while reserved != 0 {
       if (reserved & 1) != 0 {
-        let ignored = run varcTake(Cursor.readU32Var(&mut cursor))
+        drop run varcTake(Cursor.readU32Var(&mut cursor))
       }
       reserved = u32.shiftRight(reserved, 1)
     }

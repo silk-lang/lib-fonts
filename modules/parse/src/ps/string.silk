@@ -6,7 +6,6 @@ import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.core.equal { Equal }
 import silk.num.u16
-import silk.num.u32
 
 pub struct Sid {
   raw: u16,

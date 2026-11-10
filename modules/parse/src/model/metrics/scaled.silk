@@ -1,6 +1,6 @@
 // Copyright 2026 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 import model.metrics.glyph { GlyphMetrics }
-import model.metrics.extents { GlyphExtents, zeroExtents }
+import model.metrics.extents { GlyphExtents }
 import model.metrics.global { LineExtents }
 import model.metrics.convert { MetricConverter }
 import model.glyph { GlyphSourceOrder }

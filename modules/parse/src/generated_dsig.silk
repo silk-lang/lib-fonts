@@ -2,41 +2,13 @@
 // Source: pinned resources/codegen_inputs; generator: modules/parse/tools/font-codegen-silk.
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 import font_data { FontData }
-import read { ReadError, FontRead, FontReadAt, ComputeSize, Format, computeSize, readAtWithArgs }
+import read { ReadError, FontRead, FontReadAt, ComputeSize, computeSize }
 import table_provider { TopLevelTable }
-import array { ScalarArray, ComputedArray, VarLenArray }
-import offset { resolve, resolveWithArgs, resolveNullableWithArgs }
-import offset_array { ArrayOfOffsets, ArrayOfNullableOffsets }
-import read_args { ReadArgs2, ReadArgs3 }
+import array { ScalarArray, ComputedArray }
+import offset { resolve }
 import table_ref { ByteRange, MinByteRange }
-import generated_support { scalarOr, recordArray, varLenArray, varLenBytes, signedCount }
-import font_types.lib {
-  Scalar,
-  FixedSize,
-  rawByteLen,
-  readScalar,
-  writeScalar,
-  Tag,
-  Fixed,
-  F2Dot14,
-  F4Dot12,
-  F6Dot10,
-  FWord,
-  UfWord,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
-  GlyphId,
-  GlyphId16,
-  GlyphId24,
-  NameId,
-  Offset16,
-  Offset24,
-  Offset32,
-  Nullable
-}
+import generated_support { scalarOr, recordArray }
+import font_types.lib { Scalar, FixedSize, rawByteLen, readScalar, writeScalar, Tag, Offset32 }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.core.ownership { Copy }
@@ -49,9 +21,6 @@ import silk.num.usize
 import silk.num.u8
 import silk.num.u16
 import silk.num.u32
-import silk.num.u64
-import silk.num.i16
-import silk.num.i32
 
 /// [DSIG (Digital Signature Table)](https://docs.microsoft.com/en-us/typography/opentype/spec/dsig#table-structure) table
 pub struct Dsig<'a> {
@@ -82,7 +51,6 @@ impl<'a> Dsig<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[0].end = end
-    let versionValue = scalarOr<u32>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
@@ -90,7 +58,6 @@ impl<'a> Dsig<'a> {
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let flagsValue = scalarOr<PermissionFlags>(data, ranges[2].start, PermissionFlags.empty())
     ranges[3].start = end
     end = usize.saturatingAdd(end, usize.saturatingMultiply(u16.toUsize(numSignaturesValue), 12))
     ranges[3].end = end
@@ -109,7 +76,7 @@ impl<'a> Dsig<'a> {
   pub fn version(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[0].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -121,7 +88,7 @@ impl<'a> Dsig<'a> {
   pub fn numSignatures(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -136,7 +103,7 @@ impl<'a> Dsig<'a> {
       self._fieldRanges[2].start,
     ) {
       Result<PermissionFlags, ReadError>.Success { value } => value
-      Result<PermissionFlags, ReadError>.Failure { error } => PermissionFlags.empty()
+      Result<PermissionFlags, ReadError>.Failure { .. } => PermissionFlags.empty()
     }
   }
 
@@ -152,9 +119,11 @@ impl<'a> Dsig<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ComputedArray<'a, (), SignatureRecord<'a>>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, (), SignatureRecord<'a>>, ReadError>.Failure {
-        error
-      } => ComputedArray<'a, (), SignatureRecord<'a>>.empty(())
+      Result<ComputedArray<'a, (), SignatureRecord<'a>>, ReadError>.Failure { .. } => ComputedArray<
+        'a,
+        (),
+        SignatureRecord<'a>
+      >.empty(())
     }
   }
 
@@ -380,7 +349,7 @@ impl<'a> SignatureRecord<'a> {
   pub fn format(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, (self.position + 0)) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -388,7 +357,7 @@ impl<'a> SignatureRecord<'a> {
   pub fn length(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, (self.position + 4)) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -396,7 +365,7 @@ impl<'a> SignatureRecord<'a> {
   pub fn signatureBlockOffset(self: &Self) -> Offset32 {
     return match move FontData<'a>.readAt<Offset32>(&self._fontData, (self.position + 8)) {
       Result<Offset32, ReadError>.Success { value } => value
-      Result<Offset32, ReadError>.Failure { error } => Offset32.new(0)
+      Result<Offset32, ReadError>.Failure { .. } => Offset32.new(0)
     }
   }
 }
@@ -448,11 +417,9 @@ impl<'a> SignatureBlockFormat1<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let reserved1Value = scalarOr<u16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let reserved2Value = scalarOr<u16>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[2].end = end
@@ -479,7 +446,7 @@ impl<'a> SignatureBlockFormat1<'a> {
   pub fn signatureLength(self: &Self) -> u32 {
     return match move FontData<'a>.readAt<u32>(&self._fontData, self._fieldRanges[2].start) {
       Result<u32, ReadError>.Success { value } => value
-      Result<u32, ReadError>.Failure { error } => 0
+      Result<u32, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -495,7 +462,7 @@ impl<'a> SignatureBlockFormat1<'a> {
       self._fieldRanges[3].end,
     ) {
       Result<ScalarArray<'a, u8>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, u8>, ReadError>.Failure { error } => ScalarArray<u8>.empty()
+      Result<ScalarArray<'a, u8>, ReadError>.Failure { .. } => ScalarArray<u8>.empty()
     }
   }
 

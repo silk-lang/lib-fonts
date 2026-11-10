@@ -73,7 +73,7 @@ impl<'a> ValueRecord<'a> {
     if let Option<usize>.Some { value } = move ValueRecord<'a>.fieldOffset(self, field) {
       return match move FontData<'a>.readAt<i16>(&self._data, value) {
         Result<i16, ReadError>.Success { value: item } => Option<i16>.some(item)
-        Result<i16, ReadError>.Failure { error } => Option<i16>.None
+        Result<i16, ReadError>.Failure { .. } => Option<i16>.None
       }
     }
     return Option<i16>.None
@@ -101,7 +101,7 @@ impl<'a> ValueRecord<'a> {
         Result<Nullable<Offset16>, ReadError>.Success { value: item } => Option<
           Nullable<Offset16>
         >.some(item)
-        Result<Nullable<Offset16>, ReadError>.Failure { error } => Option<Nullable<Offset16>>.None
+        Result<Nullable<Offset16>, ReadError>.Failure { .. } => Option<Nullable<Offset16>>.None
       }
     }
     return Option<Nullable<Offset16>>.None
@@ -528,7 +528,7 @@ impl<'a> PairSet<'a> {
         PairValueRecord<'a>
       >.get(&records, mid) {
         Result<PairValueRecord<'a>, ReadError>.Success { value } => value
-        Result<PairValueRecord<'a>, ReadError>.Failure { error } => {
+        Result<PairValueRecord<'a>, ReadError>.Failure { .. } => {
           return Option<PairValueRecord<'a>>.None
         }
       }

@@ -2,56 +2,19 @@
 // Source: pinned resources/codegen_inputs; generator: modules/parse/tools/font-codegen-silk.
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 import font_data { FontData }
-import read { ReadError, FontRead, FontReadAt, ComputeSize, Format, computeSize, readAtWithArgs }
+import read { ReadError, FontRead, FontReadAt, ComputeSize, computeSize }
 import table_provider { TopLevelTable }
-import array { ScalarArray, ComputedArray, VarLenArray }
-import offset { resolve, resolveWithArgs, resolveNullableWithArgs }
-import offset_array { ArrayOfOffsets, ArrayOfNullableOffsets }
-import read_args { ReadArgs2, ReadArgs3 }
+import array { ComputedArray }
+import offset { resolveWithArgs }
 import table_ref { ByteRange, MinByteRange }
-import generated_support { scalarOr, recordArray, varLenArray, varLenBytes, signedCount }
-import font_types.lib {
-  Scalar,
-  FixedSize,
-  rawByteLen,
-  readScalar,
-  writeScalar,
-  Tag,
-  Fixed,
-  F2Dot14,
-  F4Dot12,
-  F6Dot10,
-  FWord,
-  UfWord,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
-  GlyphId,
-  GlyphId16,
-  GlyphId24,
-  NameId,
-  Offset16,
-  Offset24,
-  Offset32,
-  Nullable
-}
+import generated_support { scalarOr, recordArray }
+import font_types.lib { FixedSize, rawByteLen, Tag, MajorMinor, NameId, Offset32 }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.core.ownership { Copy }
-import silk.core.equal { Equal }
-import silk.core.order { Order, Ordering }
-import silk.text.format { Debug, Formatter }
-import silk.io.writer { Writer, WriterError }
-import silk.core.ops { BitAnd, BitOr, BitXor, Not, Subtract }
 import silk.num.usize
 import silk.num.u8
 import silk.num.u16
-import silk.num.u32
-import silk.num.u64
-import silk.num.i16
-import silk.num.i32
 
 /// The [feature name](https://developer.apple.com/fonts/TrueType-Reference-Manual/RM06/Chap6feat.html) table.
 pub struct Feat<'a> {
@@ -82,7 +45,6 @@ impl<'a> Feat<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[0].end = end
-    let versionValue = scalarOr<MajorMinor>(data, ranges[0].start, MajorMinor.new(0, 0))
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
@@ -90,11 +52,9 @@ impl<'a> Feat<'a> {
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let reserved1Value = scalarOr<u16>(data, ranges[2].start, 0)
     ranges[3].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[3].end = end
-    let reserved2Value = scalarOr<u32>(data, ranges[3].start, 0)
     ranges[4].start = end
     end = usize.saturatingAdd(end, usize.saturatingMultiply(u16.toUsize(featureNameCountValue), 12))
     ranges[4].end = end
@@ -114,7 +74,7 @@ impl<'a> Feat<'a> {
   pub fn version(self: &Self) -> MajorMinor {
     return match move FontData<'a>.readAt<MajorMinor>(&self._fontData, self._fieldRanges[0].start) {
       Result<MajorMinor, ReadError>.Success { value } => value
-      Result<MajorMinor, ReadError>.Failure { error } => MajorMinor.new(0, 0)
+      Result<MajorMinor, ReadError>.Failure { .. } => MajorMinor.new(0, 0)
     }
   }
 
@@ -126,7 +86,7 @@ impl<'a> Feat<'a> {
   pub fn featureNameCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[1].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -150,7 +110,7 @@ impl<'a> Feat<'a> {
       self._fieldRanges[4].end,
     ) {
       Result<ComputedArray<'a, (), FeatureName<'a>>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, (), FeatureName<'a>>, ReadError>.Failure { error } => ComputedArray<
+      Result<ComputedArray<'a, (), FeatureName<'a>>, ReadError>.Failure { .. } => ComputedArray<
         'a,
         (),
         FeatureName<'a>
@@ -212,7 +172,7 @@ impl<'a> FeatureName<'a> {
   pub fn feature(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 0)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -220,7 +180,7 @@ impl<'a> FeatureName<'a> {
   pub fn nSettings(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 2)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -230,7 +190,7 @@ impl<'a> FeatureName<'a> {
   pub fn settingTableOffset(self: &Self) -> Offset32 {
     return match move FontData<'a>.readAt<Offset32>(&self._fontData, (self.position + 4)) {
       Result<Offset32, ReadError>.Success { value } => value
-      Result<Offset32, ReadError>.Failure { error } => Offset32.new(0)
+      Result<Offset32, ReadError>.Failure { .. } => Offset32.new(0)
     }
   }
 
@@ -247,7 +207,7 @@ impl<'a> FeatureName<'a> {
   pub fn featureFlags(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 8)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -255,7 +215,7 @@ impl<'a> FeatureName<'a> {
   pub fn nameIndex(self: &Self) -> NameId {
     return match move FontData<'a>.readAt<NameId>(&self._fontData, (self.position + 10)) {
       Result<NameId, ReadError>.Success { value } => value
-      Result<NameId, ReadError>.Failure { error } => NameId.default()
+      Result<NameId, ReadError>.Failure { .. } => NameId.default()
     }
   }
 }
@@ -329,7 +289,7 @@ impl<'a> SettingNameArray<'a> {
       self._fieldRanges[0].end,
     ) {
       Result<ComputedArray<'a, (), SettingName<'a>>, ReadError>.Success { value } => value
-      Result<ComputedArray<'a, (), SettingName<'a>>, ReadError>.Failure { error } => ComputedArray<
+      Result<ComputedArray<'a, (), SettingName<'a>>, ReadError>.Failure { .. } => ComputedArray<
         'a,
         (),
         SettingName<'a>
@@ -385,7 +345,7 @@ impl<'a> SettingName<'a> {
   pub fn setting(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 0)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -393,7 +353,7 @@ impl<'a> SettingName<'a> {
   pub fn nameIndex(self: &Self) -> NameId {
     return match move FontData<'a>.readAt<NameId>(&self._fontData, (self.position + 2)) {
       Result<NameId, ReadError>.Success { value } => value
-      Result<NameId, ReadError>.Failure { error } => NameId.default()
+      Result<NameId, ReadError>.Failure { .. } => NameId.default()
     }
   }
 }

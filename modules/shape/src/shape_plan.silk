@@ -1,6 +1,6 @@
 //! Reusable lookup plans and keys for application-owned caches.
 import plan { OtPlan }
-import font { ConfiguredShaper, FontFuncs, Shaper, table }
+import font { ConfiguredShaper, FontFuncs }
 import buffer { Buffer }
 import direction { Direction }
 import feature { Feature }

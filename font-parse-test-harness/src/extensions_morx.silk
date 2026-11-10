@@ -7,11 +7,9 @@ import read_fonts.tables.morx {
   SubtableKind,
   SubtableParts,
   ContextualSubtable,
-  LigatureSubtable
 }
 import read_fonts.tables.maxp { SelectedMaxp }
-import read_fonts.tables.aat { TypedLookup, LookupU16 }
-import font_types.lib { GlyphId16 }
+import read_fonts.tables.aat { LookupU16 }
 import extensions_aat_common { dumpExtendedState, dumpArray, dumpGlyphs, dumpLookupU16 }
 import dump_support { DumpPath, scalar, readError, absent }
 import silk.core.result { Result }
@@ -114,7 +112,7 @@ effect fn dumpSubtable<'a>(path: &mut DumpPath, subtable: Subtable<'a>, count: u
       DumpPath.pop(&mut path)
       DumpPath.push(&mut path, "fromParts")
       match move SubtableKind<'a>.fromParts(data, &parts) {
-        Result<SubtableKind<'a>, ReadError>.Success { value } => run scalar(&path, "ok")
+        Result<SubtableKind<'a>, ReadError>.Success { .. } => run scalar(&path, "ok")
         Result<SubtableKind<'a>, ReadError>.Failure { error } => run readError(&path, error)
       }
       DumpPath.pop(&mut path)

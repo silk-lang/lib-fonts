@@ -28,7 +28,7 @@ impl<T> Maybe<T> {
 
   pub fn present(self: &Self) -> bool {
     return match &self.* {
-      Maybe<T>.Some { value } => true
+      Maybe<T>.Some { .. } => true
       _ => false
     }
   }

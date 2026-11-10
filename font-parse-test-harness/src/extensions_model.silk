@@ -33,7 +33,7 @@ import read_fonts.model.metrics {
 import read_fonts.model.glyph { GlyphSource, GlyphSourceOrder }
 import read_fonts.tables.fvar { Fvar, VariationAxisRecord }
 import read_fonts.tables.cmap { CmapMapping }
-import read_fonts.lib { FontData, ReadError, ComputedArray }
+import read_fonts.lib { ReadError, ComputedArray }
 import font_types.lib { GlyphId, F48Dot16, F26Dot6, F2Dot14, Tag }
 import dump_support { DumpPath, DumpValue, scalar, absent, bytes }
 import silk.io.writer { Writer, WriterError }

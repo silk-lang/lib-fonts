@@ -223,8 +223,8 @@ impl<'a> GlyphNameMap<'a> {
 
   fn cffString(self: &Self, sid: Sid) -> Option<&'a [u8]> {
     return match &self.nameSource {
-      NameSource<'a>.SfntCff { cff, charset } => Cff.string(&cff, sid)
-      NameSource<'a>.StandaloneCff { cff, charset } => CffFontRef.string(&cff, sid)
+      NameSource<'a>.SfntCff { cff, .. } => Cff.string(&cff, sid)
+      NameSource<'a>.StandaloneCff { cff, .. } => CffFontRef.string(&cff, sid)
       _ => Option<&'a [u8]>.None
     }
   }
@@ -243,10 +243,10 @@ impl<'a> GlyphNameMap<'a> {
         }
         source = NameIterSource<'a>.Post { names: names, pending: pending, present: present }
       }
-      NameSource<'a>.SfntCff { cff, charset } => {
+      NameSource<'a>.SfntCff { charset, .. } => {
         source = NameIterSource<'a>.Cff { names: Charset.iter(&charset) }
       }
-      NameSource<'a>.StandaloneCff { cff, charset } => {
+      NameSource<'a>.StandaloneCff { charset, .. } => {
         source = NameIterSource<'a>.Cff { names: Charset.iter(&charset) }
       }
       NameSource<'a>.Synthesized => {}

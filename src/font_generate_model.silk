@@ -12,39 +12,83 @@ import silk.system.host_input { HostInput, HostInputError }
 import silk.text.string { String }
 import silk.core.option { Option }
 
-struct Fixture { name: string<'static>, file: string<'static> }
+struct Fixture {
+  name: string<'static>,
+  file: string<'static>
+}
 
-effect fn format12(values: &[usize]) -> Bytes ! OutOfMemoryError ? &mut Allocator {
-  let mut mappings = List<B.Mapping>.make() let mut i: usize = 0
-  while i < values.length { run List<B.Mapping>.append(&mut mappings, B.Mapping { code: values[i], glyph: values[i + 1] }) i = i + 2 }
+effect fn format12(values: &[usize]) -> Bytes
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let mut mappings = List<B.Mapping>.make()
+  let mut i: usize = 0
+  while i < values.length {
+    run List<B.Mapping>.append(&mut mappings, B.Mapping { code: values[i], glyph: values[i + 1] })
+    i = i + 2
+  }
   return run B.format12(List<B.Mapping>.asSlice(&mappings))
 }
-effect fn uvs(format: usize, defaults: &[usize], values: &[usize]) -> Bytes ! OutOfMemoryError ? &mut Allocator {
-  let mut mappings = List<B.Mapping>.make() let mut i: usize = 0
-  while i < values.length { run List<B.Mapping>.append(&mut mappings, B.Mapping { code: values[i], glyph: values[i + 1] }) i = i + 2 }
+
+effect fn uvs(format: usize, defaults: &[usize], values: &[usize]) -> Bytes
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let mut mappings = List<B.Mapping>.make()
+  let mut i: usize = 0
+  while i < values.length {
+    run List<B.Mapping>.append(&mut mappings, B.Mapping { code: values[i], glyph: values[i + 1] })
+    i = i + 2
+  }
   return run B.uvs(format, defaults, List<B.Mapping>.asSlice(&mappings))
 }
-effect fn oneCmap(platform: usize, encoding: usize, values: &[usize]) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+
+effect fn oneCmap(platform: usize, encoding: usize, values: &[usize]) -> Bytes
+  ! OutOfMemoryError
+  ? &mut Allocator {
   let record = B.CmapRecord { platform: platform, encoding: encoding, data: run format12(values) }
   return run B.cmap(&[move record])
 }
-effect fn font(cmap: &[u8], dmap: &[u8]) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+
+effect fn font(cmap: &[u8], dmap: &[u8]) -> Bytes
+  ! OutOfMemoryError
+  ? &mut Allocator {
   let mut tables = List<B.Table>.make()
-  if dmap.length != 0 { run List<B.Table>.append(&mut tables, B.Table { tag: "DMAP", data: run Bytes.copy(dmap) }) }
-  if cmap.length != 0 { run List<B.Table>.append(&mut tables, B.Table { tag: "cmap", data: run Bytes.copy(cmap) }) }
-  run List<B.Table>.append(&mut tables, B.Table { tag: "maxp", data: run Bytes.copy(b"\x00\x00\x50\x00\xff\xff") })
+  if dmap.length != 0 {
+    run List<B.Table>.append(&mut tables, B.Table { tag: "DMAP", data: run Bytes.copy(dmap) })
+  }
+  if cmap.length != 0 {
+    run List<B.Table>.append(&mut tables, B.Table { tag: "cmap", data: run Bytes.copy(cmap) })
+  }
+  run List<B.Table>.append(
+    &mut tables,
+    B.Table { tag: "maxp", data: run Bytes.copy(b"\x00\x00\x50\x00\xff\xff") },
+  )
   return run B.sfnt(List<B.Table>.asSlice(&tables))
 }
-effect fn addFont(out: &mut Bytes, name: string, cmap: &[u8], dmap: &[u8]) -> () ! OutOfMemoryError ? &mut Allocator {
-  let data = run font(cmap, dmap) run G.blob(&mut out, name, Bytes.asSlice(&data), true)
+
+effect fn addFont(out: &mut Bytes, name: string, cmap: &[u8], dmap: &[u8]) -> ()
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let data = run font(cmap, dmap)
+  run G.blob(&mut out, name, Bytes.asSlice(&data), true)
 }
-effect fn format0(platform: usize, encoding: usize, values: &[usize]) -> Bytes ! OutOfMemoryError ? &mut Allocator {
-  let mut data = Bytes.make() run B.words(&mut data, &[0, 262, 0]) run G.zeros(&mut data, 256)
-  let mut i: usize = 0 while i < values.length { G.patch(&mut data, 6 + values[i], values[i + 1], 1) i = i + 2 }
+
+effect fn format0(platform: usize, encoding: usize, values: &[usize]) -> Bytes
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let mut data = Bytes.make()
+  run B.words(&mut data, &[0, 262, 0])
+  run G.zeros(&mut data, 256)
+  let mut i: usize = 0
+  while i < values.length {
+    G.patch(&mut data, 6 + values[i], values[i + 1], 1)
+    i = i + 2
+  }
   return run B.cmap(&[B.CmapRecord { platform: platform, encoding: encoding, data: move data }])
 }
 
-pub effect fn model(root: &Path, check: bool) -> () ! TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError ? &mut HostInput | &mut Allocator | &mut ChildProcess | &mut FileSystem {
+pub effect fn model(root: &Path, check: bool) -> ()
+  ! TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError
+  ? &mut HostInput | &mut Allocator | &mut ChildProcess | &mut FileSystem {
   let fixtures = [
     Fixture { name: "hvarNames", file: "hvar_with_truncated_adv_index_map.ttf" },
     Fixture { name: "notoSansJp", file: "NotoSansJP-Regular.subset.otf" },
@@ -66,62 +110,179 @@ pub effect fn model(root: &Path, check: bool) -> () ! TaskError | ProcessError |
     Fixture { name: "tinos", file: "tinos_subset.ttf" },
   ]
   let mut out = Bytes.make()
-  run G.add(&mut out, "// THIS FILE IS AUTOGENERATED. DO NOT EDIT.\n// Copyright 2026 the Fontations Authors. Licensed under Apache-2.0 or MIT.\n")
+  run G.add(
+    &mut out,
+    "// THIS FILE IS AUTOGENERATED. DO NOT EDIT.\n// Copyright 2026 the Fontations Authors. Licensed under Apache-2.0 or MIT.\n",
+  )
   let base = run Path.resolve(root, "modules/parse/upstream/font-test-data/test_data/ttf")
   let mut fixtureIndex: usize = 0
-  while fixtureIndex < fixtures.length { let fixture = &fixtures[fixtureIndex] fixtureIndex = fixtureIndex + 1 let data = run G.read(&base, fixture.file) run G.blob(&mut out, fixture.name, Bytes.asSlice(&data), true) }
+  while fixtureIndex < fixtures.length {
+    let fixture = &fixtures[fixtureIndex]
+    fixtureIndex = fixtureIndex + 1
+    let data = run G.read(&base, fixture.file)
+    run G.blob(&mut out, fixture.name, Bytes.asSlice(&data), true)
+  }
   let source = run G.read(root, "modules/parse/upstream/font-test-data/src/lib.rs")
-  let post = run G.after(run G.after(run G.text(Bytes.asSlice(&source)), "pub mod post {"), "pub static SIMPLE:")
+  let post = run G.after(
+    run G.after(run G.text(Bytes.asSlice(&source)), "pub mod post {"),
+    "pub static SIMPLE:",
+  )
   let body = run G.before(run G.after(run G.after(post, "&["), "&["), "];")
-  let clean = run G.comments(body) let data = run G.numericBytes(run G.text(Bytes.asSlice(&clean)), "0[xX][0-9A-Fa-f]+|0[bB][01]+|[0-9]+", 1)
+  let clean = run G.comments(body)
+  let data = run G.numericBytes(
+    run G.text(Bytes.asSlice(&clean)),
+    "0[xX][0-9A-Fa-f]+|0[bB][01]+|[0-9]+",
+    1,
+  )
   run G.blob(&mut out, "postSimple", Bytes.asSlice(&data), true)
 
-  let base2 = run B.cmap(&[B.CmapRecord { platform: 3, encoding: 10, data: run format12(&[65, 1, 66, 2, 68, 5]) }, B.CmapRecord { platform: 0, encoding: 5, data: run uvs(14, &[66], &[65, 5, 67, 6]) }])
-  let delta = run B.cmap(&[B.CmapRecord { platform: 0, encoding: 4, data: run format12(&[65, 3, 66, 0, 67, 4]) }, B.CmapRecord { platform: 0, encoding: 5, data: run uvs(14, &[65], &[66, 4, 68, 7]) }])
-  let batchBase = run oneCmap(3, 10, &[65, 1, 66, 2, 67, 3]) let batchDelta = run oneCmap(3, 10, &[66, 9, 68, 10])
+  let base2 = run B.cmap(
+    &[
+      B.CmapRecord { platform: 3, encoding: 10, data: run format12(&[65, 1, 66, 2, 68, 5]) },
+      B.CmapRecord { platform: 0, encoding: 5, data: run uvs(14, &[66], &[65, 5, 67, 6]) },
+    ],
+  )
+  let delta = run B.cmap(
+    &[
+      B.CmapRecord { platform: 0, encoding: 4, data: run format12(&[65, 3, 66, 0, 67, 4]) },
+      B.CmapRecord { platform: 0, encoding: 5, data: run uvs(14, &[65], &[66, 4, 68, 7]) },
+    ],
+  )
+  let batchBase = run oneCmap(3, 10, &[65, 1, 66, 2, 67, 3])
+  let batchDelta = run oneCmap(3, 10, &[66, 9, 68, 10])
   run addFont(&mut out, "dmapBatch", Bytes.asSlice(&batchBase), Bytes.asSlice(&batchDelta))
   run addFont(&mut out, "dmapMappings", Bytes.asSlice(&base2), Bytes.asSlice(&delta))
   run addFont(&mut out, "dmapOnly", b"", Bytes.asSlice(&delta))
-  let symbol = run oneCmap(3, 0, &[65, 0, 61505, 3]) run addFont(&mut out, "symbolNotdef", Bytes.asSlice(&symbol), b"")
-  let mac = run format0(1, 0, &[142, 3, 0, 5]) run addFont(&mut out, "macRoman", Bytes.asSlice(&mac), b"")
-  let unicode = run format0(3, 1, &[65, 3, 66, 4]) run addFont(&mut out, "unicodeFormat0", Bytes.asSlice(&unicode), b"")
-  let old = run uvs(14, &[], &[65, 2, 67, 3]) let new = run uvs(15, &[65], &[66, 70000, 68, 16777215])
-  let oldDelta = run B.cmap(&[B.CmapRecord { platform: 0, encoding: 5, data: run Bytes.copy(Bytes.asSlice(&old)) }])
+  let symbol = run oneCmap(3, 0, &[65, 0, 61505, 3])
+  run addFont(&mut out, "symbolNotdef", Bytes.asSlice(&symbol), b"")
+  let mac = run format0(1, 0, &[142, 3, 0, 5])
+  run addFont(&mut out, "macRoman", Bytes.asSlice(&mac), b"")
+  let unicode = run format0(3, 1, &[65, 3, 66, 4])
+  run addFont(&mut out, "unicodeFormat0", Bytes.asSlice(&unicode), b"")
+  let old = run uvs(14, &[], &[65, 2, 67, 3])
+  let new = run uvs(15, &[65], &[66, 70000, 68, 16777215])
+  let oldDelta = run B.cmap(
+    &[B.CmapRecord { platform: 0, encoding: 5, data: run Bytes.copy(Bytes.asSlice(&old)) }],
+  )
   let mut reverse: usize = 0
   while reverse < 2 {
     let mut records = List<B.CmapRecord>.make()
-    run List<B.CmapRecord>.append(&mut records, B.CmapRecord { platform: 3, encoding: 10, data: run format12(&[65, 1]) })
+    run List<B.CmapRecord>.append(
+      &mut records,
+      B.CmapRecord { platform: 3, encoding: 10, data: run format12(&[65, 1]) },
+    )
     if reverse == 0 {
-      run List<B.CmapRecord>.append(&mut records, B.CmapRecord { platform: 0, encoding: 5, data: run Bytes.copy(Bytes.asSlice(&old)) })
-      run List<B.CmapRecord>.append(&mut records, B.CmapRecord { platform: 0, encoding: 5, data: run Bytes.copy(Bytes.asSlice(&new)) })
+      run List<B.CmapRecord>.append(
+        &mut records,
+        B.CmapRecord { platform: 0, encoding: 5, data: run Bytes.copy(Bytes.asSlice(&old)) },
+      )
+      run List<B.CmapRecord>.append(
+        &mut records,
+        B.CmapRecord { platform: 0, encoding: 5, data: run Bytes.copy(Bytes.asSlice(&new)) },
+      )
     } else {
-      run List<B.CmapRecord>.append(&mut records, B.CmapRecord { platform: 0, encoding: 5, data: run Bytes.copy(Bytes.asSlice(&new)) })
-      run List<B.CmapRecord>.append(&mut records, B.CmapRecord { platform: 0, encoding: 5, data: run Bytes.copy(Bytes.asSlice(&old)) })
+      run List<B.CmapRecord>.append(
+        &mut records,
+        B.CmapRecord { platform: 0, encoding: 5, data: run Bytes.copy(Bytes.asSlice(&new)) },
+      )
+      run List<B.CmapRecord>.append(
+        &mut records,
+        B.CmapRecord { platform: 0, encoding: 5, data: run Bytes.copy(Bytes.asSlice(&old)) },
+      )
     }
     let cmap = run B.cmap(List<B.CmapRecord>.asSlice(&records))
-    let mut name = Bytes.make() run G.add(&mut name, "cmap15Order") run G.decimal(&mut name, reverse)
+    let mut name = Bytes.make()
+    run G.add(&mut name, "cmap15Order")
+    run G.decimal(&mut name, reverse)
     run addFont(&mut out, run G.text(Bytes.asSlice(&name)), Bytes.asSlice(&cmap), b"")
-    let mut name3 = Bytes.make() run G.add(&mut name3, "cmap15Delta") run G.decimal(&mut name3, reverse)
-    run addFont(&mut out, run G.text(Bytes.asSlice(&name3)), Bytes.asSlice(&cmap), Bytes.asSlice(&oldDelta))
+    let mut name3 = Bytes.make()
+    run G.add(&mut name3, "cmap15Delta")
+    run G.decimal(&mut name3, reverse)
+    run addFont(
+      &mut out,
+      run G.text(Bytes.asSlice(&name3)),
+      Bytes.asSlice(&cmap),
+      Bytes.asSlice(&oldDelta),
+    )
     reverse = reverse + 1
   }
-  let newDelta = run B.cmap(&[B.CmapRecord { platform: 0, encoding: 5, data: run Bytes.copy(Bytes.asSlice(&new)) }])
+  let newDelta = run B.cmap(
+    &[B.CmapRecord { platform: 0, encoding: 5, data: run Bytes.copy(Bytes.asSlice(&new)) }],
+  )
   run addFont(&mut out, "dmap15Only", b"", Bytes.asSlice(&newDelta))
-  let cargo = match move run HostInput.variableNamed("CARGO") { Option<Bytes>.Some { value } => move value _ => run Bytes.copy(b"cargo") }
-  run Task.exec(run G.text(Bytes.asSlice(&cargo)), &["build", "--quiet", "--locked", "--manifest-path", "modules/scripts/rust-font-dump/Cargo.toml", "--target-dir", "build/rust", "--bin", "model-fixtures"])
-  let kinds = ["glyf", "cff", "cff2", "bitmap-largest", "bitmap-12", "bitmap-64", "varc-cjk", "varc-static", "varc-conditionals", "varc-precision", "color-variable", "color-half", "color-moved", "color-static", "color-v0", "color-no-clip", "color-gradient", "orders-tinos", "orders-cff", "orders-cbdt", "orders-colr", "orders-varc", "orders-cantarell", "orders-cantarell650"] let mut kindIndex: usize = 0
+  let cargo = match move run HostInput.variableNamed("CARGO") {
+    Option<Bytes>.Some { value } => move value
+    _ => run Bytes.copy(b"cargo")
+  }
+  run Task.exec(
+    run G.text(Bytes.asSlice(&cargo)),
+    &[
+      "build",
+      "--quiet",
+      "--locked",
+      "--manifest-path",
+      "modules/scripts/rust-font-dump/Cargo.toml",
+      "--target-dir",
+      "build/rust",
+      "--bin",
+      "model-fixtures",
+    ],
+  )
+  let kinds = [
+    "glyf",
+    "cff",
+    "cff2",
+    "bitmap-largest",
+    "bitmap-12",
+    "bitmap-64",
+    "varc-cjk",
+    "varc-static",
+    "varc-conditionals",
+    "varc-precision",
+    "color-variable",
+    "color-half",
+    "color-moved",
+    "color-static",
+    "color-v0",
+    "color-no-clip",
+    "color-gradient",
+    "orders-tinos",
+    "orders-cff",
+    "orders-cbdt",
+    "orders-colr",
+    "orders-varc",
+    "orders-cantarell",
+    "orders-cantarell650",
+  ]
+  let mut kindIndex: usize = 0
   while kindIndex < kinds.length {
-    let kind = kinds[kindIndex] kindIndex = kindIndex + 1
+    let kind = kinds[kindIndex]
+    kindIndex = kindIndex + 1
     let data = run Process.capture(root, "build/rust/debug/model-fixtures", &[kind])
-    let mut width: usize = 36 if String.startsWith(kind, "orders-") { width = 40 }
-    run G.require(Bytes.length(&data) > 0 && Bytes.length(&data) % width == 0, "Malformed upstream model fixture records")
+    let mut width: usize = 36
+    if String.startsWith(kind, "orders-") {
+      width = 40
+    }
+    run G.require(
+      Bytes.length(&data) > 0 && Bytes.length(&data) % width == 0,
+      "Malformed upstream model fixture records",
+    )
     let mut name = Bytes.make()
-    let first = match move String.find(kind, "-") { Option<usize>.Some { value } => value _ => String.byteLength(kind) }
+    let first = match move String.find(kind, "-") {
+      Option<usize>.Some { value } => value
+      _ => String.byteLength(kind)
+    }
     run G.add(&mut name, String.slice(kind, 0, first))
-    if first < String.byteLength(kind) { let suffix = run G.camel(String.slice(kind, first + 1, String.byteLength(kind) - first - 1)) run Bytes.append(&mut name, Bytes.asSlice(&suffix)) }
-    run G.add(&mut name, "DrawnBounds") run G.blob(&mut out, run G.text(Bytes.asSlice(&name)), Bytes.asSlice(&data), true)
+    if first < String.byteLength(kind) {
+      let suffix = run G.camel(String.slice(kind, first + 1, String.byteLength(kind) - first - 1))
+      run Bytes.append(&mut name, Bytes.asSlice(&suffix))
+    }
+    run G.add(&mut name, "DrawnBounds")
+    run G.blob(&mut out, run G.text(Bytes.asSlice(&name)), Bytes.asSlice(&data), true)
   }
   run G.save(root, "modules/parse/src/generated_model_fixtures.silk", &out, check)
-  let mut message = Bytes.make() run G.decimal(&mut message, G.count(run G.text(Bytes.asSlice(&out)), "pub fn "))
-  run G.add(&mut message, " model fixtures") run G.report(check, run G.text(Bytes.asSlice(&message)))
+  let mut message = Bytes.make()
+  run G.decimal(&mut message, G.count(run G.text(Bytes.asSlice(&out)), "pub fn "))
+  run G.add(&mut message, " model fixtures")
+  run G.report(check, run G.text(Bytes.asSlice(&message)))
 }

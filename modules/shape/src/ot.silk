@@ -3,8 +3,8 @@ import silk.collections.slice { Slice }
 import trace
 import view { View, read16, offset, valueSize }
 import set_digest { SetDigest }
-import buffer { Buffer, Glyph, GlyphPosition }
-import font { ConfiguredShaper, FontFuncs, Shaper }
+import buffer { Buffer, Glyph }
+import font { ConfiguredShaper, FontFuncs }
 import plan {
   OtPlan,
   LookupStep,
@@ -262,7 +262,7 @@ pub effect fn apply<'a, 's, F: FontFuncs>(
       return
     }
   }
-  let length = Buffer.len(&buffer.*)
+  drop Buffer.len(&buffer.*)
   let maxLength = buffer.maxLength
   let mut context = Context {
     haveSavedInput: false,
@@ -4528,7 +4528,7 @@ fn resolveOffset(
 
 fn hasCoverage(table: View<'_>, glyph: u32) -> bool {
   return match move View.coverage(&table, glyph) {
-    Option<u32>.Some { value } => true
+    Option<u32>.Some { .. } => true
     _ => false
   }
 }

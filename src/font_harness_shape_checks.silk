@@ -19,13 +19,21 @@ import font_harness_random { Random }
 import font_shape_generate_tests as Cases
 
 type Errors = TaskError | FileError | HostInputError | OutOfMemoryError | WriterError
+
 import font_harness_shaping as Trace
+
 const upstream: string = "modules/shape/test-data/harfrust/harfrust"
 
 effect fn ignored(error: FileError | OutOfMemoryError) -> () {}
-effect fn cleanup(path: &Path) -> () ? &mut FileSystem | &mut Allocator { run Effect.catchAll(FileSystem.removeDirectoryRecursively(path), ignored) }
 
-pub effect fn splitOptions(text: string) -> List<String> ! TaskError | OutOfMemoryError ? &mut Allocator {
+effect fn cleanup(path: &Path) -> ()
+  ? &mut FileSystem | &mut Allocator {
+  run Effect.catchAll(FileSystem.removeDirectoryRecursively(path), ignored)
+}
+
+pub effect fn splitOptions(text: string) -> List<String>
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
   let bytes = String.utf8Bytes(text)
   let mut words = List<String>.make()
   let mut word = Bytes.make()
@@ -35,25 +43,44 @@ pub effect fn splitOptions(text: string) -> List<String> ! TaskError | OutOfMemo
   while at < bytes.length {
     let c = bytes[at]
     if quote == 0 && (c == 32 || c == 9 || c == 10 || c == 13) {
-      if active { run words.append(run Corpus.utf8(word.asSlice()))  word.clear()  active = false }
+      if active {
+        run words.append(run Corpus.utf8(word.asSlice()))
+        word.clear()
+        active = false
+      }
     } else if c == 92 && quote != 39 {
       at = at + 1
-      if at == bytes.length { run Task.abort("No escaped character") }
-      if quote == 34 && bytes[at] != 34 && bytes[at] != 92 { run word.append(b"\\") }
+      if at == bytes.length {
+        run Task.abort("No escaped character")
+      }
+      if quote == 34 && bytes[at] != 34 && bytes[at] != 92 {
+        run word.append(b"\\")
+      }
       run word.append(Slice.view<u8>(bytes, at, 1))
       active = true
-    } else if c == quote && quote != 0 { quote = 0 }
-    else if quote == 0 && (c == 34 || c == 39) { quote = c  active = true }
-    else { run word.append(Slice.view<u8>(bytes, at, 1))  active = true }
+    } else if c == quote && quote != 0 {
+      quote = 0
+    } else if quote == 0 && (c == 34 || c == 39) {
+      quote = c
+      active = true
+    } else {
+      run word.append(Slice.view<u8>(bytes, at, 1))
+      active = true
+    }
     at = at + 1
   }
-  if quote != 0 { run Task.abort("No closing quotation") }
-  if active { run words.append(run Corpus.utf8(word.asSlice())) }
+  if quote != 0 {
+    run Task.abort("No closing quotation")
+  }
+  if active {
+    run words.append(run Corpus.utf8(word.asSlice()))
+  }
   return move words
 }
 
 effect fn comparisons(silk: string, rust: string, filter: string, directory: &Path) -> ()
-  ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  ! Errors
+  ? &mut HostInput | &mut Allocator | &mut FileSystem {
   let root = run Task.root()
   let cases = run Cases.shapingCases(&root)
   let fontRoot = run Path.join(&root, upstream)
@@ -78,12 +105,23 @@ effect fn comparisons(silk: string, rust: string, filter: string, directory: &Pa
       run args.append(String.view(&option))
       let options = words.asSlice()
       let mut k: usize = 0
-      while k < options.length { run args.append(String.view(&options[k]))  k = k + 1 }
-      let mut reference = run Process.execute(rust, &["--case", String.view(&font), String.view(&textName), String.view(&row.options)], 30.0, false)
+      while k < options.length {
+        run args.append(String.view(&options[k]))
+        k = k + 1
+      }
+      let mut reference = run Process.execute(
+        rust,
+        &["--case", String.view(&font), String.view(&textName), String.view(&row.options)],
+        30.0,
+        false,
+      )
       let mut port = run Process.execute(silk, args.asSlice(), 30.0, false)
-      if reference.timedOut || port.timedOut { run Task.abort("shaping comparison timed out") }
+      if reference.timedOut || port.timedOut {
+        run Task.abort("shaping comparison timed out")
+      }
       let leftBytes = run reference.output.readAll()
       let rightBytes = run port.output.readAll()
+
       // text=True rejects invalid UTF-8 independently of the process exit code.
       let left = run Corpus.utf8(leftBytes.asSlice())
       let right = run Corpus.utf8(rightBytes.asSlice())
@@ -91,20 +129,45 @@ effect fn comparisons(silk: string, rust: string, filter: string, directory: &Pa
       let b = Process.trim(String.utf8Bytes(String.view(&right)))
       checked = checked + 1
       if reference.code != 0 || port.code != 0 || !Process.equal(a, b) {
-        let alen = if a.length > 160 { 160 } else { a.length }
-        let blen = if b.length > 160 { 160 } else { b.length }
-        run Format.format("FAIL {name}: Rust {rust:?} ({rn} bytes), Silk {silk:?} ({sn} bytes)\n", &.{ name: String.view(&row.name), rust: Slice.view<u8>(a, 0, alen), silk: Slice.view<u8>(b, 0, blen), rn: leftBytes.length(), sn: rightBytes.length() }) |> Effect.provideMut<Writer>(&mut writer)
+        let alen = if a.length > 160 {
+          160
+        } else {
+          a.length
+        }
+        let blen = if b.length > 160 {
+          160
+        } else {
+          b.length
+        }
+        run Format.format(
+          "FAIL {name}: Rust {rust:?} ({rn} bytes), Silk {silk:?} ({sn} bytes)\n",
+          &.{
+            name: String.view(&row.name),
+            rust: Slice.view<u8>(a, 0, alen),
+            silk: Slice.view<u8>(b, 0, blen),
+            rn: leftBytes.length(),
+            sn: rightBytes.length(),
+          },
+        )
+          |> Effect.provideMut<Writer>(&mut writer)
         failed = failed + 1
       }
     }
     at = at + 1
   }
-  run Format.format("{checked} comparisons, {failed} differences\n", &.{ checked: checked, failed: failed }) |> Effect.provideMut<Writer>(&mut writer)
-  if failed != 0 { run Task.abort("shaping comparisons failed") }
+  run Format.format(
+    "{checked} comparisons, {failed} differences\n",
+    &.{ checked: checked, failed: failed },
+  )
+    |> Effect.provideMut<Writer>(&mut writer)
+  if failed != 0 {
+    run Task.abort("shaping comparisons failed")
+  }
 }
 
 pub effect fn compareShaping(silk: string, rust: string, filter: string) -> ()
-  ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  ! Errors
+  ? &mut HostInput | &mut Allocator | &mut FileSystem {
   let parent = run Path.make("/tmp")
   let directory = run FileSystem.createTemporaryDirectory(&parent, b"silk-shaping-diff-")
   run Effect.ensuring(comparisons(silk, rust, filter, &directory), cleanup(&directory))
@@ -113,37 +176,67 @@ pub effect fn compareShaping(silk: string, rust: string, filter: string) -> ()
 fn be(bytes: &[u8], start: usize, length: usize) -> usize {
   let mut result: usize = 0
   let mut at = start
-  while at < start + length && at < bytes.length { result = result * 256 + u8.toUsize(bytes[at])  at = at + 1 }
+  while at < start + length && at < bytes.length {
+    result = result * 256 + u8.toUsize(bytes[at])
+    at = at + 1
+  }
   return result
 }
 
 effect fn collectFonts(directory: &Path, result: &mut List<String>) -> ()
-  ! TaskError | FileError | OutOfMemoryError ? &mut Allocator | &mut FileSystem {
+  ! TaskError | FileError | OutOfMemoryError
+  ? &mut Allocator | &mut FileSystem {
   let listing = run FileSystem.listDirectory(directory)
   let entries = listing.asSlice()
   let mut at: usize = 0
   while at < entries.length {
-    if entries[at].kind.code == 1 { run collectFonts(&entries[at].path, &mut result) }
-    else {
+    if entries[at].kind.code == 1 {
+      run collectFonts(&entries[at].path, &mut result)
+    } else {
       let name = run Corpus.pathText(&entries[at].path)
       let text = String.view(&name)
-      if String.endsWith(text, ".ttf") || String.endsWith(text, ".otf") { run result.append(move name) }
+      if String.endsWith(text, ".ttf") || String.endsWith(text, ".otf") {
+        run result.append(move name)
+      }
     }
     at = at + 1
   }
 }
 
-effect fn malformedCases(binary: string, perFont: usize, allFonts: bool, timeout: f64, failures: string, directory: &Path) -> ()
-  ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+effect fn malformedCases(
+  binary: string,
+  perFont: usize,
+  allFonts: bool,
+  timeout: f64,
+  failures: string,
+  directory: &Path,
+) -> ()
+  ! Errors
+  ? &mut HostInput | &mut Allocator | &mut FileSystem {
   let root = run Task.root()
   let fontRoot = run Path.join(&root, upstream)
-  let selected = ["benches/fonts/Roboto-Regular.ttf", "benches/fonts/NotoNastaliqUrdu-Regular.ttf", "benches/fonts/NotoSansDevanagari-Regular.ttf", "benches/fonts/SourceSerifVariable-Roman.ttf", "tests/fonts/text-rendering-tests/AdobeVFPrototype-Subset.otf", "tests/fonts/text-rendering-tests/TestAATMort.ttf", "tests/fonts/text-rendering-tests/TestAATMorx.ttf", "tests/fonts/text-rendering-tests/TestKERNOne.otf"]
+  let selected = [
+    "benches/fonts/Roboto-Regular.ttf",
+    "benches/fonts/NotoNastaliqUrdu-Regular.ttf",
+    "benches/fonts/NotoSansDevanagari-Regular.ttf",
+    "benches/fonts/SourceSerifVariable-Roman.ttf",
+    "tests/fonts/text-rendering-tests/AdobeVFPrototype-Subset.otf",
+    "tests/fonts/text-rendering-tests/TestAATMort.ttf",
+    "tests/fonts/text-rendering-tests/TestAATMorx.ttf",
+    "tests/fonts/text-rendering-tests/TestKERNOne.otf",
+  ]
   let texts = ["áoffice AV", "لاّ", "क्ष", "ABCEFGXuT"]
   let mut fonts = List<String>.make()
-  if allFonts { run collectFonts(&fontRoot, &mut fonts)  Corpus.sortStrings(fonts.asMutSlice()) }
-  else {
+  if allFonts {
+    run collectFonts(&fontRoot, &mut fonts)
+    Corpus.sortStrings(fonts.asMutSlice())
+  } else {
     let mut at: usize = 0
-    while at < selected.length { let path = run Path.join(&fontRoot, selected[at])  run fonts.append(run Corpus.pathText(&path))  at = at + 1 }
+    while at < selected.length {
+      let path = run Path.join(&fontRoot, selected[at])
+      run fonts.append(run Corpus.pathText(&path))
+      at = at + 1
+    }
   }
   let target = run Path.join(directory, "font.ttf")
   let targetName = run Corpus.pathText(&target)
@@ -159,21 +252,43 @@ effect fn malformedCases(binary: string, perFont: usize, allFonts: bool, timeout
     run offsets.append(0)
     if bytes.length >= 12 {
       let mut tables = be(bytes, 4, 2)
-      if tables > (bytes.length - 12) / 16 { tables = (bytes.length - 12) / 16 }
+      if tables > (bytes.length - 12) / 16 {
+        tables = (bytes.length - 12) / 16
+      }
       let mut index: usize = 0
-      while index < tables { let start = be(bytes, 20 + index * 16, 4)  if start < bytes.length { run offsets.append(start) }  index = index + 1 }
+      while index < tables {
+        let start = be(bytes, 20 + index * 16, 4)
+        if start < bytes.length {
+          run offsets.append(start)
+        }
+        index = index + 1
+      }
     }
     let mut index: usize = 0
     while index < 7 + perFont {
-      let mut changed = if index == 0 { Bytes.make() }
-        else if index == 1 { run Bytes.copy(b"\x00") }
-        else if index == 2 { run Bytes.copy(b"OTTO") }
-        else if index == 3 { run Bytes.copy(b"ttcf") }
-        else if index < 7 {
-          let mut length = if index == 4 { 12 } else if index == 5 { 64 } else { bytes.length / 2 }
-          if length > bytes.length { length = bytes.length }
-          run Bytes.copy(Slice.view<u8>(bytes, 0, length))
-        } else { run Bytes.copy(bytes) }
+      let mut changed = if index == 0 {
+        Bytes.make()
+      } else if index == 1 {
+        run Bytes.copy(b"\x00")
+      } else if index == 2 {
+        run Bytes.copy(b"OTTO")
+      } else if index == 3 {
+        run Bytes.copy(b"ttcf")
+      } else if index < 7 {
+        let mut length = if index == 4 {
+          12
+        } else if index == 5 {
+          64
+        } else {
+          bytes.length / 2
+        }
+        if length > bytes.length {
+          length = bytes.length
+        }
+        run Bytes.copy(Slice.view<u8>(bytes, 0, length))
+      } else {
+        run Bytes.copy(bytes)
+      }
       if index >= 7 {
         let mutation = index - 7
         let mut start: usize = 0
@@ -181,16 +296,26 @@ effect fn malformedCases(binary: string, perFont: usize, allFonts: bool, timeout
         if mutation % 2 == 1 {
           let choices = offsets.asSlice()
           start = choices[random.below(choices.length)]
-          if end > start + 32 { end = start + 32 }
+          if end > start + 32 {
+            end = start + 32
+          }
         }
-        if end <= start { run Task.abort("cannot mutate an empty shaping seed") }
+        if end <= start {
+          run Task.abort("cannot mutate an empty shaping seed")
+        }
         let view = changed.asMutSlice()
         let mut n: usize = 0
         while n < 8 {
           let position = start + random.below(end - start)
           let arbitrary = usize.toU8(random.below(256))
           let choice = random.below(3)
-          view[position] = if choice == 0 { 0 } else if choice == 1 { 255 } else { arbitrary }
+          view[position] = if choice == 0 {
+            0
+          } else if choice == 1 {
+            255
+          } else {
+            arbitrary
+          }
           n = n + 1
         }
       }
@@ -200,11 +325,20 @@ effect fn malformedCases(binary: string, perFont: usize, allFonts: bool, timeout
       if result.timedOut || (result.code != 0 && result.code != 2) {
         let destination = run Corpus.resolve(failures)
         run FileSystem.createDirectoriesRecursively(&destination)
-        let mut stem = run String.copy(match Path.name(&path) { Option<string>.Some { value } => value Option<string>.None => "font" })
+        let mut stem = run String.copy(
+          match Path.name(&path) {
+            Option<string>.Some { value } => value
+            Option<string>.None => "font"
+          },
+        )
         let stemBytes = String.utf8Bytes(String.view(&stem))
         let mut dot = stemBytes.length
-        while dot > 0 && stemBytes[dot - 1] != 46 { dot = dot - 1 }
-        if dot > 0 { stem = run Corpus.utf8(Slice.view<u8>(stemBytes, 0, dot - 1)) }
+        while dot > 0 && stemBytes[dot - 1] != 46 {
+          dot = dot - 1
+        }
+        if dot > 0 {
+          stem = run Corpus.utf8(Slice.view<u8>(stemBytes, 0, dot - 1))
+        }
         let number = run Process.number(usize.toU64(index))
         run String.append(&mut stem, "-")
         run String.append(&mut stem, String.view(&number))
@@ -217,7 +351,13 @@ effect fn malformedCases(binary: string, perFont: usize, allFonts: bool, timeout
         let mut message = run Bytes.copy(String.utf8Bytes(String.view(&paths[at])))
         run message.append(b"\n")
         run Corpus.quote(&mut message, text)
-        run message.append(if result.timedOut { b"\ntimeout\n" } else { b"\nprocess failure\n" })
+        run message.append(
+          if result.timedOut {
+            b"\ntimeout\n"
+          } else {
+            b"\nprocess failure\n"
+          },
+        )
         run FileSystem.writeFile(&note, message.asSlice())
         run Task.abort("malformed shaping input failed; saved input and diagnostic")
       }
@@ -226,26 +366,62 @@ effect fn malformedCases(binary: string, perFont: usize, allFonts: bool, timeout
     }
     at = at + 1
   }
-  if paths.length == 0 { run Task.abort("shaping corpus is empty") }
+  if paths.length == 0 {
+    run Task.abort("shaping corpus is empty")
+  }
   let mut oversized = run String.copy("--font-size=")
   at = 0
-  while at < 200 { run String.append(&mut oversized, "9")  at = at + 1 }
-  let invalid = [String.view(&oversized), "--face-index=-1", "--cluster-level=9", "--features=kern[", "--unicodes-before=110000", "--font-size=no", "--font-ptem=NaN", "--variations=wght=no", "--face-index=4294967296"]
+  while at < 200 {
+    run String.append(&mut oversized, "9")
+    at = at + 1
+  }
+  let invalid = [
+    String.view(&oversized),
+    "--face-index=-1",
+    "--cluster-level=9",
+    "--features=kern[",
+    "--unicodes-before=110000",
+    "--font-size=no",
+    "--font-ptem=NaN",
+    "--variations=wght=no",
+    "--face-index=4294967296",
+  ]
   at = 0
   while at < invalid.length {
-    let result = run Process.execute(binary, &[String.view(&paths[0]), "a", invalid[at]], timeout, false)
-    if result.timedOut || result.code != 2 { run Task.abort("invalid shaping option was not rejected") }
+    let result = run Process.execute(
+      binary,
+      &[String.view(&paths[0]), "a", invalid[at]],
+      timeout,
+      false,
+    )
+    if result.timedOut || result.code != 2 {
+      run Task.abort("invalid shaping option was not rejected")
+    }
     at = at + 1
   }
   let mut writer = StdoutWriter.make()
-  run Format.format("{fonts} malformed fonts and {options} invalid options passed\n", &.{ fonts: checked, options: invalid.length }) |> Effect.provideMut<Writer>(&mut writer)
+  run Format.format(
+    "{fonts} malformed fonts and {options} invalid options passed\n",
+    &.{ fonts: checked, options: invalid.length },
+  )
+    |> Effect.provideMut<Writer>(&mut writer)
 }
 
-pub effect fn checkShapingMalformed(binary: string, perFont: usize, allFonts: bool, timeout: f64, failures: string) -> ()
-  ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+pub effect fn checkShapingMalformed(
+  binary: string,
+  perFont: usize,
+  allFonts: bool,
+  timeout: f64,
+  failures: string,
+) -> ()
+  ! Errors
+  ? &mut HostInput | &mut Allocator | &mut FileSystem {
   let temporary = run Path.make("/tmp")
   let directory = run FileSystem.createTemporaryDirectory(&temporary, b"silk-shaping-")
-  run Effect.ensuring(malformedCases(binary, perFont, allFonts, timeout, failures, &directory), cleanup(&directory))
+  run Effect.ensuring(
+    malformedCases(binary, perFont, allFonts, timeout, failures, &directory),
+    cleanup(&directory),
+  )
 }
 
 effect fn compiler(arguments: &[string]) -> ()
@@ -254,17 +430,35 @@ effect fn compiler(arguments: &[string]) -> ()
   if let Option<Bytes>.Some { value } = move run HostInput.variableNamed("SILK") {
     let name = run Corpus.utf8(value.asSlice())
     run Task.exec(String.view(&name), arguments)
-  } else { run Task.silk(arguments) }
+  } else {
+    run Task.silk(arguments)
+  }
 }
 
 pub effect fn checkShaping(noBuild: bool) -> ()
-  ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  ! Errors
+  ? &mut HostInput | &mut Allocator | &mut FileSystem {
   if !noBuild {
-    run compiler(&["test", "--release", "--manifest-path", "modules/shape/silk.toml", "--root", "src/tests.silk"])
+    run compiler(
+      &[
+        "test",
+        "--release",
+        "--manifest-path",
+        "modules/shape/silk.toml",
+        "--root",
+        "src/tests.silk",
+      ],
+    )
     run compiler(&["build", "--release", "--manifest-path", "font-shape-test-harness/silk.toml"])
   }
   run Task.exec(Trace.defaultShapeBinary, &["--suite", "modules/shape/tests/shaping.bin"])
   run Task.exec(Trace.defaultShapeBinary, &["--regressions"])
   run Trace.checkShapingTrace(Trace.defaultShapeBinary)
-  run checkShapingMalformed(Trace.defaultShapeBinary, 8, false, 10.0, "build/shaping-malformed-failures")
+  run checkShapingMalformed(
+    Trace.defaultShapeBinary,
+    8,
+    false,
+    10.0,
+    "build/shaping-malformed-failures",
+  )
 }

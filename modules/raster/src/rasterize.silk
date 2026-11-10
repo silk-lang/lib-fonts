@@ -7,9 +7,9 @@ import face { FontFace }
 import font_outline.vector_path { PathRecorder }
 import font_types.lib { GlyphId }
 import vector.path { Path }
-import vector.geometry { Affine, Point }
+import vector.geometry { Affine }
 import vector.geometry_error { GeometryError }
-import vector.strips { Rasterizer, Coverage, Strip, Fill, BAND, NONZERO }
+import vector.strips { Rasterizer, Coverage, BAND, NONZERO }
 import silk.geometry.affine { Affine2 }
 import silk.collections.list { List }
 import silk.collections.slice { Slice }
@@ -197,7 +197,7 @@ impl GlyphRasterizer {
         OutOfMemoryError problem => {
           fail move problem
         }
-        GeometryError problem => {
+        GeometryError _ => {
           return Outcome.Missing
         }
       }

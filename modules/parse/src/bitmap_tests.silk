@@ -10,17 +10,15 @@ import tables.bitmap {
   SbitLineMetrics,
   SmallGlyphMetrics,
   BigGlyphMetrics,
-  BdtComponent,
-  bitmapData
 }
-import tables.sbix { Sbix, Strike, GlyphData }
+import tables.sbix { Sbix }
 import tables.cbdt { Cbdt }
 import tables.cblc { Cblc }
 import tables.ebdt { Ebdt }
 import tables.eblc { Eblc }
 import generated_misc_table_fixtures as Fixtures
 import test_font_builder as Builder
-import font_types.lib { GlyphId, GlyphId16, Tag, Offset32 }
+import font_types.lib { GlyphId, GlyphId16, Offset32 }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.collections.slice { Slice }
@@ -53,7 +51,7 @@ effect fn present<T>(option: Option<T>) -> T
 
 fn failed<T>(result: Result<T, ReadError>) -> bool {
   return match move result {
-    Result<T, ReadError>.Failure { error } => true
+    Result<T, ReadError>.Failure { .. } => true
     _ => false
   }
 }

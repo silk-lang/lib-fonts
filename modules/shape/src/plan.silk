@@ -1,13 +1,13 @@
 //! Resolve script, language, feature ranges and variation substitutions once per run.
 import view { View, read16, offset, valueSize }
 import set_digest { SetDigest, subtableCoverage }
-import buffer { Buffer, Glyph }
+import buffer { Buffer }
 import direction { Direction }
 import feature { Feature }
 import arabic
 import complex
 import script { ScriptTags }
-import font { ConfiguredShaper, FontFuncs, Shaper }
+import font { ConfiguredShaper, FontFuncs }
 import read_fonts.tables.layout { FeatureVariations, LookupVariations }
 import read_fonts.tables.variations { ItemVariationStore, DeltaSetIndex }
 import read_fonts.model.error { Error }

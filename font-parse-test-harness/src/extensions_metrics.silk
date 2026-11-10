@@ -1,4 +1,4 @@
-import read_fonts.lib { ScalarArray, ComputedArray, ReadError }
+import read_fonts.lib { ScalarArray, ComputedArray }
 import read_fonts.tables.hmtx { Hmtx, HmtxExtended, LongMetric }
 import font_types.lib { GlyphId }
 import dump_support { DumpPath, scalar, absent }

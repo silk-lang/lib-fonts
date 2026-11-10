@@ -1,6 +1,6 @@
 // Deferred ports from upstream table_provider.rs and tables/vorg.rs.
 // Copyright 2026 the Fontations Authors. Licensed under Apache-2.0 or MIT.
-import lib { FontData, FontRef, ReadError, ComputedArray, ScalarArray, GlyfLoca }
+import lib { FontRef, ReadError, ComputedArray, ScalarArray, GlyfLoca }
 import tables.maxp { SelectedMaxp }
 import tables.hhea { SelectedHhea }
 import tables.vhea { SelectedVhea }
@@ -17,7 +17,6 @@ import silk.testing.testing { Testing, AssertionError }
 import silk.collections.slice { Slice }
 import silk.num.u32
 import silk.num.usize
-import silk.num.i32
 
 effect fn must<T>(value: Result<T, ReadError>) -> T
   ! AssertionError<'static> {
@@ -50,7 +49,7 @@ fn none<T>(value: Option<T>) -> bool {
 
 fn failed<T>(value: Result<T, ReadError>) -> bool {
   return match move value {
-    Result<T, ReadError>.Failure { error } => true
+    Result<T, ReadError>.Failure { .. } => true
     _ => false
   }
 }

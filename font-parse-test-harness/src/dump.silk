@@ -9,13 +9,10 @@ import extensions_morx
 import extensions_mort
 import extensions_kerx
 import extensions_kern
-import extensions_aat_common
 import extensions_aat_misc
-import generated_dump_aat
 import generated_dump_morx
 import generated_dump_mort
 import generated_dump_kerx
-import generated_dump_kern
 import generated_dump_trak
 import generated_dump_ankr
 import generated_dump_feat
@@ -47,8 +44,6 @@ import generated_dump_hhea
 import generated_dump_hmtx
 import generated_dump_name
 import generated_dump_os2
-import generated_dump_layout
-import generated_dump_variations
 import generated_dump_gdef
 import generated_dump_gsub
 import generated_dump_gpos
@@ -72,7 +67,6 @@ import generated_dump_cvar
 import generated_dump_cpal
 import generated_dump_svg
 import generated_dump_dsig
-import generated_dump_bitmap
 import generated_dump_sbix
 import generated_dump_cbdt
 import generated_dump_cblc
@@ -183,7 +177,7 @@ effect fn font<'a>(index: u32, font: FontRef<'a>, data: &'a [u8]) -> ()
         &.{ i: index, j: j, value: TableRecord.length(&record) },
       )
       let mut lookup: string<'static> = "missing"
-      if let Option<FontData<'a>>.Some { value } = move FontRef<'a>.tableData(&font, tag) {
+      if let Option<FontData<'a>>.Some { .. } = move FontRef<'a>.tableData(&font, tag) {
         lookup = "available"
       }
       run Format.format(
@@ -271,7 +265,7 @@ pub effect fn dump<'a>(data: &'a [u8]) -> ()
     }
   }
   match file {
-    FileRef.Font { font } => run text("file.kind=sfnt\nfile.fonts=1\n")
+    FileRef.Font { .. } => run text("file.kind=sfnt\nfile.fonts=1\n")
     FileRef.Collection { collection } => {
       run Format.format(
         "file.kind=ttc\nfile.fonts={value}\n",

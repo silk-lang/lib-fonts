@@ -17,46 +17,12 @@ import read_fonts.tables.math {
   GlyphPartRecord,
   PartFlags
 }
-import read_fonts.lib {
-  FontData,
-  FontRead,
-  ReadError,
-  ScalarArray,
-  ComputedArray,
-  VarLenArray,
-  VarLenIter,
-  ReadArgs2,
-  ReadArgs3,
-  ArrayOfOffsets,
-  ArrayOfNullableOffsets
-}
-import font_types.lib {
-  Fixed,
-  F2Dot14,
-  FWord,
-  UfWord,
-  Tag,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
-  GlyphId16,
-  GlyphId24,
-  GlyphId,
-  NameId,
-  Nullable,
-  Offset16,
-  Offset24,
-  Offset32
-}
-import dump_support { DumpPath, DumpTable, scalar, absent, readError, versionBits, bytes }
+import read_fonts.lib { FontData, ReadError, ScalarArray, ComputedArray, ArrayOfOffsets }
+import font_types.lib { FWord, UfWord, Tag, GlyphId16, Nullable, Offset16 }
+import dump_support { DumpPath, DumpTable, scalar, absent, readError }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.io.writer { Writer, WriterError }
-import silk.num.u8
-import silk.num.u16
-import silk.num.u32
 import silk.num.u64
 import read_fonts.tables.layout { CoverageTable, DeviceOrVariationIndex }
 
@@ -72,7 +38,6 @@ pub effect fn dumpMath<'a>(path: &mut DumpPath, value: Math<'a>) -> ()
   ) {
     return
   }
-  let base = Math<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "version")
     let fieldValue = Math<'a>.version(&value)
@@ -153,7 +118,6 @@ pub effect fn dumpMathValueRecord<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -658,7 +622,6 @@ pub effect fn dumpMathGlyphInfo<'a>(path: &mut DumpPath, value: MathGlyphInfo<'a
   ) {
     return
   }
-  let base = MathGlyphInfo<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "mathItalicsCorrectionInfoOffset")
     let fieldValue = MathGlyphInfo<'a>.mathItalicsCorrectionInfoOffset(&value)
@@ -968,7 +931,6 @@ pub effect fn dumpMathKernInfoRecord<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -1154,7 +1116,6 @@ pub effect fn dumpMathVariants<'a>(path: &mut DumpPath, value: MathVariants<'a>)
   ) {
     return
   }
-  let base = MathVariants<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "minConnectorOverlap")
     let fieldValue = MathVariants<'a>.minConnectorOverlap(&value)
@@ -1411,7 +1372,6 @@ pub effect fn dumpMathGlyphVariantRecord<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -1489,7 +1449,6 @@ pub effect fn dumpGlyphPartRecord<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return

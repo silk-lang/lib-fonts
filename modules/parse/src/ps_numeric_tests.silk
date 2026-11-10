@@ -1,6 +1,6 @@
 // Ports of all ps/num.rs and ps/transform.rs tests.
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
-import ps.num { parseInt, BcdComponents, DynamicFixed }
+import ps.num { parseInt, BcdComponents }
 import ps.transform { Transform, ScaledFontMatrix, isDegenerate, combineScaled }
 import font_data { FontData, Cursor }
 import font_types.lib { Fixed }

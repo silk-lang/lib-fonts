@@ -224,7 +224,7 @@ impl<'a, T> TupleVariationData<'a, T> {
       value
     } = move ActiveTupleVariationIter<'a, 'b, GlyphDelta>.next(&mut active) {
       if TupleVariation<'a, GlyphDelta>.hasDeltasForAllPoints(&value.variation) {
-        if let Result<(), ReadError>.Failure { error } = move TupleVariation<
+        if let Result<(), ReadError>.Failure { .. } = move TupleVariation<
           'a,
           GlyphDelta
         >.accumulateDenseDeltas<D>(&value.variation, &mut buffers.deltas, value.scalar) {
@@ -244,7 +244,7 @@ impl<'a, T> TupleVariationData<'a, T> {
           PointFlags.clearMarker(&mut flags[i], PointMarker.hasDelta())
           i = i + 1
         }
-        if let Result<(), ReadError>.Failure { error } = move TupleVariation<
+        if let Result<(), ReadError>.Failure { .. } = move TupleVariation<
           'a,
           GlyphDelta
         >.accumulateSparseDeltas<D>(&value.variation, &mut buffers.iup, &mut flags, value.scalar) {
@@ -300,7 +300,7 @@ impl<'a, T> TupleVariationData<'a, T> {
       value
     } = move ActiveTupleVariationIter<'a, 'b, GlyphDelta>.next(&mut active) {
       if TupleVariation<'a, GlyphDelta>.hasDeltasForAllPoints(&value.variation) {
-        if let Result<(), ReadError>.Failure { error } = move TupleVariation<
+        if let Result<(), ReadError>.Failure { .. } = move TupleVariation<
           'a,
           GlyphDelta
         >.accumulateDenseDeltas<D>(&value.variation, &mut deltas, value.scalar) {

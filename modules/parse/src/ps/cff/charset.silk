@@ -167,10 +167,10 @@ impl<'a> Charset<'a> {
     }
     match self.charsetKind {
       CharsetKind<'a>.Custom { value } => match value {
-        CustomCharset<'a>.Format1 { value: format } => {
+        CustomCharset<'a>.Format1 { .. } => {
           result.ranged = true
         }
-        CustomCharset<'a>.Format2 { value: format } => {
+        CustomCharset<'a>.Format2 { .. } => {
           result.ranged = true
         }
         _ => {}

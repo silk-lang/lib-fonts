@@ -854,7 +854,7 @@ impl<'a, 's, F> ConfiguredShaper<'a, 's, F> {
 impl<'a, 's, F> ConfiguredShaper<'a, 's, F> {
   pub fn hasGlyph(self: &Self, cp: u32) -> bool {
     return match move ConfiguredShaper.nominalGlyph(self, cp) {
-      Option<GlyphId>.Some { value } => true
+      Option<GlyphId>.Some { .. } => true
       _ => false
     }
   }

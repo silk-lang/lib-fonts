@@ -13,7 +13,7 @@ effect fn must<T>(result: Result<T, ReadError>) -> T
   ! AssertionError<'static> {
   return match move result {
     Result<T, ReadError>.Success { value } => move value
-    Result<T, ReadError>.Failure { error } => {
+    Result<T, ReadError>.Failure { .. } => {
       run Testing.expect(false, "table read succeeds")
       return Intrinsic.trap("unreachable after failed assertion")
     }
@@ -76,7 +76,7 @@ test effect fn generatedMinimumAndLazyOptionalFields() -> ()
   }
   run Testing.expect(absent, "truncated optional maxp field stays absent")
   let failed = match move Cmap0.read(FontData.new(b"\x00\x00\x01\x06\x00\x00")) {
-    Result<Cmap0, ReadError>.Failure { error } => true
+    Result<Cmap0, ReadError>.Failure { .. } => true
     _ => false
   }
   run Testing.expect(failed, "fixed-size array contributes to minimum")

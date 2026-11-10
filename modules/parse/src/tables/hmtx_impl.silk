@@ -13,7 +13,7 @@ fn advance<'a>(metrics: ComputedArray<'a, (), LongMetric<'a>>, glyph: GlyphId) -
     Result<LongMetric<'a>, ReadError>.Success { value } => Option<u16>.some(
       LongMetric<'a>.advance(&value),
     )
-    Result<LongMetric<'a>, ReadError>.Failure { error } => Option<u16>.None
+    Result<LongMetric<'a>, ReadError>.Failure { .. } => Option<u16>.None
   }
 }
 

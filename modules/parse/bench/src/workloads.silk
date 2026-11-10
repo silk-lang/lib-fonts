@@ -167,7 +167,7 @@ pub fn cff<'a>(font: &FontRef<'a>, onlySubfont: bool) -> u64 {
       continue
     }
     match move CffFontRef.draw(&outlines, &subfont, glyph, &coords, Option<f32>.None, &mut sink) {
-      Result<Option<f32>, Error>.Success { value } => {
+      Result<Option<f32>, Error>.Success { .. } => {
         sink.sum = u64.wrappingAdd(sink.sum, 1)
       }
       _ => {}

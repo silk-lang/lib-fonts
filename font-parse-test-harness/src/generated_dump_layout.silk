@@ -86,38 +86,25 @@ import read_fonts.lib {
   ReadError,
   ScalarArray,
   ComputedArray,
-  VarLenArray,
-  VarLenIter,
-  ReadArgs2,
-  ReadArgs3,
   ArrayOfOffsets,
   ArrayOfNullableOffsets
 }
 import font_types.lib {
-  Fixed,
   F2Dot14,
-  FWord,
-  UfWord,
   Tag,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
   Uint24,
-  Int24,
   GlyphId16,
   GlyphId24,
-  GlyphId,
   NameId,
   Nullable,
   Offset16,
   Offset24,
   Offset32
 }
-import dump_support { DumpPath, DumpTable, scalar, absent, readError, versionBits, bytes }
+import dump_support { DumpPath, DumpTable, scalar, absent, readError }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.io.writer { Writer, WriterError }
-import silk.num.u8
 import silk.num.u16
 import silk.num.u32
 import silk.num.u64
@@ -174,7 +161,6 @@ pub effect fn dumpScriptRecord<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -283,7 +269,6 @@ pub effect fn dumpLangSysRecord<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -421,7 +406,6 @@ pub effect fn dumpFeatureRecord<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -466,7 +450,6 @@ pub effect fn dumpFeature<'a>(path: &mut DumpPath, value: Feature<'a>) -> ()
   ) {
     return
   }
-  let base = Feature<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "featureParamsOffset")
     let fieldValue = Feature<'a>.featureParamsOffset(&value)
@@ -532,7 +515,6 @@ pub effect fn dumpLookupList<'a, T: FontRead<'a, ()> + DumpTable<'a>>(
   ) {
     return
   }
-  let base = LookupList<'a, T>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "lookupCount")
     let fieldValue = LookupList<'a, T>.lookupCount(&value)
@@ -597,7 +579,6 @@ pub effect fn dumpLookup<'a, T: FontRead<'a, ()> + DumpTable<'a>>(
   ) {
     return
   }
-  let base = Lookup<'a, T>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "lookupType")
     let fieldValue = Lookup<'a, T>.lookupType(&value)
@@ -681,7 +662,6 @@ pub effect fn dumpCoverageFormat1<'a>(path: &mut DumpPath, value: CoverageFormat
   ) {
     return
   }
-  let base = CoverageFormat1<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "coverageFormat")
     let fieldValue = CoverageFormat1<'a>.coverageFormat(&value)
@@ -775,7 +755,6 @@ pub effect fn dumpRangeRecord<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -803,7 +782,6 @@ pub effect fn dumpRangeRecord<'a>(
 pub effect fn dumpCoverageTable<'a>(path: &mut DumpPath, value: CoverageTable<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -848,7 +826,6 @@ pub effect fn dumpClassDefFormat1<'a>(path: &mut DumpPath, value: ClassDefFormat
   ) {
     return
   }
-  let base = ClassDefFormat1<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "classFormat")
     let fieldValue = ClassDefFormat1<'a>.classFormat(&value)
@@ -945,7 +922,6 @@ pub effect fn dumpClassRangeRecord<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -973,7 +949,6 @@ pub effect fn dumpClassRangeRecord<'a>(
 pub effect fn dumpClassDef<'a>(path: &mut DumpPath, value: ClassDef<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -1013,7 +988,6 @@ pub effect fn dumpSequenceLookupRecord<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -1047,7 +1021,6 @@ pub effect fn dumpSequenceContextFormat1<'a>(
   ) {
     return
   }
-  let base = SequenceContextFormat1<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = SequenceContextFormat1<'a>.format(&value)
@@ -1149,7 +1122,6 @@ pub effect fn dumpSequenceRuleSet<'a>(path: &mut DumpPath, value: SequenceRuleSe
   ) {
     return
   }
-  let base = SequenceRuleSet<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "seqRuleCount")
     let fieldValue = SequenceRuleSet<'a>.seqRuleCount(&value)
@@ -1285,7 +1257,6 @@ pub effect fn dumpSequenceContextFormat2<'a>(
   ) {
     return
   }
-  let base = SequenceContextFormat2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = SequenceContextFormat2<'a>.format(&value)
@@ -1412,7 +1383,6 @@ pub effect fn dumpClassSequenceRuleSet<'a>(
   ) {
     return
   }
-  let base = ClassSequenceRuleSet<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "classSeqRuleCount")
     let fieldValue = ClassSequenceRuleSet<'a>.classSeqRuleCount(&value)
@@ -1637,7 +1607,6 @@ pub effect fn dumpSequenceContextFormat3<'a>(
 pub effect fn dumpSequenceContext<'a>(path: &mut DumpPath, value: SequenceContext<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -1697,7 +1666,6 @@ pub effect fn dumpChainedSequenceContextFormat1<'a>(
   ) {
     return
   }
-  let base = ChainedSequenceContextFormat1<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = ChainedSequenceContextFormat1<'a>.format(&value)
@@ -1804,7 +1772,6 @@ pub effect fn dumpChainedSequenceRuleSet<'a>(
   ) {
     return
   }
-  let base = ChainedSequenceRuleSet<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "chainedSeqRuleCount")
     let fieldValue = ChainedSequenceRuleSet<'a>.chainedSeqRuleCount(&value)
@@ -1995,7 +1962,6 @@ pub effect fn dumpChainedSequenceContextFormat2<'a>(
   ) {
     return
   }
-  let base = ChainedSequenceContextFormat2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = ChainedSequenceContextFormat2<'a>.format(&value)
@@ -2164,7 +2130,6 @@ pub effect fn dumpChainedClassSequenceRuleSet<'a>(
   ) {
     return
   }
-  let base = ChainedClassSequenceRuleSet<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "chainedClassSeqRuleCount")
     let fieldValue = ChainedClassSequenceRuleSet<'a>.chainedClassSeqRuleCount(&value)
@@ -2547,7 +2512,6 @@ pub effect fn dumpChainedSequenceContext<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -2598,7 +2562,6 @@ pub effect fn dumpDevice<'a>(path: &mut DumpPath, value: Device<'a>) -> ()
   ) {
     return
   }
-  let base = Device<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "startSize")
     let fieldValue = Device<'a>.startSize(&value)
@@ -2648,7 +2611,6 @@ pub effect fn dumpVariationIndex<'a>(path: &mut DumpPath, value: VariationIndex<
   ) {
     return
   }
-  let base = VariationIndex<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "deltaSetOuterIndex")
     let fieldValue = VariationIndex<'a>.deltaSetOuterIndex(&value)
@@ -2675,7 +2637,6 @@ pub effect fn dumpDeviceOrVariationIndex<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -2797,7 +2758,6 @@ pub effect fn dumpFeatureVariationRecord<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -2863,7 +2823,6 @@ pub effect fn dumpLookupVariationRecord<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -2965,7 +2924,6 @@ pub effect fn dumpLookupConditionRecord<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -3029,7 +2987,6 @@ pub effect fn dumpLookupIndexList<'a>(path: &mut DumpPath, value: LookupIndexLis
   ) {
     return
   }
-  let base = LookupIndexList<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "lookupIndexCount")
     let fieldValue = LookupIndexList<'a>.lookupIndexCount(&value)
@@ -3067,7 +3024,6 @@ pub effect fn dumpConditionSet<'a>(path: &mut DumpPath, value: ConditionSet<'a>)
   ) {
     return
   }
-  let base = ConditionSet<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "conditionCount")
     let fieldValue = ConditionSet<'a>.conditionCount(&value)
@@ -3123,7 +3079,6 @@ pub effect fn dumpConditionSet<'a>(path: &mut DumpPath, value: ConditionSet<'a>)
 pub effect fn dumpCondition<'a>(path: &mut DumpPath, value: Condition<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -3174,7 +3129,6 @@ pub effect fn dumpConditionFormat1<'a>(path: &mut DumpPath, value: ConditionForm
   ) {
     return
   }
-  let base = ConditionFormat1<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = ConditionFormat1<'a>.format(&value)
@@ -3213,7 +3167,6 @@ pub effect fn dumpConditionFormat2<'a>(path: &mut DumpPath, value: ConditionForm
   ) {
     return
   }
-  let base = ConditionFormat2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = ConditionFormat2<'a>.format(&value)
@@ -3246,7 +3199,6 @@ pub effect fn dumpConditionFormat3<'a>(path: &mut DumpPath, value: ConditionForm
   ) {
     return
   }
-  let base = ConditionFormat3<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = ConditionFormat3<'a>.format(&value)
@@ -3317,7 +3269,6 @@ pub effect fn dumpConditionFormat4<'a>(path: &mut DumpPath, value: ConditionForm
   ) {
     return
   }
-  let base = ConditionFormat4<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = ConditionFormat4<'a>.format(&value)
@@ -3388,7 +3339,6 @@ pub effect fn dumpConditionFormat5<'a>(path: &mut DumpPath, value: ConditionForm
   ) {
     return
   }
-  let base = ConditionFormat5<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = ConditionFormat5<'a>.format(&value)
@@ -3483,7 +3433,6 @@ pub effect fn dumpFeatureTableSubstitutionRecord<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -3528,7 +3477,6 @@ pub effect fn dumpSizeParams<'a>(path: &mut DumpPath, value: SizeParams<'a>) -> 
   ) {
     return
   }
-  let base = SizeParams<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "designSize")
     let fieldValue = SizeParams<'a>.designSize(&value)
@@ -3573,7 +3521,6 @@ pub effect fn dumpStylisticSetParams<'a>(path: &mut DumpPath, value: StylisticSe
   ) {
     return
   }
-  let base = StylisticSetParams<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "version")
     let fieldValue = StylisticSetParams<'a>.version(&value)
@@ -3603,7 +3550,6 @@ pub effect fn dumpCharacterVariantParams<'a>(
   ) {
     return
   }
-  let base = CharacterVariantParams<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = CharacterVariantParams<'a>.format(&value)
@@ -3680,7 +3626,6 @@ pub effect fn dumpCoverageFormat3<'a>(path: &mut DumpPath, value: CoverageFormat
   ) {
     return
   }
-  let base = CoverageFormat3<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "coverageFormat")
     let fieldValue = CoverageFormat3<'a>.coverageFormat(&value)
@@ -3774,7 +3719,6 @@ pub effect fn dumpRangeRecord2<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -3811,7 +3755,6 @@ pub effect fn dumpClassDefFormat3<'a>(path: &mut DumpPath, value: ClassDefFormat
   ) {
     return
   }
-  let base = ClassDefFormat3<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "classFormat")
     let fieldValue = ClassDefFormat3<'a>.classFormat(&value)
@@ -3909,7 +3852,6 @@ pub effect fn dumpClassRangeRecord2<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -3949,7 +3891,6 @@ pub effect fn dumpSequenceContextFormat4<'a>(
   ) {
     return
   }
-  let base = SequenceContextFormat4<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = SequenceContextFormat4<'a>.format(&value)
@@ -4051,7 +3992,6 @@ pub effect fn dumpSequenceRuleSet2<'a>(path: &mut DumpPath, value: SequenceRuleS
   ) {
     return
   }
-  let base = SequenceRuleSet2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "seqRuleCount")
     let fieldValue = SequenceRuleSet2<'a>.seqRuleCount(&value)
@@ -4187,7 +4127,6 @@ pub effect fn dumpSequenceContextFormat5<'a>(
   ) {
     return
   }
-  let base = SequenceContextFormat5<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = SequenceContextFormat5<'a>.format(&value)
@@ -4314,7 +4253,6 @@ pub effect fn dumpClassSequenceRuleSet2<'a>(
   ) {
     return
   }
-  let base = ClassSequenceRuleSet2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "classSeqRuleCount")
     let fieldValue = ClassSequenceRuleSet2<'a>.classSeqRuleCount(&value)
@@ -4486,7 +4424,6 @@ pub effect fn dumpChainedSequenceContextFormat4<'a>(
   ) {
     return
   }
-  let base = ChainedSequenceContextFormat4<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = ChainedSequenceContextFormat4<'a>.format(&value)
@@ -4593,7 +4530,6 @@ pub effect fn dumpChainedSequenceRuleSet2<'a>(
   ) {
     return
   }
-  let base = ChainedSequenceRuleSet2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "chainedSeqRuleCount")
     let fieldValue = ChainedSequenceRuleSet2<'a>.chainedSeqRuleCount(&value)
@@ -4790,7 +4726,6 @@ pub effect fn dumpChainedSequenceContextFormat5<'a>(
   ) {
     return
   }
-  let base = ChainedSequenceContextFormat5<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = ChainedSequenceContextFormat5<'a>.format(&value)
@@ -4961,7 +4896,6 @@ pub effect fn dumpChainedClassSequenceRuleSet2<'a>(
   ) {
     return
   }
-  let base = ChainedClassSequenceRuleSet2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "chainedClassSeqRuleCount")
     let fieldValue = ChainedClassSequenceRuleSet2<'a>.chainedClassSeqRuleCount(&value)
@@ -5038,7 +4972,6 @@ pub effect fn dumpLookupList2<'a, T: FontRead<'a, ()> + DumpTable<'a>>(
   ) {
     return
   }
-  let base = LookupList2<'a, T>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "lookupCount")
     let fieldValue = LookupList2<'a, T>.lookupCount(&value)

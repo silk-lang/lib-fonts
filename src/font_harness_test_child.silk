@@ -14,19 +14,37 @@ import silk.num.usize
 
 // A real native subprocess for harness contract tests: no shell or interpreter.
 unsafe extern "C" fn sleep(seconds: u32) -> u32
+
 type Errors = HostInputError | FileError | OutOfMemoryError | WriterError
 
-effect fn sidecar(program: string, suffix: string) -> Path ! FileError | OutOfMemoryError ? &mut Allocator {
+effect fn sidecar(program: string, suffix: string) -> Path
+  ! FileError | OutOfMemoryError
+  ? &mut Allocator {
   let mut name = run String.copy(program)
   run String.append(&mut name, suffix)
   return run Path.make(String.view(&name))
 }
-effect fn child() -> i32 ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
-  let argument = match move run HostInput.argument(0) { Option<Bytes>.Some { value } => move value Option<Bytes>.None => { return 90 } }
-  let program = match move String.fromUtf8(argument.asSlice()) { Result<string, InvalidUtf8>.Success { value } => value Result<string, InvalidUtf8>.Failure { .. } => { return 90 } }
+
+effect fn child() -> i32
+  ! Errors
+  ? &mut HostInput | &mut Allocator | &mut FileSystem {
+  let argument = match move run HostInput.argument(0) {
+    Option<Bytes>.Some { value } => move value
+    Option<Bytes>.None => {
+      return 90
+    }
+  }
+  let program = match move String.fromUtf8(argument.asSlice()) {
+    Result<string, InvalidUtf8>.Success { value } => value
+    Result<string, InvalidUtf8>.Failure { .. } => {
+      return 90
+    }
+  }
   let controlPath = run sidecar(program, ".control")
   let control = run FileSystem.readFile(&controlPath)
-  if control.length() != 3 { return 90 }
+  if control.length() != 3 {
+    return 90
+  }
   let bytes = control.asSlice()
   let code = bytes[0]
   let delay = bytes[1]
@@ -37,28 +55,47 @@ effect fn child() -> i32 ! Errors ? &mut HostInput | &mut Allocator | &mut FileS
     let previous = run FileSystem.readFile(&counterPath)
     let bytes = previous.asSlice()
     let mut at: usize = 0
-    while at < bytes.length { count = count * 256 + u8.toUsize(bytes[at]) at = at + 1 }
+    while at < bytes.length {
+      count = count * 256 + u8.toUsize(bytes[at])
+      at = at + 1
+    }
   }
   count = count + 1
   let mut encoded: [u8; 8] = [0; 8]
   let mut value = count
   let mut at: usize = 8
-  while at > 0 { at = at - 1 encoded[at] = usize.toU8(value % 256) value = value / 256 }
+  while at > 0 {
+    at = at - 1
+    encoded[at] = usize.toU8(value % 256)
+    value = value / 256
+  }
   run FileSystem.writeFile(&counterPath, &encoded)
-  if delay > 0 { let _remaining = unsafe sleep(u8.toU32(delay)) }
+  if delay > 0 {
+    let _remaining = unsafe sleep(u8.toU32(delay))
+  }
   let outputPath = run sidecar(program, ".output")
   let output = run FileSystem.readFile(&outputPath)
   let mut stdout = StdoutWriter.make()
   run Writer.writeAll(output.asSlice()) |> Effect.provideMut<Writer>(&mut stdout)
-  if failAt > 0 && count == u8.toUsize(failAt) { return 1 }
+  if failAt > 0 && count == u8.toUsize(failAt) {
+    return 1
+  }
   return u8.toI32(code)
 }
-pub effect fn main() -> i32 ? &mut HostInput {
+
+pub effect fn main() -> i32
+  ? &mut HostInput {
   let mut allocator = Allocator.systemAllocatorProvider()
   let result = run Effect.result(withFiles()) |> Effect.provideMut<Allocator>(&mut allocator)
-  return match move result { Result<i32, Errors>.Success { value } => value Result<i32, Errors>.Failure { .. } => 90 }
+  return match move result {
+    Result<i32, Errors>.Success { value } => value
+    Result<i32, Errors>.Failure { .. } => 90
+  }
 }
-effect fn withFiles() -> i32 ! Errors ? &mut HostInput | &mut Allocator {
+
+effect fn withFiles() -> i32
+  ! Errors
+  ? &mut HostInput | &mut Allocator {
   let mut files = run MachineFileSystem.make()
   return run child() |> Effect.provideMut<FileSystem>(&mut files)
 }

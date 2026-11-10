@@ -210,7 +210,7 @@ impl LineCache {
     line.lastUsed = self.frameNumber
     line.live = true
     line.advance = 0
-    if let Result<(), ShapeError>.Success { value } = move shaped {
+    if let Result<(), ShapeError>.Success { .. } = move shaped {
       let infos = self.buffer.glyphInfos()
       let positions = self.buffer.glyphPositions()
       run line.glyphs.reserve(infos.len())

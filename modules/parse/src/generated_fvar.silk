@@ -2,55 +2,21 @@
 // Source: pinned resources/codegen_inputs; generator: modules/parse/tools/font-codegen-silk.
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 import font_data { FontData }
-import read { ReadError, FontRead, FontReadAt, ComputeSize, Format, computeSize, readAtWithArgs }
+import read { ReadError, FontRead, FontReadAt, ComputeSize, computeSize }
 import table_provider { TopLevelTable }
-import array { ScalarArray, ComputedArray, VarLenArray }
-import offset { resolve, resolveWithArgs, resolveNullableWithArgs }
-import offset_array { ArrayOfOffsets, ArrayOfNullableOffsets }
+import array { ComputedArray, VarLenArray }
+import offset { resolveWithArgs }
 import read_args { ReadArgs2, ReadArgs3 }
 import table_ref { ByteRange, MinByteRange }
-import generated_support { scalarOr, recordArray, varLenArray, varLenBytes, signedCount }
-import font_types.lib {
-  Scalar,
-  FixedSize,
-  rawByteLen,
-  readScalar,
-  writeScalar,
-  Tag,
-  Fixed,
-  F2Dot14,
-  F4Dot12,
-  F6Dot10,
-  FWord,
-  UfWord,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
-  GlyphId,
-  GlyphId16,
-  GlyphId24,
-  NameId,
-  Offset16,
-  Offset24,
-  Offset32,
-  Nullable
-}
+import generated_support { recordArray }
+import font_types.lib { FixedSize, rawByteLen, Tag, Fixed, F2Dot14, MajorMinor, NameId, Offset16 }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.core.ownership { Copy }
-import silk.core.equal { Equal }
-import silk.core.order { Order, Ordering }
-import silk.text.format { Debug, Formatter }
-import silk.io.writer { Writer, WriterError }
-import silk.core.ops { BitAnd, BitOr, BitXor, Not, Subtract }
 import silk.num.usize
 import silk.num.u8
 import silk.num.u16
 import silk.num.u32
-import silk.num.u64
-import silk.num.i16
 import silk.num.i32
 pub import tables.instance_record { InstanceRecord }
 
@@ -83,31 +49,24 @@ impl<'a> Fvar<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 4)
     ranges[0].end = end
-    let versionValue = scalarOr<MajorMinor>(data, ranges[0].start, MajorMinor.new(0, 0))
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let axisInstanceArraysOffsetValue = scalarOr<Offset16>(data, ranges[1].start, Offset16.new(0))
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let reservedValue = scalarOr<u16>(data, ranges[2].start, 0)
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let axisCountValue = scalarOr<u16>(data, ranges[3].start, 0)
     ranges[4].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[4].end = end
-    let axisSizeValue = scalarOr<u16>(data, ranges[4].start, 0)
     ranges[5].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[5].end = end
-    let instanceCountValue = scalarOr<u16>(data, ranges[5].start, 0)
     ranges[6].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[6].end = end
-    let instanceSizeValue = scalarOr<u16>(data, ranges[6].start, 0)
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -124,7 +83,7 @@ impl<'a> Fvar<'a> {
   pub fn version(self: &Self) -> MajorMinor {
     return match move FontData<'a>.readAt<MajorMinor>(&self._fontData, self._fieldRanges[0].start) {
       Result<MajorMinor, ReadError>.Success { value } => value
-      Result<MajorMinor, ReadError>.Failure { error } => MajorMinor.new(0, 0)
+      Result<MajorMinor, ReadError>.Failure { .. } => MajorMinor.new(0, 0)
     }
   }
 
@@ -137,7 +96,7 @@ impl<'a> Fvar<'a> {
   pub fn axisInstanceArraysOffset(self: &Self) -> Offset16 {
     return match move FontData<'a>.readAt<Offset16>(&self._fontData, self._fieldRanges[1].start) {
       Result<Offset16, ReadError>.Success { value } => value
-      Result<Offset16, ReadError>.Failure { error } => Offset16.new(0)
+      Result<Offset16, ReadError>.Failure { .. } => Offset16.new(0)
     }
   }
 
@@ -166,7 +125,7 @@ impl<'a> Fvar<'a> {
   pub fn axisCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[3].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -178,7 +137,7 @@ impl<'a> Fvar<'a> {
   pub fn axisSize(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[4].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -190,7 +149,7 @@ impl<'a> Fvar<'a> {
   pub fn instanceCount(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[5].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -202,7 +161,7 @@ impl<'a> Fvar<'a> {
   pub fn instanceSize(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[6].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -316,7 +275,7 @@ impl<'a> AxisInstanceArrays<'a> {
     ) {
       Result<ComputedArray<'a, (), VariationAxisRecord<'a>>, ReadError>.Success { value } => value
       Result<ComputedArray<'a, (), VariationAxisRecord<'a>>, ReadError>.Failure {
-        error
+        ..
       } => ComputedArray<'a, (), VariationAxisRecord<'a>>.empty(())
     }
   }
@@ -337,7 +296,7 @@ impl<'a> AxisInstanceArrays<'a> {
         value
       } => value
       Result<ComputedArray<'a, ReadArgs2<u16, u16>, InstanceRecord<'a>>, ReadError>.Failure {
-        error
+        ..
       } => ComputedArray<'a, ReadArgs2<u16, u16>, InstanceRecord<'a>>.empty(
         ReadArgs2<u16, u16> { first: self._axisCount, second: self._instanceSize },
       )
@@ -392,7 +351,7 @@ impl<'a> VariationAxisRecord<'a> {
   pub fn axisTag(self: &Self) -> Tag {
     return match move FontData<'a>.readAt<Tag>(&self._fontData, (self.position + 0)) {
       Result<Tag, ReadError>.Success { value } => value
-      Result<Tag, ReadError>.Failure { error } => Tag.default()
+      Result<Tag, ReadError>.Failure { .. } => Tag.default()
     }
   }
 
@@ -400,7 +359,7 @@ impl<'a> VariationAxisRecord<'a> {
   pub fn minValue(self: &Self) -> Fixed {
     return match move FontData<'a>.readAt<Fixed>(&self._fontData, (self.position + 4)) {
       Result<Fixed, ReadError>.Success { value } => value
-      Result<Fixed, ReadError>.Failure { error } => Fixed.zero()
+      Result<Fixed, ReadError>.Failure { .. } => Fixed.zero()
     }
   }
 
@@ -408,7 +367,7 @@ impl<'a> VariationAxisRecord<'a> {
   pub fn defaultValue(self: &Self) -> Fixed {
     return match move FontData<'a>.readAt<Fixed>(&self._fontData, (self.position + 8)) {
       Result<Fixed, ReadError>.Success { value } => value
-      Result<Fixed, ReadError>.Failure { error } => Fixed.zero()
+      Result<Fixed, ReadError>.Failure { .. } => Fixed.zero()
     }
   }
 
@@ -416,7 +375,7 @@ impl<'a> VariationAxisRecord<'a> {
   pub fn maxValue(self: &Self) -> Fixed {
     return match move FontData<'a>.readAt<Fixed>(&self._fontData, (self.position + 12)) {
       Result<Fixed, ReadError>.Success { value } => value
-      Result<Fixed, ReadError>.Failure { error } => Fixed.zero()
+      Result<Fixed, ReadError>.Failure { .. } => Fixed.zero()
     }
   }
 
@@ -424,7 +383,7 @@ impl<'a> VariationAxisRecord<'a> {
   pub fn flags(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, (self.position + 16)) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -432,7 +391,7 @@ impl<'a> VariationAxisRecord<'a> {
   pub fn axisNameId(self: &Self) -> NameId {
     return match move FontData<'a>.readAt<NameId>(&self._fontData, (self.position + 18)) {
       Result<NameId, ReadError>.Success { value } => value
-      Result<NameId, ReadError>.Failure { error } => NameId.default()
+      Result<NameId, ReadError>.Failure { .. } => NameId.default()
     }
   }
 }

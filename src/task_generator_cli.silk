@@ -45,15 +45,28 @@ impl TaskSet for GeneratorTasks {
       GeneratorTasks.Generate { check } => Tasks.Generate { check: move check }
       GeneratorTasks.GenerateStatic { check } => Tasks.GenerateStatic { check: move check }
       GeneratorTasks.GeneratePsData { check } => Tasks.GeneratePsData { check: move check }
-      GeneratorTasks.GenerateModelTables { check } => Tasks.GenerateModelTables { check: move check }
-      GeneratorTasks.GenerateModelFixtures { check } => Tasks.GenerateModelFixtures { check: move check }
-      GeneratorTasks.GenerateMiscTableFixtures { check } => Tasks.GenerateMiscTableFixtures { check: move check }
-      GeneratorTasks.GenerateLayoutFixtures { check } => Tasks.GenerateLayoutFixtures { check: move check }
-      GeneratorTasks.GenerateVariationFixtures { check } => Tasks.GenerateVariationFixtures { check: move check }
-      GeneratorTasks.GenerateAatFixtures { check } => Tasks.GenerateAatFixtures { check: move check }
-      GeneratorTasks.GenerateCffFixtures { check } => Tasks.GenerateCffFixtures { check: move check }
+      GeneratorTasks.GenerateModelTables { check } => Tasks.GenerateModelTables {
+        check: move check,
+      }
+      GeneratorTasks.GenerateModelFixtures { check } => Tasks.GenerateModelFixtures {
+        check: move check,
+      }
+      GeneratorTasks.GenerateMiscTableFixtures { check } => Tasks.GenerateMiscTableFixtures {
+        check: move check,
+      }
+      GeneratorTasks.GenerateLayoutFixtures { check } => Tasks.GenerateLayoutFixtures {
+        check: move check,
+      }
+      GeneratorTasks.GenerateVariationFixtures { check } => Tasks.GenerateVariationFixtures {
+        check: move check,
+      }
+      GeneratorTasks.GenerateAatFixtures { check } => Tasks.GenerateAatFixtures {
+        check: move check,
+      }
+      GeneratorTasks.GenerateCffFixtures { check } => Tasks.GenerateCffFixtures {
+        check: move check,
+      }
     }
     run TaskSet.perform(move task)
   }
 }
-

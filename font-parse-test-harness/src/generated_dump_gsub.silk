@@ -31,67 +31,25 @@ import read_fonts.tables.gsub {
   LigatureSubst,
   ReverseChainSingleSubst
 }
-import read_fonts.lib {
-  FontData,
-  FontRead,
-  ReadError,
-  ScalarArray,
-  ComputedArray,
-  VarLenArray,
-  VarLenIter,
-  ReadArgs2,
-  ReadArgs3,
-  ArrayOfOffsets,
-  ArrayOfNullableOffsets
-}
+import read_fonts.lib { FontData, FontRead, ReadError, ScalarArray, ArrayOfOffsets }
 import font_types.lib {
-  Fixed,
-  F2Dot14,
-  FWord,
-  UfWord,
   Tag,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
   Uint24,
   Int24,
   GlyphId16,
   GlyphId24,
-  GlyphId,
-  NameId,
   Nullable,
   Offset16,
   Offset24,
   Offset32
 }
-import dump_support { DumpPath, DumpTable, scalar, absent, readError, versionBits, bytes }
+import dump_support { DumpPath, DumpTable, scalar, absent, readError }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.io.writer { Writer, WriterError }
-import silk.num.u8
-import silk.num.u16
-import silk.num.u32
 import silk.num.u64
-import read_fonts.tables.layout {
-  Lookup,
-  LookupList,
-  LookupList2,
-  ScriptList,
-  FeatureList,
-  FeatureVariations,
-  CoverageTable,
-  ClassDef,
-  DeviceOrVariationIndex,
-  SequenceContext,
-  ChainedSequenceContext,
-  LookupFlag
-}
-import read_fonts.tables.gsub {
-  OriginalSubstitutionLookupList,
-  SubstitutionLookupList2,
-  SubstitutionSequenceContext,
-  SubstitutionChainContext
-}
+import read_fonts.tables.layout { ScriptList, FeatureList, FeatureVariations, CoverageTable }
+import read_fonts.tables.gsub { OriginalSubstitutionLookupList, SubstitutionLookupList2 }
 
 pub effect fn dumpGsub<'a>(path: &mut DumpPath, value: Gsub<'a>) -> ()
   ! WriterError
@@ -105,7 +63,6 @@ pub effect fn dumpGsub<'a>(path: &mut DumpPath, value: Gsub<'a>) -> ()
   ) {
     return
   }
-  let base = Gsub<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "version")
     let fieldValue = Gsub<'a>.version(&value)
@@ -317,7 +274,6 @@ pub effect fn dumpGsub<'a>(path: &mut DumpPath, value: Gsub<'a>) -> ()
 pub effect fn dumpSubstitutionLookup<'a>(path: &mut DumpPath, value: SubstitutionLookup<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -377,7 +333,6 @@ pub effect fn dumpSubstitutionLookup<'a>(path: &mut DumpPath, value: Substitutio
 pub effect fn dumpSingleSubst<'a>(path: &mut DumpPath, value: SingleSubst<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -422,7 +377,6 @@ pub effect fn dumpSingleSubstFormat1<'a>(path: &mut DumpPath, value: SingleSubst
   ) {
     return
   }
-  let base = SingleSubstFormat1<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "substFormat")
     let fieldValue = SingleSubstFormat1<'a>.substFormat(&value)
@@ -469,7 +423,6 @@ pub effect fn dumpSingleSubstFormat2<'a>(path: &mut DumpPath, value: SingleSubst
   ) {
     return
   }
-  let base = SingleSubstFormat2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "substFormat")
     let fieldValue = SingleSubstFormat2<'a>.substFormat(&value)
@@ -539,7 +492,6 @@ pub effect fn dumpMultipleSubstFormat1<'a>(
   ) {
     return
   }
-  let base = MultipleSubstFormat1<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "substFormat")
     let fieldValue = MultipleSubstFormat1<'a>.substFormat(&value)
@@ -630,7 +582,6 @@ pub effect fn dumpSequence<'a>(path: &mut DumpPath, value: Sequence<'a>) -> ()
   ) {
     return
   }
-  let base = Sequence<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "glyphCount")
     let fieldValue = Sequence<'a>.glyphCount(&value)
@@ -674,7 +625,6 @@ pub effect fn dumpAlternateSubstFormat1<'a>(
   ) {
     return
   }
-  let base = AlternateSubstFormat1<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "substFormat")
     let fieldValue = AlternateSubstFormat1<'a>.substFormat(&value)
@@ -765,7 +715,6 @@ pub effect fn dumpAlternateSet<'a>(path: &mut DumpPath, value: AlternateSet<'a>)
   ) {
     return
   }
-  let base = AlternateSet<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "glyphCount")
     let fieldValue = AlternateSet<'a>.glyphCount(&value)
@@ -809,7 +758,6 @@ pub effect fn dumpLigatureSubstFormat1<'a>(
   ) {
     return
   }
-  let base = LigatureSubstFormat1<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "substFormat")
     let fieldValue = LigatureSubstFormat1<'a>.substFormat(&value)
@@ -900,7 +848,6 @@ pub effect fn dumpLigatureSet<'a>(path: &mut DumpPath, value: LigatureSet<'a>) -
   ) {
     return
   }
-  let base = LigatureSet<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "ligatureCount")
     let fieldValue = LigatureSet<'a>.ligatureCount(&value)
@@ -965,7 +912,6 @@ pub effect fn dumpLigature<'a>(path: &mut DumpPath, value: Ligature<'a>) -> ()
   ) {
     return
   }
-  let base = Ligature<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "ligatureGlyph")
     let fieldValue = Ligature<'a>.ligatureGlyph(&value)
@@ -1015,7 +961,6 @@ pub effect fn dumpExtensionSubstFormat1<'a, T: FontRead<'a, ()> + DumpTable<'a>>
   ) {
     return
   }
-  let base = ExtensionSubstFormat1<'a, T>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "substFormat")
     let fieldValue = ExtensionSubstFormat1<'a, T>.substFormat(&value)
@@ -1050,7 +995,6 @@ pub effect fn dumpExtensionSubstFormat1<'a, T: FontRead<'a, ()> + DumpTable<'a>>
 pub effect fn dumpExtensionSubtable<'a>(path: &mut DumpPath, value: ExtensionSubtable<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -1116,7 +1060,6 @@ pub effect fn dumpReverseChainSingleSubstFormat1<'a>(
   ) {
     return
   }
-  let base = ReverseChainSingleSubstFormat1<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "substFormat")
     let fieldValue = ReverseChainSingleSubstFormat1<'a>.substFormat(&value)
@@ -1283,7 +1226,6 @@ pub effect fn dumpSingleSubstFormat3<'a>(path: &mut DumpPath, value: SingleSubst
   ) {
     return
   }
-  let base = SingleSubstFormat3<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "substFormat")
     let fieldValue = SingleSubstFormat3<'a>.substFormat(&value)
@@ -1330,7 +1272,6 @@ pub effect fn dumpSingleSubstFormat4<'a>(path: &mut DumpPath, value: SingleSubst
   ) {
     return
   }
-  let base = SingleSubstFormat4<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "substFormat")
     let fieldValue = SingleSubstFormat4<'a>.substFormat(&value)
@@ -1400,7 +1341,6 @@ pub effect fn dumpMultipleSubstFormat2<'a>(
   ) {
     return
   }
-  let base = MultipleSubstFormat2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "substFormat")
     let fieldValue = MultipleSubstFormat2<'a>.substFormat(&value)
@@ -1494,7 +1434,6 @@ pub effect fn dumpAlternateSubstFormat2<'a>(
   ) {
     return
   }
-  let base = AlternateSubstFormat2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "substFormat")
     let fieldValue = AlternateSubstFormat2<'a>.substFormat(&value)
@@ -1588,7 +1527,6 @@ pub effect fn dumpLigatureSubstFormat2<'a>(
   ) {
     return
   }
-  let base = LigatureSubstFormat2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "substFormat")
     let fieldValue = LigatureSubstFormat2<'a>.substFormat(&value)
@@ -1682,7 +1620,6 @@ pub effect fn dumpReverseChainSingleSubstFormat2<'a>(
   ) {
     return
   }
-  let base = ReverseChainSingleSubstFormat2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "substFormat")
     let fieldValue = ReverseChainSingleSubstFormat2<'a>.substFormat(&value)
@@ -1849,7 +1786,6 @@ pub effect fn dumpSequence2<'a>(path: &mut DumpPath, value: Sequence2<'a>) -> ()
   ) {
     return
   }
-  let base = Sequence2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "glyphCount")
     let fieldValue = Sequence2<'a>.glyphCount(&value)
@@ -1890,7 +1826,6 @@ pub effect fn dumpAlternateSet2<'a>(path: &mut DumpPath, value: AlternateSet2<'a
   ) {
     return
   }
-  let base = AlternateSet2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "glyphCount")
     let fieldValue = AlternateSet2<'a>.glyphCount(&value)
@@ -1931,7 +1866,6 @@ pub effect fn dumpLigatureSet2<'a>(path: &mut DumpPath, value: LigatureSet2<'a>)
   ) {
     return
   }
-  let base = LigatureSet2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "ligatureCount")
     let fieldValue = LigatureSet2<'a>.ligatureCount(&value)
@@ -1996,7 +1930,6 @@ pub effect fn dumpLigature2<'a>(path: &mut DumpPath, value: Ligature2<'a>) -> ()
   ) {
     return
   }
-  let base = Ligature2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "ligatureGlyph")
     let fieldValue = Ligature2<'a>.ligatureGlyph(&value)
@@ -2034,7 +1967,6 @@ pub effect fn dumpLigature2<'a>(path: &mut DumpPath, value: Ligature2<'a>) -> ()
 pub effect fn dumpMultipleSubst<'a>(path: &mut DumpPath, value: MultipleSubst<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -2058,7 +1990,6 @@ pub effect fn dumpMultipleSubst<'a>(path: &mut DumpPath, value: MultipleSubst<'a
 pub effect fn dumpAlternateSubst<'a>(path: &mut DumpPath, value: AlternateSubst<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -2082,7 +2013,6 @@ pub effect fn dumpAlternateSubst<'a>(path: &mut DumpPath, value: AlternateSubst<
 pub effect fn dumpLigatureSubst<'a>(path: &mut DumpPath, value: LigatureSubst<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -2109,7 +2039,6 @@ pub effect fn dumpReverseChainSingleSubst<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return

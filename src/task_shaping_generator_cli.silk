@@ -17,7 +17,10 @@ pub union ShapingGeneratorTasks {
 
 impl CommandLine for ShapingGeneratorTasks {
   static fn command() -> Command<ShapingGeneratorTasks> {
-    return Command<ShapingGeneratorTasks>.make("shaping-generator-tasks", "Font library maintenance")
+    return Command<ShapingGeneratorTasks>.make(
+      "shaping-generator-tasks",
+      "Font library maintenance",
+    )
       |> Command.variant("GenerateShapingUnicode", "Generate pinned shaping Unicode properties")
       |> Command.variant("GenerateShapingMachines", "Generate pinned shaping transition machines")
       |> Command.variant("GenerateShapingLanguages", "Generate pinned shaping language mappings")
@@ -36,9 +39,10 @@ impl TaskSet for ShapingGeneratorTasks {
       ShapingGeneratorTasks.GenerateShapingMachines => Tasks.GenerateShapingMachines
       ShapingGeneratorTasks.GenerateShapingLanguages => Tasks.GenerateShapingLanguages
       ShapingGeneratorTasks.GenerateShapingFixtures => Tasks.GenerateShapingFixtures
-      ShapingGeneratorTasks.GenerateShapingTests { check } => Tasks.GenerateShapingTests { check: move check }
+      ShapingGeneratorTasks.GenerateShapingTests { check } => Tasks.GenerateShapingTests {
+        check: move check,
+      }
     }
     run TaskSet.perform(move task)
   }
 }
-

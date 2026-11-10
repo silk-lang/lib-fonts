@@ -1,12 +1,10 @@
 //! Hangul syllable composition and Thai/Lao character preprocessing.
 import buffer { Buffer, Glyph, ClusterLevel }
-import font { ConfiguredShaper, FontFuncs, Shaper, ShaperData }
+import font { ConfiguredShaper, FontFuncs }
 import complex { moveGlyph }
 import view { View }
 import generated_unicode as data
-import unicode
-import read_fonts.model.metrics.glyph { GlyphMetrics }
-import font_types.lib { GlyphId, F2Dot14 }
+import font_types.lib { GlyphId }
 import silk.collections.list { List }
 import silk.mem.allocator { Allocator, OutOfMemoryError }
 import silk.num.u16

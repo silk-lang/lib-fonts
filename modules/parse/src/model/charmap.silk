@@ -189,7 +189,7 @@ impl<'a> MaybeSubtable<'a> {
 
   fn present(self: &Self) -> bool {
     return match &self.* {
-      MaybeSubtable<'a>.Some { table } => true
+      MaybeSubtable<'a>.Some { .. } => true
       _ => false
     }
   }
@@ -491,9 +491,9 @@ impl<'a> Charmap<'a> {
 
   pub fn hasUnicodeVariants(self: &Self) -> bool {
     return match self.delta.variants {
-      MaybeUvs<'a>.Some { table } => true
+      MaybeUvs<'a>.Some { .. } => true
       _ => match self.base.variants {
-        MaybeUvs<'a>.Some { table } => true
+        MaybeUvs<'a>.Some { .. } => true
         _ => false
       }
     }
@@ -697,10 +697,7 @@ impl<'a> Unicodes<'a> {
       if GlyphId.toU32(value.glyph) == 0 {
         continue
       }
-      if let Option<GlyphId>.Some { value: glyph } = UnicodeSubtables.map(
-        &self.map.delta,
-        value.codepoint,
-      ) {
+      if let Option<GlyphId>.Some { .. } = UnicodeSubtables.map(&self.map.delta, value.codepoint) {
         continue
       }
       return Option<CmapMapping>.some(value)
@@ -743,7 +740,7 @@ impl<'a> UnicodeVariants<'a> {
       if !self.inDelta {
         entry = nextVariant(&mut self.base)
         if let Option<UvsMappingEntry>.Some { value } = &entry {
-          if let Option<MapVariant>.Some { value: found } = MaybeUvs.map(
+          if let Option<MapVariant>.Some { .. } = MaybeUvs.map(
             &self.map.delta.variants,
             value.codepoint,
             value.selector,
@@ -855,12 +852,12 @@ fn readEncoding<'a>(cmap: MaybeCmap<'a>, index: u32, isDelta: bool) -> Option<En
     }
   }
   let supported = match subtable {
-    CmapSubtable<'a>.Format0 { value } => true
-    CmapSubtable<'a>.Format4 { value } => true
-    CmapSubtable<'a>.Format6 { value } => true
-    CmapSubtable<'a>.Format10 { value } => true
-    CmapSubtable<'a>.Format12 { value } => true
-    CmapSubtable<'a>.Format13 { value } => true
+    CmapSubtable<'a>.Format0 { .. } => true
+    CmapSubtable<'a>.Format4 { .. } => true
+    CmapSubtable<'a>.Format6 { .. } => true
+    CmapSubtable<'a>.Format10 { .. } => true
+    CmapSubtable<'a>.Format12 { .. } => true
+    CmapSubtable<'a>.Format13 { .. } => true
     _ => false
   }
   if !supported {
@@ -977,7 +974,7 @@ impl<'a> RawCodeIter<'a> {
   fn new(table: MaybeSubtable<'a>, limits: CmapIterLimits) -> Self {
     let mut extra = MaybeSubtable<'a>.None
     if let MaybeSubtable<'a>.Some { table: subtable } = table {
-      if let CmapSubtable<'a>.Format0 { value } = subtable {
+      if let CmapSubtable<'a>.Format0 { .. } = subtable {
         extra = table
       }
     }
@@ -1039,7 +1036,7 @@ impl<'a> Codes<'a> {
       if GlyphId.toU32(value.glyph) == 0 {
         continue
       }
-      if let Option<GlyphId>.Some { value: glyph } = nonzero(
+      if let Option<GlyphId>.Some { .. } = nonzero(
         MaybeSubtable.map(&self.deltaTable, value.codepoint),
       ) {
         continue

@@ -1,11 +1,10 @@
 //! HarfBuzz glyph strings without a general-purpose formatter in the glyph loop.
 import buffer { Buffer, Glyph, ContentType }
-import font { ConfiguredShaper, FontFuncs, DefaultFontFuncs, Shaper, Metrics, metrics }
-import scale { Scale, add, sub }
+import font { ConfiguredShaper, FontFuncs }
+import scale { add }
 import read_fonts.model.name.glyph { GlyphNameMap, GlyphName }
-import read_fonts.model.metrics.glyph { GlyphMetrics }
 import read_fonts.model.metrics.extents { GlyphExtents }
-import font_types.lib { GlyphId, F2Dot14 }
+import font_types.lib { GlyphId }
 import silk.text.string { String, InvalidUtf8 }
 import silk.collections.list { List }
 import silk.collections.slice { Slice }

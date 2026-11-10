@@ -15,7 +15,6 @@ import read_fonts.tables.varc {
 }
 import read_fonts.tables.variations { PackedDeltas, DeltaRunIter }
 import font_types.lib { GlyphId, F2Dot14, Offset32 }
-import silk.geometry.affine { Affine2 }
 import dump_support { DumpPath, scalar, absent, readError }
 import silk.core.result { Result }
 import silk.core.option { Option }

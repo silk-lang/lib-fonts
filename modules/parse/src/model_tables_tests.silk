@@ -3,11 +3,6 @@ import model { Blob, Tables, TableFunction, TableCallback }
 import generated_model_fixtures { tinos, ahem }
 import lib { FontRef, FontData, TableProvider, ReadError }
 import tables.head { Head }
-import tables.cmap { Cmap }
-import tables.hmtx { Hmtx }
-import tables.name { Name }
-import tables.glyf { Glyf }
-import tables.loca { Loca }
 import tables.cff { Cff }
 import tables.cbdt { Cbdt }
 import tables.dsig { Dsig }
@@ -135,35 +130,35 @@ effect fn missingTablesBody() -> ()
   let tables = run some(run Tables.new(Blob.fromStatic(ahem()), 0))
   run Testing.expect(
     match move Tables.cff(&tables) {
-      Result<Cff, ReadError>.Failure { error: ReadError.TableIsMissing { tag } } => true
+      Result<Cff, ReadError>.Failure { error: ReadError.TableIsMissing { .. } } => true
       _ => false
     },
     "missing CFF",
   )
   run Testing.expect(
     match move Tables.cbdt(&tables) {
-      Result<Cbdt, ReadError>.Failure { error: ReadError.TableIsMissing { tag } } => true
+      Result<Cbdt, ReadError>.Failure { error: ReadError.TableIsMissing { .. } } => true
       _ => false
     },
     "missing CBDT",
   )
   run Testing.expect(
     match move Tables.dsig(&tables) {
-      Result<Dsig, ReadError>.Failure { error: ReadError.TableIsMissing { tag } } => true
+      Result<Dsig, ReadError>.Failure { error: ReadError.TableIsMissing { .. } } => true
       _ => false
     },
     "missing DSIG",
   )
   run Testing.expect(
     match move Tables.expectRawData(&tables, Tag.new(&[67, 66, 68, 84])) {
-      Result<FontData, ReadError>.Failure { error: ReadError.TableIsMissing { tag } } => true
+      Result<FontData, ReadError>.Failure { error: ReadError.TableIsMissing { .. } } => true
       _ => false
     },
     "missing CBDT bytes",
   )
   run Testing.expect(
     match move Tables.expectRawData(&tables, Tag.new(&[68, 83, 73, 71])) {
-      Result<FontData, ReadError>.Failure { error: ReadError.TableIsMissing { tag } } => true
+      Result<FontData, ReadError>.Failure { error: ReadError.TableIsMissing { .. } } => true
       _ => false
     },
     "missing DSIG bytes",

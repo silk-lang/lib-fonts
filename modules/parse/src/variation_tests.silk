@@ -10,7 +10,7 @@ import generated_variations {
   DeltaSetIndex,
   advanceDeltaWithScalars
 }
-import font_types.lib { Fixed, F2Dot14, F48Dot16, GlyphId, writeScalar }
+import font_types.lib { Fixed, F2Dot14, F48Dot16, GlyphId }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.testing.testing { Testing, AssertionError }

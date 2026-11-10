@@ -1,8 +1,7 @@
 import vector_path { PathRecorder }
-import outline { Recorder, Op }
+import outline { Recorder }
 import read_fonts.model.glyph.outline { PathSink }
 import vector.path { Path, MOVE, LINE, QUAD, CUBIC, CLOSE }
-import vector.geometry { Point }
 import silk.testing.testing { AssertionError, Testing }
 import silk.collections.list { List }
 

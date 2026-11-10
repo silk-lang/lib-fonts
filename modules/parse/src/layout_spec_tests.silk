@@ -3,7 +3,7 @@
 import font_data { FontData }
 import read { ReadError }
 import array { ScalarArray, ComputedArray }
-import offset_array { ArrayOfOffsets, ArrayOfNullableOffsets }
+import offset_array { ArrayOfOffsets }
 import offset { resolve }
 import generated_gdef {
   Gdef,
@@ -45,7 +45,7 @@ effect fn must<T>(result: Result<T, ReadError>) -> T
   ! AssertionError<'static> {
   return match move result {
     Result<T, ReadError>.Success { value } => move value
-    Result<T, ReadError>.Failure { error } => {
+    Result<T, ReadError>.Failure { .. } => {
       run Testing.expect(false, "upstream fixture parses")
       return Intrinsic.trap("test assertion")
     }
@@ -399,7 +399,7 @@ effect fn some<T>(option: Option<T>) -> T
 fn coverageCount(table: &CoverageTable<'_>) -> usize {
   let mut iter = CoverageTable.iter(table)
   let mut count: usize = 0
-  while let Option<GlyphId>.Some { value } = move CoverageIter.next(&mut iter) {
+  while let Option<GlyphId>.Some { .. } = move CoverageIter.next(&mut iter) {
     count = count + 1
   }
   return count
@@ -408,7 +408,7 @@ fn coverageCount(table: &CoverageTable<'_>) -> usize {
 fn classCount(table: &ClassDef<'_>) -> usize {
   let mut iter = ClassDef.iter(table)
   let mut count: usize = 0
-  while let Option<ClassEntry>.Some { value } = move ClassIter.next(&mut iter) {
+  while let Option<ClassEntry>.Some { .. } = move ClassIter.next(&mut iter) {
     count = count + 1
   }
   return count
@@ -781,7 +781,6 @@ import generated_gpos {
   AnchorFormat1,
   AnchorFormat2,
   AnchorFormat3,
-  AnchorTable,
   MarkBasePosFormat1,
   BaseArray,
   BaseRecord,
@@ -836,7 +835,7 @@ test effect fn singleposformat2() -> ()
   )
   run Testing.expect(
     match move ComputedArray<'static, ValueFormat, ValueRecord<'static>>.get(&records, 3) {
-      Result<ValueRecord<'static>, ReadError>.Failure { error } => true
+      Result<ValueRecord<'static>, ReadError>.Failure { .. } => true
       _ => false
     },
     "out-of-range record",
@@ -1196,7 +1195,7 @@ test effect fn anchorformat3() -> ()
 
 import font_types.lib { readScalar }
 import silk.collections.slice { Slice }
-import generated_layout { ScriptTags, SelectedScript, TaggedElement }
+import generated_layout { ScriptTags, TaggedElement }
 
 fn tag(bytes: &[u8]) -> Tag {
   return readScalar<Tag>(bytes) |> Option<Tag>.unwrapOr(Tag.default())
@@ -1346,7 +1345,7 @@ test effect fn featureListGet() -> ()
   run Testing.expect(&first.tag == &tag(b"c2sc") && &second.tag == &tag(b"liga"), "feature tags")
   run Testing.expect(
     match move FeatureList.get(&features, 2) {
-      Result<TaggedElement<Feature<'static>>, ReadError>.Failure { error } => true
+      Result<TaggedElement<Feature<'static>>, ReadError>.Failure { .. } => true
       _ => false
     },
     "feature bounds",
@@ -1524,7 +1523,7 @@ test effect fn singlePos2RecordsAreEvenlySpaced() -> ()
   }
   run Testing.expect(
     match move ComputedArray<'static, ValueFormat, ValueRecord<'static>>.get(&records, count) {
-      Result<ValueRecord<'static>, ReadError>.Failure { error } => true
+      Result<ValueRecord<'static>, ReadError>.Failure { .. } => true
       _ => false
     },
     "record bounds",
@@ -1544,7 +1543,7 @@ test effect fn defaultForGenerics() -> ()
         |> Result<SinglePos<'static>, ReadError>.unwrapOr(SinglePos<'static>.default())
       run Testing.expect(
         match inner {
-          SinglePos<'static>.Format1 { value: first } => true
+          SinglePos<'static>.Format1 { .. } => true
           _ => false
         },
         "default first variant",

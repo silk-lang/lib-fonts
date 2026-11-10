@@ -12,7 +12,9 @@ import font_generate_fixtures
 import font_generate_model
 import font_generate_misc
 import font_harness_corpus
-static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
+
+static if Intrinsic.targetOperatingSystem() == "darwin"
+  || Intrinsic.targetOperatingSystem() == "linux" {
   import font_harness
   import font_harness_shaping
   import font_harness_shape_checks
@@ -31,6 +33,7 @@ static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOpera
   import font_harness_misc_fixtures
   import font_harness_tests
 }
+
 import silk.cli.task { Task, TaskError, TaskSet }
 import silk.collections.bytes { Bytes }
 import silk.collections.list { List }
@@ -68,24 +71,84 @@ pub union Tasks {
   CheckWasm,
   Check,
   FontList { pub fonts: String, pub output: String, pub report: String, pub timeout: f64 },
-  Compare { pub fonts: String, pub reference: String, pub silkDumper: String, pub timeout: f64, pub report: String },
-  VerifyReference { pub fonts: String, pub reference: String, pub timeout: f64, pub report: String },
+  Compare {
+    pub fonts: String,
+    pub reference: String,
+    pub silkDumper: String,
+    pub timeout: f64,
+    pub report: String
+  },
+  VerifyReference {
+    pub fonts: String,
+    pub reference: String,
+    pub timeout: f64,
+    pub report: String
+  },
   CompareShaping { pub silk: String, pub rust: String, pub filter: String },
   CheckShapingTrace { pub binary: String },
-  CheckShapingMalformed { pub binary: String, pub mutationsPerFont: usize, pub allFonts: bool, pub malformedTimeout: f64, pub failures: String },
+  CheckShapingMalformed {
+    pub binary: String,
+    pub mutationsPerFont: usize,
+    pub allFonts: bool,
+    pub malformedTimeout: f64,
+    pub failures: String
+  },
   CheckShaping { pub noBuild: bool },
-  BenchShaping { pub silk: String, pub rust: String, pub iterations: usize, pub samples: usize, pub filter: String, pub callgrind: bool },
-  BenchLibrary { pub fonts: String, pub librarySilk: String, pub libraryRust: String, pub workload: List<String>, pub top: i64 },
-  Benchmark { pub fonts: String, pub benchmarkReference: String, pub benchmarkSilk: String, pub rounds: usize, pub longTimeout: f64, pub requiredReport: String },
-  CheckMalformed { pub fonts: String, pub reference: String, pub silkDumper: String, pub seed: i64, pub jobs: Option<usize>, pub longTimeout: f64, pub cache: String, pub campaignFailures: String, pub requiredReport: String },
-  CheckRobustness { pub fonts: String, pub silkDumper: String, pub robustnessMutations: usize, pub seed: i64, pub robustnessTimeout: f64, pub jobs: Option<usize>, pub robustnessFailures: String },
+  BenchShaping {
+    pub silk: String,
+    pub rust: String,
+    pub iterations: usize,
+    pub samples: usize,
+    pub filter: String,
+    pub callgrind: bool
+  },
+  BenchLibrary {
+    pub fonts: String,
+    pub librarySilk: String,
+    pub libraryRust: String,
+    pub workload: List<String>,
+    pub top: i64
+  },
+  Benchmark {
+    pub fonts: String,
+    pub benchmarkReference: String,
+    pub benchmarkSilk: String,
+    pub rounds: usize,
+    pub longTimeout: f64,
+    pub requiredReport: String
+  },
+  CheckMalformed {
+    pub fonts: String,
+    pub reference: String,
+    pub silkDumper: String,
+    pub seed: i64,
+    pub jobs: Option<usize>,
+    pub longTimeout: f64,
+    pub cache: String,
+    pub campaignFailures: String,
+    pub requiredReport: String
+  },
+  CheckRobustness {
+    pub fonts: String,
+    pub silkDumper: String,
+    pub robustnessMutations: usize,
+    pub seed: i64,
+    pub robustnessTimeout: f64,
+    pub jobs: Option<usize>,
+    pub robustnessFailures: String
+  },
   CheckCoreFixtures,
   CheckTableFixtures { pub reference: String, pub silkDumper: String, pub report: String },
   CheckLayoutFixtures { pub reference: String, pub silkDumper: String, pub report: String },
   CheckVariationFixtures { pub reference: String, pub silkDumper: String, pub report: String },
   CheckModelFixtures { pub reference: String, pub silkDumper: String, pub report: String },
   CheckAatFixtures { pub reference: String, pub silkDumper: String, pub report: String },
-  CheckCffFixtures { pub reference: String, pub silkDumper: String, pub report: String, pub seedsOnly: bool },
+  CheckCffFixtures {
+    pub reference: String,
+    pub silkDumper: String,
+    pub report: String,
+    pub seedsOnly: bool
+  },
   CheckMiscTableFixtures { pub reference: String, pub silkDumper: String, pub report: String },
   TestHarness,
 }
@@ -160,126 +223,335 @@ impl TaskSet for Tasks {
       Tasks.Build { referenceOnly, release } => run build(referenceOnly, release)
       Tasks.BuildWasm => run buildWasm()
       Tasks.CheckWasm => {
-        run Task.silk(&["check", "--manifest-path", "modules/shape/tools/wasm/silk.toml", "--target", "wasm32-unknown-unknown"])
-        run Task.silk(&["build", "--release", "--manifest-path", "modules/shape/tools/wasm/silk.toml", "--target", "wasm32-unknown-unknown"])
+        run Task.silk(
+          &[
+            "check",
+            "--manifest-path",
+            "modules/shape/tools/wasm/silk.toml",
+            "--target",
+            "wasm32-unknown-unknown",
+          ],
+        )
+        run Task.silk(
+          &[
+            "build",
+            "--release",
+            "--manifest-path",
+            "modules/shape/tools/wasm/silk.toml",
+            "--target",
+            "wasm32-unknown-unknown",
+          ],
+        )
       }
       Tasks.Check => run check()
       Tasks.FontList { fonts, output, report, timeout } => {
-        run font_harness_corpus.fontList(String.view(&fonts), String.view(&output), String.view(&report), timeout)
+        run font_harness_corpus.fontList(
+          String.view(&fonts),
+          String.view(&output),
+          String.view(&report),
+          timeout,
+        )
       }
       Tasks.Compare { fonts, reference, silkDumper, timeout, report } => {
-        static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
-          run font_harness.compare(String.view(&fonts), String.view(&reference), String.view(&silkDumper), timeout, String.view(&report))
-        } else { run unsupportedHarness() }
+        static if Intrinsic.targetOperatingSystem() == "darwin"
+          || Intrinsic.targetOperatingSystem() == "linux" {
+          run font_harness.compare(
+            String.view(&fonts),
+            String.view(&reference),
+            String.view(&silkDumper),
+            timeout,
+            String.view(&report),
+          )
+        } else {
+          run unsupportedHarness()
+        }
       }
       Tasks.VerifyReference { fonts, reference, timeout, report } => {
-        static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
-          run font_harness.verifyReference(String.view(&fonts), String.view(&reference), timeout, String.view(&report))
-        } else { run unsupportedHarness() }
+        static if Intrinsic.targetOperatingSystem() == "darwin"
+          || Intrinsic.targetOperatingSystem() == "linux" {
+          run font_harness.verifyReference(
+            String.view(&fonts),
+            String.view(&reference),
+            timeout,
+            String.view(&report),
+          )
+        } else {
+          run unsupportedHarness()
+        }
       }
       Tasks.CompareShaping { silk, rust, filter } => {
-        static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
-          run font_harness_shape_checks.compareShaping(String.view(&silk), String.view(&rust), String.view(&filter))
-        } else { run unsupportedHarness() }
+        static if Intrinsic.targetOperatingSystem() == "darwin"
+          || Intrinsic.targetOperatingSystem() == "linux" {
+          run font_harness_shape_checks.compareShaping(
+            String.view(&silk),
+            String.view(&rust),
+            String.view(&filter),
+          )
+        } else {
+          run unsupportedHarness()
+        }
       }
       Tasks.CheckShapingTrace { binary } => {
-        static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
+        static if Intrinsic.targetOperatingSystem() == "darwin"
+          || Intrinsic.targetOperatingSystem() == "linux" {
           run font_harness_shaping.checkShapingTrace(String.view(&binary))
-        } else { run unsupportedHarness() }
+        } else {
+          run unsupportedHarness()
+        }
       }
-      Tasks.CheckShapingMalformed { binary, mutationsPerFont, allFonts, malformedTimeout, failures } => {
-        static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
-          run font_harness_shape_checks.checkShapingMalformed(String.view(&binary), mutationsPerFont, allFonts, malformedTimeout, String.view(&failures))
-        } else { run unsupportedHarness() }
+      Tasks.CheckShapingMalformed {
+        binary,
+        mutationsPerFont,
+        allFonts,
+        malformedTimeout,
+        failures
+      } => {
+        static if Intrinsic.targetOperatingSystem() == "darwin"
+          || Intrinsic.targetOperatingSystem() == "linux" {
+          run font_harness_shape_checks.checkShapingMalformed(
+            String.view(&binary),
+            mutationsPerFont,
+            allFonts,
+            malformedTimeout,
+            String.view(&failures),
+          )
+        } else {
+          run unsupportedHarness()
+        }
       }
       Tasks.CheckShaping { noBuild } => {
-        static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
+        static if Intrinsic.targetOperatingSystem() == "darwin"
+          || Intrinsic.targetOperatingSystem() == "linux" {
           run font_harness_shape_checks.checkShaping(noBuild)
-        } else { run unsupportedHarness() }
+        } else {
+          run unsupportedHarness()
+        }
       }
       Tasks.BenchShaping { silk, rust, iterations, samples, filter, callgrind } => {
-        static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
-          run font_benchmark_shaping.benchShaping(String.view(&silk), String.view(&rust), iterations, samples, String.view(&filter), callgrind)
-        } else { run unsupportedHarness() }
+        static if Intrinsic.targetOperatingSystem() == "darwin"
+          || Intrinsic.targetOperatingSystem() == "linux" {
+          run font_benchmark_shaping.benchShaping(
+            String.view(&silk),
+            String.view(&rust),
+            iterations,
+            samples,
+            String.view(&filter),
+            callgrind,
+          )
+        } else {
+          run unsupportedHarness()
+        }
       }
       Tasks.BenchLibrary { fonts, librarySilk, libraryRust, workload, top } => {
-        static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
-          run font_benchmark_library.benchLibrary(String.view(&fonts), String.view(&librarySilk), String.view(&libraryRust), List<String>.asSlice(&workload), top)
-        } else { run unsupportedHarness() }
+        static if Intrinsic.targetOperatingSystem() == "darwin"
+          || Intrinsic.targetOperatingSystem() == "linux" {
+          run font_benchmark_library.benchLibrary(
+            String.view(&fonts),
+            String.view(&librarySilk),
+            String.view(&libraryRust),
+            List<String>.asSlice(&workload),
+            top,
+          )
+        } else {
+          run unsupportedHarness()
+        }
       }
-      Tasks.Benchmark { fonts, benchmarkReference, benchmarkSilk, rounds, longTimeout, requiredReport } => {
-        static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
-          run font_benchmark.benchmark(String.view(&fonts), String.view(&benchmarkReference), String.view(&benchmarkSilk), rounds, longTimeout, String.view(&requiredReport))
-        } else { run unsupportedHarness() }
+      Tasks.Benchmark {
+        fonts,
+        benchmarkReference,
+        benchmarkSilk,
+        rounds,
+        longTimeout,
+        requiredReport
+      } => {
+        static if Intrinsic.targetOperatingSystem() == "darwin"
+          || Intrinsic.targetOperatingSystem() == "linux" {
+          run font_benchmark.benchmark(
+            String.view(&fonts),
+            String.view(&benchmarkReference),
+            String.view(&benchmarkSilk),
+            rounds,
+            longTimeout,
+            String.view(&requiredReport),
+          )
+        } else {
+          run unsupportedHarness()
+        }
       }
-      Tasks.CheckMalformed { fonts, reference, silkDumper, seed, jobs, longTimeout, cache, campaignFailures, requiredReport } => {
-        static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
-          run font_harness_campaign.checkMalformed(String.view(&fonts), String.view(&reference), String.view(&silkDumper), seed, run workers(move jobs), longTimeout, String.view(&cache), String.view(&campaignFailures), String.view(&requiredReport))
-        } else { run unsupportedHarness() }
+      Tasks.CheckMalformed {
+        fonts,
+        reference,
+        silkDumper,
+        seed,
+        jobs,
+        longTimeout,
+        cache,
+        campaignFailures,
+        requiredReport
+      } => {
+        static if Intrinsic.targetOperatingSystem() == "darwin"
+          || Intrinsic.targetOperatingSystem() == "linux" {
+          run font_harness_campaign.checkMalformed(
+            String.view(&fonts),
+            String.view(&reference),
+            String.view(&silkDumper),
+            seed,
+            run workers(move jobs),
+            longTimeout,
+            String.view(&cache),
+            String.view(&campaignFailures),
+            String.view(&requiredReport),
+          )
+        } else {
+          run unsupportedHarness()
+        }
       }
-      Tasks.CheckRobustness { fonts, silkDumper, robustnessMutations, seed, robustnessTimeout, jobs, robustnessFailures } => {
-        static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
-          run font_harness_robustness.checkRobustness(String.view(&fonts), String.view(&silkDumper), robustnessMutations, seed, robustnessTimeout, run workers(move jobs), String.view(&robustnessFailures))
-        } else { run unsupportedHarness() }
+      Tasks.CheckRobustness {
+        fonts,
+        silkDumper,
+        robustnessMutations,
+        seed,
+        robustnessTimeout,
+        jobs,
+        robustnessFailures
+      } => {
+        static if Intrinsic.targetOperatingSystem() == "darwin"
+          || Intrinsic.targetOperatingSystem() == "linux" {
+          run font_harness_robustness.checkRobustness(
+            String.view(&fonts),
+            String.view(&silkDumper),
+            robustnessMutations,
+            seed,
+            robustnessTimeout,
+            run workers(move jobs),
+            String.view(&robustnessFailures),
+          )
+        } else {
+          run unsupportedHarness()
+        }
       }
       Tasks.CheckCoreFixtures => {
-        static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
+        static if Intrinsic.targetOperatingSystem() == "darwin"
+          || Intrinsic.targetOperatingSystem() == "linux" {
           run font_harness_core_fixtures.checkCoreFixtures()
-        } else { run unsupportedHarness() }
+        } else {
+          run unsupportedHarness()
+        }
       }
       Tasks.CheckTableFixtures { reference, silkDumper, report } => {
-        static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
-          run font_harness_table_fixtures.checkTableFixtures(String.view(&reference), String.view(&silkDumper), String.view(&report))
-        } else { run unsupportedHarness() }
+        static if Intrinsic.targetOperatingSystem() == "darwin"
+          || Intrinsic.targetOperatingSystem() == "linux" {
+          run font_harness_table_fixtures.checkTableFixtures(
+            String.view(&reference),
+            String.view(&silkDumper),
+            String.view(&report),
+          )
+        } else {
+          run unsupportedHarness()
+        }
       }
       Tasks.CheckLayoutFixtures { reference, silkDumper, report } => {
-        static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
-          run font_harness_layout_fixtures.checkLayoutFixtures(String.view(&reference), String.view(&silkDumper), String.view(&report))
-        } else { run unsupportedHarness() }
+        static if Intrinsic.targetOperatingSystem() == "darwin"
+          || Intrinsic.targetOperatingSystem() == "linux" {
+          run font_harness_layout_fixtures.checkLayoutFixtures(
+            String.view(&reference),
+            String.view(&silkDumper),
+            String.view(&report),
+          )
+        } else {
+          run unsupportedHarness()
+        }
       }
       Tasks.CheckVariationFixtures { reference, silkDumper, report } => {
-        static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
-          run font_harness_variation_fixtures.checkVariationFixtures(String.view(&reference), String.view(&silkDumper), String.view(&report))
-        } else { run unsupportedHarness() }
+        static if Intrinsic.targetOperatingSystem() == "darwin"
+          || Intrinsic.targetOperatingSystem() == "linux" {
+          run font_harness_variation_fixtures.checkVariationFixtures(
+            String.view(&reference),
+            String.view(&silkDumper),
+            String.view(&report),
+          )
+        } else {
+          run unsupportedHarness()
+        }
       }
       Tasks.CheckModelFixtures { reference, silkDumper, report } => {
-        static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
-          run font_harness_model_fixtures.checkModelFixtures(String.view(&reference), String.view(&silkDumper), String.view(&report))
-        } else { run unsupportedHarness() }
+        static if Intrinsic.targetOperatingSystem() == "darwin"
+          || Intrinsic.targetOperatingSystem() == "linux" {
+          run font_harness_model_fixtures.checkModelFixtures(
+            String.view(&reference),
+            String.view(&silkDumper),
+            String.view(&report),
+          )
+        } else {
+          run unsupportedHarness()
+        }
       }
       Tasks.CheckAatFixtures { reference, silkDumper, report } => {
-        static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
-          run font_harness_aat_fixtures.checkAatFixtures(String.view(&reference), String.view(&silkDumper), String.view(&report))
-        } else { run unsupportedHarness() }
+        static if Intrinsic.targetOperatingSystem() == "darwin"
+          || Intrinsic.targetOperatingSystem() == "linux" {
+          run font_harness_aat_fixtures.checkAatFixtures(
+            String.view(&reference),
+            String.view(&silkDumper),
+            String.view(&report),
+          )
+        } else {
+          run unsupportedHarness()
+        }
       }
       Tasks.CheckCffFixtures { reference, silkDumper, report, seedsOnly } => {
-        static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
-          run font_harness_cff_fixtures.checkCffFixtures(String.view(&reference), String.view(&silkDumper), String.view(&report), seedsOnly)
-        } else { run unsupportedHarness() }
+        static if Intrinsic.targetOperatingSystem() == "darwin"
+          || Intrinsic.targetOperatingSystem() == "linux" {
+          run font_harness_cff_fixtures.checkCffFixtures(
+            String.view(&reference),
+            String.view(&silkDumper),
+            String.view(&report),
+            seedsOnly,
+          )
+        } else {
+          run unsupportedHarness()
+        }
       }
       Tasks.CheckMiscTableFixtures { reference, silkDumper, report } => {
-        static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
-          run font_harness_misc_fixtures.checkMiscTableFixtures(String.view(&reference), String.view(&silkDumper), String.view(&report))
-        } else { run unsupportedHarness() }
+        static if Intrinsic.targetOperatingSystem() == "darwin"
+          || Intrinsic.targetOperatingSystem() == "linux" {
+          run font_harness_misc_fixtures.checkMiscTableFixtures(
+            String.view(&reference),
+            String.view(&silkDumper),
+            String.view(&report),
+          )
+        } else {
+          run unsupportedHarness()
+        }
       }
       Tasks.TestHarness => {
-        static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
+        static if Intrinsic.targetOperatingSystem() == "darwin"
+          || Intrinsic.targetOperatingSystem() == "linux" {
           run font_harness_tests.checkHarness()
-        } else { run unsupportedHarness() }
+        } else {
+          run unsupportedHarness()
+        }
       }
     }
   }
 }
 
-effect fn unsupportedHarness() -> never ! TaskError | OutOfMemoryError ? &mut Allocator {
-  return run Task.abort("managed font harness tasks require Linux or macOS; Windows support is blocked by silk#3034")
+effect fn unsupportedHarness() -> never
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
+  return run Task.abort(
+    "managed font harness tasks require Linux or macOS; Windows support is blocked by silk#3034",
+  )
 }
 
-effect fn workers(option: Option<usize>) -> usize ! TaskError | OutOfMemoryError ? &mut Allocator {
+effect fn workers(option: Option<usize>) -> usize
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
   return match move option {
     Option<usize>.None => 0
     Option<usize>.Some { value } => {
-      if value == 0 { run Task.abort("--jobs must be positive") }
+      if value == 0 {
+        run Task.abort("--jobs must be positive")
+      }
       value
     }
   }
@@ -293,9 +565,30 @@ effect fn build(referenceOnly: bool, release: bool) -> ()
     Option<Bytes>.None => run String.copy("cargo")
   }
   if release {
-    run Task.exec(String.view(&cargo), &["build", "--locked", "--manifest-path", "modules/scripts/rust-font-dump/Cargo.toml", "--target-dir", "build/rust", "--release"])
+    run Task.exec(
+      String.view(&cargo),
+      &[
+        "build",
+        "--locked",
+        "--manifest-path",
+        "modules/scripts/rust-font-dump/Cargo.toml",
+        "--target-dir",
+        "build/rust",
+        "--release",
+      ],
+    )
   } else {
-    run Task.exec(String.view(&cargo), &["build", "--locked", "--manifest-path", "modules/scripts/rust-font-dump/Cargo.toml", "--target-dir", "build/rust"])
+    run Task.exec(
+      String.view(&cargo),
+      &[
+        "build",
+        "--locked",
+        "--manifest-path",
+        "modules/scripts/rust-font-dump/Cargo.toml",
+        "--target-dir",
+        "build/rust",
+      ],
+    )
   }
   if !referenceOnly {
     if release {
@@ -312,7 +605,14 @@ effect fn check() -> ()
   ! TaskError | HostInputError | OutOfMemoryError
   ? &mut HostInput | &mut Allocator | &mut FileSystem {
   run Task.silk(&["check", "--workspace"])
-  let packages = ["modules/types/silk.toml", "modules/parse/silk.toml", "modules/shape/silk.toml", "modules/outline/silk.toml", "modules/raster/silk.toml", "modules/faces/silk.toml"]
+  let packages = [
+    "modules/types/silk.toml",
+    "modules/parse/silk.toml",
+    "modules/shape/silk.toml",
+    "modules/outline/silk.toml",
+    "modules/raster/silk.toml",
+    "modules/faces/silk.toml",
+  ]
   let mut at: usize = 0
   while at < packages.length {
     run Task.silk(&["test", "--manifest-path", packages[at], "--root", "src/tests.silk"])
@@ -326,7 +626,16 @@ effect fn check() -> ()
 effect fn buildWasm() -> ()
   ! TaskError | FileError | HostInputError | OutOfMemoryError | WriterError
   ? &mut HostInput | &mut Allocator | &mut FileSystem {
-  run Task.silk(&["build", "--release", "--manifest-path", "modules/shape/tools/wasm/silk.toml", "--target", "wasm32-unknown-unknown"])
+  run Task.silk(
+    &[
+      "build",
+      "--release",
+      "--manifest-path",
+      "modules/shape/tools/wasm/silk.toml",
+      "--target",
+      "wasm32-unknown-unknown",
+    ],
+  )
   let root = run Task.root()
   let artifact = run Path.join(&root, "build/llvm/wasm32-unknown-unknown/release/font-shape-wasm")
   let destination = run Path.join(&root, "modules/shape/tools/wasm/js/dist/harfrust.wasm")
@@ -337,10 +646,11 @@ effect fn buildWasm() -> ()
   run Writer.writeAll(b"\n") |> Effect.provideMut<Writer>(&mut stdout)
 }
 
-effect fn text(bytes: &[u8]) -> string ! TaskError | OutOfMemoryError ? &mut Allocator {
+effect fn text(bytes: &[u8]) -> string
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
   return match move String.fromUtf8(bytes) {
     Result<string, InvalidUtf8>.Success { value } => value
     Result<string, InvalidUtf8>.Failure { .. } => run Task.abort("expected UTF-8 process output")
   }
 }
-

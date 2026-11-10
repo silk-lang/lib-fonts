@@ -13,52 +13,101 @@ import silk.num.u8
 import silk.num.u64
 import silk.num.usize
 
-pub struct Hit<'a> { pub matched: Match<'a>, pub start: usize, pub end: usize }
-pub struct Named { pub name: String, pub value: u64 }
-pub struct Tag { pub name: String, pub tag: String }
+pub struct Hit<'a> {
+  pub matched: Match<'a>,
+  pub start: usize,
+  pub end: usize
+}
 
-pub effect fn regexFailure(error: RegexError) -> never ! TaskError | OutOfMemoryError ? &mut Allocator {
+pub struct Named {
+  pub name: String,
+  pub value: u64
+}
+
+pub struct Tag {
+  pub name: String,
+  pub tag: String
+}
+
+pub effect fn regexFailure(error: RegexError) -> never
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
   return run Task.abort(error.message)
 }
-pub effect fn hits<'a>(pattern: string, text: string<'a>) -> List<Hit<'a>> ! TaskError | OutOfMemoryError ? &mut Allocator {
+
+pub effect fn hits<'a>(pattern: string, text: string<'a>) -> List<Hit<'a>>
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
   let compiled = run Effect.catch<RegexError>(Regex.compile(pattern), regexFailure)
   let mut result = List<Hit<'a>>.make()
   let mut offset: usize = 0
   while offset < String.byteLength(text) {
-    let found = run Effect.catch<RegexError>(Regex.find(&compiled, String.slice(text, offset, String.byteLength(text) - offset)), regexFailure)
+    let found = run Effect.catch<RegexError>(
+      Regex.find(&compiled, String.slice(text, offset, String.byteLength(text) - offset)),
+      regexFailure,
+    )
     match move found {
-      Option<Match<'a>>.None => { break }
+      Option<Match<'a>>.None => {
+        break
+      }
       Option<Match<'a>>.Some { value } => {
         let start = offset + Match.start(&value)
         let end = offset + Match.end(&value)
-        if end == offset { return run Task.abort("generator pattern matched empty text") }
-        run List<Hit<'a>>.append(&mut result, Hit<'a> { matched: move value, start: start, end: end })
+        if end == offset {
+          return run Task.abort("generator pattern matched empty text")
+        }
+        run List<Hit<'a>>.append(
+          &mut result,
+          Hit<'a> { matched: move value, start: start, end: end },
+        )
         offset = end
       }
     }
   }
   return move result
 }
+
 pub fn group<'a>(hit: &Hit<'a>, index: usize) -> string<'a> {
   return Match.group(&hit.matched, index) |> Option<string<'a>>.unwrapOr("")
 }
-pub effect fn require(ok: bool, message: string) -> () ! TaskError | OutOfMemoryError ? &mut Allocator {
-  if !ok { run Task.abort(message) }
-}
-pub effect fn index(text: string, needle: string) -> usize ! TaskError | OutOfMemoryError ? &mut Allocator {
-  match move String.find(text, needle) {
-    Option<usize>.Some { value } => { return value }
-    Option<usize>.None => { return run Task.abort("missing pinned upstream syntax") }
+
+pub effect fn require(ok: bool, message: string) -> ()
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
+  if !ok {
+    run Task.abort(message)
   }
 }
-pub effect fn after<'a>(text: string<'a>, needle: string) -> string<'a> ! TaskError | OutOfMemoryError ? &mut Allocator {
+
+pub effect fn index(text: string, needle: string) -> usize
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
+  match move String.find(text, needle) {
+    Option<usize>.Some { value } => {
+      return value
+    }
+    Option<usize>.None => {
+      return run Task.abort("missing pinned upstream syntax")
+    }
+  }
+}
+
+pub effect fn after<'a>(text: string<'a>, needle: string) -> string<'a>
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
   let start = (run index(text, needle)) + String.byteLength(needle)
   return String.slice(text, start, String.byteLength(text) - start)
 }
-pub effect fn before<'a>(text: string<'a>, needle: string) -> string<'a> ! TaskError | OutOfMemoryError ? &mut Allocator {
+
+pub effect fn before<'a>(text: string<'a>, needle: string) -> string<'a>
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
   return String.slice(text, 0, run index(text, needle))
 }
-pub effect fn replace(text: string, pattern: string, replacement: string) -> String ! TaskError | OutOfMemoryError ? &mut Allocator {
+
+pub effect fn replace(text: string, pattern: string, replacement: string) -> String
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
   let found = run hits(pattern, text)
   let rows = List<Hit>.asSlice(&found)
   let mut out = String.make()
@@ -73,23 +122,39 @@ pub effect fn replace(text: string, pattern: string, replacement: string) -> Str
   run String.append(&mut out, String.slice(text, at, String.byteLength(text) - at))
   return move out
 }
-pub effect fn read(root: &Path, relative: string) -> String ! TaskError | FileError | OutOfMemoryError ? &mut Allocator | &mut FileSystem {
+
+pub effect fn read(root: &Path, relative: string) -> String
+  ! TaskError | FileError | OutOfMemoryError
+  ? &mut Allocator | &mut FileSystem {
   let path = run Path.join(root, relative)
   let bytes = run FileSystem.readFile(&path)
   match move String.fromBytes(move bytes) {
-    Result<String, InvalidUtf8>.Success { value } => { return move value }
-    Result<String, InvalidUtf8>.Failure { .. } => { return run Task.abort("upstream source is not UTF-8") }
+    Result<String, InvalidUtf8>.Success { value } => {
+      return move value
+    }
+    Result<String, InvalidUtf8>.Failure { .. } => {
+      return run Task.abort("upstream source is not UTF-8")
+    }
   }
 }
-pub effect fn source(root: &Path, relative: string) -> String ! TaskError | FileError | OutOfMemoryError ? &mut Allocator | &mut FileSystem {
+
+pub effect fn source(root: &Path, relative: string) -> String
+  ! TaskError | FileError | OutOfMemoryError
+  ? &mut Allocator | &mut FileSystem {
   let base = run Path.join(root, "modules/shape/test-data/harfrust/harfrust/src")
   return run read(&base, relative)
 }
-pub effect fn save(root: &Path, relative: string, text: string) -> () ! FileError | OutOfMemoryError ? &mut Allocator | &mut FileSystem {
+
+pub effect fn save(root: &Path, relative: string, text: string) -> ()
+  ! FileError | OutOfMemoryError
+  ? &mut Allocator | &mut FileSystem {
   let path = run Path.join(root, relative)
   run FileSystem.writeFile(&path, String.utf8Bytes(text))
 }
-pub effect fn number(text: string) -> u64 ! TaskError | OutOfMemoryError ? &mut Allocator {
+
+pub effect fn number(text: string) -> u64
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
   let clean = String.trim(text)
   let bytes = String.utf8Bytes(clean)
   let mut at: usize = 0
@@ -103,30 +168,53 @@ pub effect fn number(text: string) -> u64 ! TaskError | OutOfMemoryError ? &mut 
   while at < bytes.length {
     let b = bytes[at]
     let mut digit: u64 = 255
-    if b >= 48 && b <= 57 { digit = u8.toU64(b - 48) }
-    if b >= 65 && b <= 70 { digit = u8.toU64(b - 55) }
-    if b >= 97 && b <= 102 { digit = u8.toU64(b - 87) }
+    if b >= 48 && b <= 57 {
+      digit = u8.toU64(b - 48)
+    }
+    if b >= 65 && b <= 70 {
+      digit = u8.toU64(b - 55)
+    }
+    if b >= 97 && b <= 102 {
+      digit = u8.toU64(b - 87)
+    }
     if b != 95 {
-      run require(digit < radix && value <= (18446744073709551615 - digit) / radix, "invalid upstream integer")
+      run require(
+        digit < radix && value <= (18446744073709551615 - digit) / radix,
+        "invalid upstream integer",
+      )
       value = value * radix + digit
     }
     at = at + 1
   }
   return value
 }
-pub effect fn decimal(out: &mut String, value: u64) -> () ! OutOfMemoryError ? &mut Allocator {
-  if value >= 10 { run decimal(&mut out, value / 10) }
+
+pub effect fn decimal(out: &mut String, value: u64) -> ()
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  if value >= 10 {
+    run decimal(&mut out, value / 10)
+  }
   run String.append(&mut out, String.slice("0123456789", u64.toUsize(value % 10), 1))
 }
-pub effect fn hex(out: &mut String, bytes: &[u8]) -> () ! OutOfMemoryError ? &mut Allocator {
+
+pub effect fn hex(out: &mut String, bytes: &[u8]) -> ()
+  ! OutOfMemoryError
+  ? &mut Allocator {
   let mut i: usize = 0
   while i < bytes.length {
-    run String.append(&mut out, String.slice("0123456789abcdef", u8.toUsize(u8.shiftRight(bytes[i], 4)), 1))
+    run String.append(
+      &mut out,
+      String.slice("0123456789abcdef", u8.toUsize(u8.shiftRight(bytes[i], 4)), 1),
+    )
     run String.append(&mut out, String.slice("0123456789abcdef", u8.toUsize(bytes[i] & 15), 1))
     i = i + 1
   }
 }
-pub effect fn integer(out: &mut Bytes, value: u64, width: usize) -> () ! OutOfMemoryError ? &mut Allocator {
+
+pub effect fn integer(out: &mut Bytes, value: u64, width: usize) -> ()
+  ! OutOfMemoryError
+  ? &mut Allocator {
   let mut i = width
   while i > 0 {
     i = i - 1
@@ -134,6 +222,7 @@ pub effect fn integer(out: &mut Bytes, value: u64, width: usize) -> () ! OutOfMe
     run Bytes.append(&mut out, &[byte])
   }
 }
+
 pub fn patch(out: &mut Bytes, at: usize, value: u64, width: usize) -> () {
   let bytes = Bytes.asMutSlice(&mut out)
   let mut i: usize = 0
@@ -142,7 +231,10 @@ pub fn patch(out: &mut Bytes, at: usize, value: u64, width: usize) -> () {
     i = i + 1
   }
 }
-pub effect fn byteFunction(out: &mut String, name: string, bytes: &[u8]) -> () ! OutOfMemoryError ? &mut Allocator {
+
+pub effect fn byteFunction(out: &mut String, name: string, bytes: &[u8]) -> ()
+  ! OutOfMemoryError
+  ? &mut Allocator {
   run String.reserve(&mut out, String.byteLength(name) + bytes.length * 4 + 48)
   run String.append(&mut out, "pub fn ")
   run String.append(&mut out, name)
@@ -155,7 +247,10 @@ pub effect fn byteFunction(out: &mut String, name: string, bytes: &[u8]) -> () !
   }
   run String.append(&mut out, "\" }\n")
 }
-pub effect fn array(text: string, name: string) -> String ! TaskError | OutOfMemoryError ? &mut Allocator {
+
+pub effect fn array(text: string, name: string) -> String
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
   let mut pattern = run String.copy("(?:static|const) ")
   run String.append(&mut pattern, name)
   run String.append(&mut pattern, ":(?s:.*?)=\\s*&?\\[(?s:(.*?))\\];")
@@ -163,34 +258,52 @@ pub effect fn array(text: string, name: string) -> String ! TaskError | OutOfMem
   run require(List<Hit>.length(&found) == 1, "missing or repeated upstream array")
   return run replace(group(&List<Hit>.asSlice(&found)[0], 1), "//[^\\n]*|/\\*(?s:.*?)\\*/", "")
 }
-pub effect fn numbers(text: string) -> List<u64> ! TaskError | OutOfMemoryError ? &mut Allocator {
+
+pub effect fn numbers(text: string) -> List<u64>
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
   let mut values = List<u64>.make()
   let mut rest = text
   while String.byteLength(rest) > 0 {
     let end = String.find(rest, ",") |> Option<usize>.unwrapOr(String.byteLength(rest))
     let word = String.trim(String.slice(rest, 0, end))
-    if word != "" { run List<u64>.append(&mut values, run number(word)) }
-    if end == String.byteLength(rest) { break }
+    if word != "" {
+      run List<u64>.append(&mut values, run number(word))
+    }
+    if end == String.byteLength(rest) {
+      break
+    }
     rest = String.slice(rest, end + 1, String.byteLength(rest) - end - 1)
   }
   return move values
 }
-pub effect fn packed(out: &mut Bytes, values: &[u64], width: usize) -> () ! OutOfMemoryError ? &mut Allocator {
+
+pub effect fn packed(out: &mut Bytes, values: &[u64], width: usize) -> ()
+  ! OutOfMemoryError
+  ? &mut Allocator {
   let mut i: usize = 0
   while i < values.length {
     run integer(&mut out, values[i], width)
     i = i + 1
   }
 }
-pub effect fn lookup(values: &[Named], name: string) -> u64 ! TaskError | OutOfMemoryError ? &mut Allocator {
+
+pub effect fn lookup(values: &[Named], name: string) -> u64
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
   let mut i = values.length
   while i > 0 {
     i = i - 1
-    if String.view(&values[i].name) == name { return values[i].value }
+    if String.view(&values[i].name) == name {
+      return values[i].value
+    }
   }
   return run Task.abort("unknown upstream constant")
 }
-pub effect fn constants(text: string) -> List<Named> ! TaskError | OutOfMemoryError ? &mut Allocator {
+
+pub effect fn constants(text: string) -> List<Named>
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
   let found = run hits("pub const (\\w+): u8 = (\\w+);", text)
   let rows = List<Hit>.asSlice(&found)
   let mut result = List<Named>.make()
@@ -198,41 +311,73 @@ pub effect fn constants(text: string) -> List<Named> ! TaskError | OutOfMemoryEr
   while i < rows.length {
     let raw = group(&rows[i], 2)
     let first = String.utf8Bytes(raw)[0]
-    let value = if first >= 48 && first <= 57 { run number(raw) } else { run lookup(List<Named>.asSlice(&result), raw) }
-    run List<Named>.append(&mut result, Named { name: run String.copy(group(&rows[i], 1)), value: value })
+    let value = if first >= 48 && first <= 57 {
+      run number(raw)
+    } else {
+      run lookup(List<Named>.asSlice(&result), raw)
+    }
+    run List<Named>.append(
+      &mut result,
+      Named { name: run String.copy(group(&rows[i], 1)), value: value },
+    )
     i = i + 1
   }
   return move result
 }
-pub effect fn scripts(root: &Path) -> List<Tag> ! TaskError | FileError | OutOfMemoryError ? &mut Allocator | &mut FileSystem {
+
+pub effect fn scripts(root: &Path) -> List<Tag>
+  ! TaskError | FileError | OutOfMemoryError
+  ? &mut Allocator | &mut FileSystem {
   let text = run source(root, "script.rs")
-  let found = run hits("pub const (\\w+): Self = Self::from_bytes\\(b\"(....)\"\\);", String.view(&text))
+  let found = run hits(
+    "pub const (\\w+): Self = Self::from_bytes\\(b\"(....)\"\\);",
+    String.view(&text),
+  )
   let rows = List<Hit>.asSlice(&found)
   let mut result = List<Tag>.make()
   let mut i: usize = 0
   while i < rows.length {
-    run List<Tag>.append(&mut result, Tag { name: run String.copy(group(&rows[i], 1)), tag: run String.copy(group(&rows[i], 2)) })
+    run List<Tag>.append(
+      &mut result,
+      Tag { name: run String.copy(group(&rows[i], 1)), tag: run String.copy(group(&rows[i], 2)) },
+    )
     i = i + 1
   }
   return move result
 }
-pub effect fn tag<'a>(values: &'a [Tag], name: string) -> string<'a> ! TaskError | OutOfMemoryError ? &mut Allocator {
+
+pub effect fn tag<'a>(values: &'a [Tag], name: string) -> string<'a>
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
   let mut i: usize = 0
   while i < values.length {
-    if String.view(&values[i].name) == name { return String.view(&values[i].tag) }
+    if String.view(&values[i].name) == name {
+      return String.view(&values[i].tag)
+    }
     i = i + 1
   }
   return run Task.abort("unknown upstream script")
 }
-pub struct Body<'a> { pub text: string<'a>, pub end: usize }
-pub effect fn body<'a>(text: string<'a>, start: usize) -> Body<'a> ! TaskError | OutOfMemoryError ? &mut Allocator {
+
+pub struct Body<'a> {
+  pub text: string<'a>,
+  pub end: usize
+}
+
+pub effect fn body<'a>(text: string<'a>, start: usize) -> Body<'a>
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
   let opening = start + run index(String.slice(text, start, String.byteLength(text) - start), "{")
   let bytes = String.utf8Bytes(text)
   let mut depth: usize = 1
   let mut end = opening + 1
   while end < bytes.length && depth != 0 {
-    if bytes[end] == 123 { depth = depth + 1 }
-    if bytes[end] == 125 { depth = depth - 1 }
+    if bytes[end] == 123 {
+      depth = depth + 1
+    }
+    if bytes[end] == 125 {
+      depth = depth - 1
+    }
     end = end + 1
   }
   run require(depth == 0, "unclosed upstream body")

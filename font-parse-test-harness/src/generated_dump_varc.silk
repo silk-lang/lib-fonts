@@ -8,49 +8,15 @@ import read_fonts.tables.varc {
   SparseVariationRegion,
   SparseRegionAxisCoordinates,
   MultiItemVariationData,
-  ConditionList,
-  VarcFlags
+  ConditionList
 }
-import read_fonts.lib {
-  FontData,
-  FontRead,
-  ReadError,
-  ScalarArray,
-  ComputedArray,
-  VarLenArray,
-  VarLenIter,
-  ReadArgs2,
-  ReadArgs3,
-  ArrayOfOffsets,
-  ArrayOfNullableOffsets
-}
-import font_types.lib {
-  Fixed,
-  F2Dot14,
-  FWord,
-  UfWord,
-  Tag,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
-  GlyphId16,
-  GlyphId24,
-  GlyphId,
-  NameId,
-  Nullable,
-  Offset16,
-  Offset24,
-  Offset32
-}
-import dump_support { DumpPath, DumpTable, scalar, absent, readError, versionBits, bytes }
+import read_fonts.lib { FontData, ReadError, ScalarArray, ArrayOfOffsets }
+import font_types.lib { F2Dot14, Tag, Nullable, Offset32 }
+import dump_support { DumpPath, DumpTable, scalar, absent, readError }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.io.writer { Writer, WriterError }
-import silk.num.u8
 import silk.num.u16
-import silk.num.u32
 import silk.num.u64
 import read_fonts.tables.layout { CoverageTable, Condition }
 
@@ -66,7 +32,6 @@ pub effect fn dumpVarc<'a>(path: &mut DumpPath, value: Varc<'a>) -> ()
   ) {
     return
   }
-  let base = Varc<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "version")
     let fieldValue = Varc<'a>.version(&value)
@@ -212,7 +177,6 @@ pub effect fn dumpMultiItemVariationStore<'a>(
   ) {
     return
   }
-  let base = MultiItemVariationStore<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = MultiItemVariationStore<'a>.format(&value)
@@ -316,7 +280,6 @@ pub effect fn dumpSparseVariationRegionList<'a>(
   ) {
     return
   }
-  let base = SparseVariationRegionList<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "regionCount")
     let fieldValue = SparseVariationRegionList<'a>.regionCount(&value)
@@ -393,7 +356,6 @@ pub effect fn dumpSparseVariationRegion<'a>(
   ) {
     return
   }
-  let base = SparseVariationRegion<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "regionAxisCount")
     let fieldValue = SparseVariationRegion<'a>.regionAxisCount(&value)
@@ -470,7 +432,6 @@ pub effect fn dumpSparseRegionAxisCoordinates<'a>(
   ) {
     return
   }
-  let base = SparseRegionAxisCoordinates<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "axisIndex")
     let fieldValue = SparseRegionAxisCoordinates<'a>.axisIndex(&value)
@@ -512,7 +473,6 @@ pub effect fn dumpMultiItemVariationData<'a>(
   ) {
     return
   }
-  let base = MultiItemVariationData<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = MultiItemVariationData<'a>.format(&value)
@@ -576,7 +536,6 @@ pub effect fn dumpConditionList<'a>(path: &mut DumpPath, value: ConditionList<'a
   ) {
     return
   }
-  let base = ConditionList<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "conditionCount")
     let fieldValue = ConditionList<'a>.conditionCount(&value)

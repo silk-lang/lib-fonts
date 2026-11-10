@@ -3,15 +3,36 @@ import silk.core.result { Result }
 import silk.mem.allocator { Allocator, OutOfMemoryError }
 import silk.text.format { Format, ParseError }
 
-pub struct Seconds { pub value: f64 }
+pub struct Seconds {
+  pub value: f64
+}
+
 impl ArgValue for Seconds {
-  fn takesValue() -> bool { return true }
-  fn repeats() -> bool { return false }
-  effect fn initial() -> Self ! OutOfMemoryError ? &mut Allocator { return Seconds { value: 0.0 } }
-  effect fn accept(self: &mut Self, arg: Arg<'_>) -> bool ! OutOfMemoryError ? &mut Allocator {
+  fn takesValue() -> bool {
+    return true
+  }
+
+  fn repeats() -> bool {
+    return false
+  }
+
+  effect fn initial() -> Self
+    ! OutOfMemoryError
+    ? &mut Allocator {
+    return Seconds { value: 0.0 }
+  }
+
+  effect fn accept(self: &mut Self, arg: Arg<'_>) -> bool
+    ! OutOfMemoryError
+    ? &mut Allocator {
     match move Format.f64Value(arg.text) {
-      Result<f64, ParseError>.Success { value } => { self.value = value return true }
-      Result<f64, ParseError>.Failure { .. } => { return false }
+      Result<f64, ParseError>.Success { value } => {
+        self.value = value
+        return true
+      }
+      Result<f64, ParseError>.Failure { .. } => {
+        return false
+      }
     }
   }
 }

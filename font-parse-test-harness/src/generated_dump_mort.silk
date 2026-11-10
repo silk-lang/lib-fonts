@@ -8,47 +8,14 @@ import read_fonts.tables.mort {
   ContextualEntryData,
   InsertionEntryData
 }
-import read_fonts.lib {
-  FontData,
-  FontRead,
-  ReadError,
-  ScalarArray,
-  ComputedArray,
-  VarLenArray,
-  VarLenIter,
-  ReadArgs2,
-  ReadArgs3,
-  ArrayOfOffsets,
-  ArrayOfNullableOffsets
-}
-import font_types.lib {
-  Fixed,
-  F2Dot14,
-  FWord,
-  UfWord,
-  Tag,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
-  GlyphId16,
-  GlyphId24,
-  GlyphId,
-  NameId,
-  Nullable,
-  Offset16,
-  Offset24,
-  Offset32
-}
-import dump_support { DumpPath, DumpTable, scalar, absent, readError, versionBits, bytes }
+import read_fonts.lib { FontData, ReadError, ScalarArray, ComputedArray, VarLenArray, VarLenIter }
+import font_types.lib { Tag }
+import dump_support { DumpPath, scalar, readError }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.io.writer { Writer, WriterError }
 import silk.num.u8
 import silk.num.u16
-import silk.num.u32
-import silk.num.u64
 
 pub effect fn dumpMort<'a>(path: &mut DumpPath, value: Mort<'a>) -> ()
   ! WriterError
@@ -225,7 +192,6 @@ pub effect fn dumpChain<'a>(path: &mut DumpPath, value: Chain<'a>) -> ()
 pub effect fn dumpFeature<'a>(path: &mut DumpPath, value: Feature<'a>, base: FontData<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -268,7 +234,6 @@ pub effect fn dumpSubtable<'a>(path: &mut DumpPath, value: Subtable<'a>) -> ()
   ) {
     return
   }
-  let base = Subtable<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "length")
     let fieldValue = Subtable<'a>.length(&value)
@@ -313,7 +278,6 @@ pub effect fn dumpContextualEntryData<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -339,7 +303,6 @@ pub effect fn dumpInsertionEntryData<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return

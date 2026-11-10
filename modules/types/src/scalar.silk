@@ -2,7 +2,6 @@
 //! Bounds-checked big-endian scalar codecs; decoding never reinterprets native memory.
 import cast
 import silk.core.option { Option }
-import silk.core.ownership { Copy }
 import silk.num.u8
 import silk.num.u16
 import silk.num.u32

@@ -7,7 +7,6 @@ import read_fonts.lib { FileRef, FontRef, ReadError, Name, NameRecord, Os2, Post
 import read_fonts.lib { ComputedArray }
 import read_fonts.tables.fvar { VariationAxisRecord }
 import read_fonts.tables.name { NameString }
-import read_fonts.tables.head { MacStyle }
 import font_types.lib { Fixed, Tag, NameId }
 import silk.collections.bytes { Bytes }
 import silk.collections.list { List }
@@ -173,7 +172,7 @@ effect fn namesWith<'a>(font: &FontRef<'a>, ids: &[u16], families: &mut List<Byt
   ? &mut Allocator {
   let table = match move font.name() {
     Result<Name<'a>, ReadError>.Success { value } => value
-    Result<Name<'a>, ReadError>.Failure { error } => {
+    Result<Name<'a>, ReadError>.Failure { .. } => {
       return
     }
   }
@@ -229,7 +228,7 @@ effect fn describe<'a>(font: &FontRef<'a>, source: usize, index: u32) -> Option<
       italic = (selection & 1) != 0
       oblique = (selection & 0x200) != 0
     }
-    Result<Os2<'a>, ReadError>.Failure { error } => {
+    Result<Os2<'a>, ReadError>.Failure { .. } => {
       if let Result<Head<'a>, ReadError>.Success { value: head } = move font.head() {
         let style = head.macStyle().bits()
         if (style & 1) != 0 {
@@ -280,13 +279,13 @@ effect fn applyAxes<'a>(font: &FontRef<'a>, face: &mut Face) -> ()
   ? &mut Allocator {
   let table = match move font.fvar() {
     Result<Fvar<'a>, ReadError>.Success { value } => value
-    Result<Fvar<'a>, ReadError>.Failure { error } => {
+    Result<Fvar<'a>, ReadError>.Failure { .. } => {
       return
     }
   }
   let axes = match move table.axes() {
     Result<ComputedArray<'a, (), VariationAxisRecord<'a>>, ReadError>.Success { value } => value
-    Result<ComputedArray<'a, (), VariationAxisRecord<'a>>, ReadError>.Failure { error } => {
+    Result<ComputedArray<'a, (), VariationAxisRecord<'a>>, ReadError>.Failure { .. } => {
       return
     }
   }

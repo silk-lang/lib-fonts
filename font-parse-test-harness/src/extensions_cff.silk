@@ -17,9 +17,8 @@ import read_fonts.ps.hinting { Blues, StemSnaps, HintingParams }
 import read_fonts.ps.transform { ScaledFontMatrix }
 import read_fonts.tables.variations { ItemVariationStore, VariationRegionList }
 import read_fonts.model.error { Error }
-import font_types.lib { Fixed, F2Dot14, GlyphId, Tag }
+import font_types.lib { Fixed, F2Dot14, GlyphId }
 import silk.geometry.rect { Rect }
-import silk.geometry.affine { Affine2 }
 import generated_dump_cff
 import generated_dump_cff2
 import generated_dump_variations

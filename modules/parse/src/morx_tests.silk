@@ -79,7 +79,7 @@ test effect fn parseRearrangement() -> ()
   let parsed = run kind(Fixtures.four(), 536870912)
   run Testing.expect(
     match parsed {
-      SubtableKind<'static>.Rearrangement { value } => true
+      SubtableKind<'static>.Rearrangement { .. } => true
       _ => false
     },
     "rearrangement kind",
@@ -98,7 +98,7 @@ test effect fn parseContextual() -> ()
         if i < 2 {
           run Testing.expect(
             match move result {
-              Result<u16, ReadError>.Failure { error } => true
+              Result<u16, ReadError>.Failure { .. } => true
               _ => false
             },
             "absent substitution",
@@ -177,7 +177,7 @@ test effect fn parseNonContextual() -> ()
         } else {
           run Testing.expect(
             match move result {
-              Result<u16, ReadError>.Failure { error } => true
+              Result<u16, ReadError>.Failure { .. } => true
               _ => false
             },
             "absent substitution",

@@ -28,7 +28,6 @@ test effect fn scalarExactWidths() -> ()
   run Testing.expect(decoded == -123456, "signed roundtrip")
 }
 
-import tag { Tag }
 import big_endian { BigEndian }
 
 test effect fn rawEndianStorage() -> ()
@@ -40,7 +39,8 @@ test effect fn rawEndianStorage() -> ()
   run Testing.expect(bytes.length == 2 && bytes[0] == 18 && bytes[1] == 52, "big endian set")
 }
 
-import fixed_tests
-import type_tests
-import format_tests
-import table_data_tests
+// Imported only to register each module's tests with this root.
+import fixed_tests as _fixed_tests
+import type_tests as _type_tests
+import format_tests as _format_tests
+import table_data_tests as _table_data_tests

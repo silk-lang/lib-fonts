@@ -175,7 +175,7 @@ impl<'a> Subtable<'a> {
 
   pub fn isVariable(self: &Self) -> bool {
     return match &self.* {
-      Subtable<'a>.Ot { value } => false
+      Subtable<'a>.Ot { .. } => false
       Subtable<'a>.Aat { value } => AatSubtable.coverage(&value) & 8192 != 0
     }
   }

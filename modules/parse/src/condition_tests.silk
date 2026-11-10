@@ -1,7 +1,7 @@
 // Ports of upstream tables/layout/condition_tests.rs.
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 import font_data { FontData }
-import read { ReadError, FontReadAt }
+import read { ReadError }
 import generated_layout { Condition, ConditionSet, LookupConditionRecord, FeatureVariations }
 import model.error { Error }
 import font_types.lib { F2Dot14 }
@@ -42,7 +42,7 @@ effect fn must<T>(result: Result<T, ReadError>) -> T
   ! AssertionError<'static> {
   return match move result {
     Result<T, ReadError>.Success { value } => move value
-    Result<T, ReadError>.Failure { error } => {
+    Result<T, ReadError>.Failure { .. } => {
       run Testing.expect(false, "fixture parses")
       return Intrinsic.trap("test assertion")
     }
@@ -60,9 +60,7 @@ fn badDelta(index: u32) -> Result<f64, Error> {
 fn evaluate(bytes: &[u8], coords: &[F2Dot14]) -> Result<bool, Error> {
   return match move Condition.read(FontData.new(bytes)) {
     Result<Condition, ReadError>.Success { value } => Condition.evaluate(&value, coords, noDelta)
-    Result<Condition, ReadError>.Failure { error } => Result<bool, Error>.failResult(
-      Error.Malformed,
-    )
+    Result<Condition, ReadError>.Failure { .. } => Result<bool, Error>.failResult(Error.Malformed)
   }
 }
 

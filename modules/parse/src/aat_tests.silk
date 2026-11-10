@@ -19,7 +19,7 @@ effect fn must<T>(result: Result<T, ReadError>) -> T
 
 fn failed<T>(result: Result<T, ReadError>) -> bool {
   return match move result {
-    Result<T, ReadError>.Failure { error } => true
+    Result<T, ReadError>.Failure { .. } => true
     _ => false
   }
 }
@@ -128,7 +128,6 @@ import silk.num.usize
 import tables.aat {
   StateTable,
   ExtendedStateTable,
-  StateEntry,
   NoPayload,
   LegacyStateTableParts,
   StateTableParts

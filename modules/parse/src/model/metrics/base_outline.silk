@@ -11,7 +11,6 @@ import table_provider { GlyfLoca }
 import tables.gvar { SelectedGvar }
 import tables.hmtx { GlyphMetricRecords }
 import ps.cff.font { CffFontRef, Subfont }
-import font_data { FontData }
 import font_types.lib { F2Dot14, GlyphId }
 import silk.geometry.point { Point2 }
 import silk.geometry.affine { Affine2 }
@@ -108,13 +107,13 @@ impl<'a> BaseOutlines<'a> {
     let mut sources = GlyphSourceOrder.iter(self.order)
     while let Option<GlyphSource>.Some { value: source } = GlyphSources.next(&mut sources) {
       if source == GlyphSource.Glyf {
-        if let Maybe<GlyfLoca<'a>>.Some { value } = self.glyf {
+        if let Maybe<GlyfLoca<'a>>.Some { .. } = self.glyf {
           return true
         }
       }
       if source == GlyphSource.Cff || source == GlyphSource.Cff2 {
         if source == GlyphSource.Cff {
-          if let Maybe<&'a CffFontRef<'a>>.Some { value } = self.standalone {
+          if let Maybe<&'a CffFontRef<'a>>.Some { .. } = self.standalone {
             return true
           }
         }
@@ -122,7 +121,7 @@ impl<'a> BaseOutlines<'a> {
         if source == GlyphSource.Cff2 {
           data = self.cff2
         }
-        if let Maybe<CffFontRef<'a>>.Some { value } = data {
+        if let Maybe<CffFontRef<'a>>.Some { .. } = data {
           return true
         }
       }

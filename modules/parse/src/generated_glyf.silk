@@ -2,14 +2,11 @@
 // Source: pinned resources/codegen_inputs; generator: modules/parse/tools/font-codegen-silk.
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 import font_data { FontData }
-import read { ReadError, FontRead, FontReadAt, ComputeSize, Format, computeSize, readAtWithArgs }
+import read { ReadError, FontRead }
 import table_provider { TopLevelTable }
-import array { ScalarArray, ComputedArray, VarLenArray }
-import offset { resolve, resolveWithArgs, resolveNullableWithArgs }
-import offset_array { ArrayOfOffsets, ArrayOfNullableOffsets }
-import read_args { ReadArgs2, ReadArgs3 }
+import array { ScalarArray }
 import table_ref { ByteRange, MinByteRange }
-import generated_support { scalarOr, recordArray, varLenArray, varLenBytes, signedCount }
+import generated_support { scalarOr, signedCount }
 import font_types.lib {
   Scalar,
   FixedSize,
@@ -19,23 +16,8 @@ import font_types.lib {
   Tag,
   Fixed,
   F2Dot14,
-  F4Dot12,
-  F6Dot10,
-  FWord,
-  UfWord,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
   Uint24,
-  Int24,
-  GlyphId,
-  GlyphId16,
-  GlyphId24,
-  NameId,
-  Offset16,
-  Offset24,
-  Offset32,
-  Nullable
+  GlyphId
 }
 import silk.core.option { Option }
 import silk.core.result { Result }
@@ -48,8 +30,6 @@ import silk.core.ops { BitAnd, BitOr, BitXor, Not, Subtract }
 import silk.num.usize
 import silk.num.u8
 import silk.num.u16
-import silk.num.u32
-import silk.num.u64
 import silk.num.i16
 import silk.num.i32
 
@@ -78,7 +58,6 @@ impl<'a> Glyf<'a> {
       return Result<Self, ReadError>.failResult(ReadError.OutOfBounds)
     }
     let mut ranges: [ByteRange; 0] = [ByteRange { start: 0, end: 0 }; 0]
-    let mut end: usize = 0
     return Result<Self, ReadError>.succeed(Self { _fontData: data, _fieldRanges: ranges })
   }
 
@@ -136,19 +115,15 @@ impl<'a> SimpleGlyph<'a> {
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let xMinValue = scalarOr<i16>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let yMinValue = scalarOr<i16>(data, ranges[2].start, 0)
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let xMaxValue = scalarOr<i16>(data, ranges[3].start, 0)
     ranges[4].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[4].end = end
-    let yMaxValue = scalarOr<i16>(data, ranges[4].start, 0)
     ranges[5].start = end
     end = usize.saturatingAdd(
       end,
@@ -178,7 +153,7 @@ impl<'a> SimpleGlyph<'a> {
   pub fn numberOfContours(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[0].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -190,7 +165,7 @@ impl<'a> SimpleGlyph<'a> {
   pub fn xMin(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[1].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -202,7 +177,7 @@ impl<'a> SimpleGlyph<'a> {
   pub fn yMin(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[2].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -214,7 +189,7 @@ impl<'a> SimpleGlyph<'a> {
   pub fn xMax(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[3].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -226,7 +201,7 @@ impl<'a> SimpleGlyph<'a> {
   pub fn yMax(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[4].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -243,7 +218,7 @@ impl<'a> SimpleGlyph<'a> {
       self._fieldRanges[5].end,
     ) {
       Result<ScalarArray<'a, u16>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, u16>, ReadError>.Failure { error } => ScalarArray<u16>.empty()
+      Result<ScalarArray<'a, u16>, ReadError>.Failure { .. } => ScalarArray<u16>.empty()
     }
   }
 
@@ -257,7 +232,7 @@ impl<'a> SimpleGlyph<'a> {
   pub fn instructionLength(self: &Self) -> u16 {
     return match move FontData<'a>.readAt<u16>(&self._fontData, self._fieldRanges[6].start) {
       Result<u16, ReadError>.Success { value } => value
-      Result<u16, ReadError>.Failure { error } => 0
+      Result<u16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -273,7 +248,7 @@ impl<'a> SimpleGlyph<'a> {
       self._fieldRanges[7].end,
     ) {
       Result<ScalarArray<'a, u8>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, u8>, ReadError>.Failure { error } => ScalarArray<u8>.empty()
+      Result<ScalarArray<'a, u8>, ReadError>.Failure { .. } => ScalarArray<u8>.empty()
     }
   }
 
@@ -289,7 +264,7 @@ impl<'a> SimpleGlyph<'a> {
       self._fieldRanges[8].end,
     ) {
       Result<ScalarArray<'a, u8>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, u8>, ReadError>.Failure { error } => ScalarArray<u8>.empty()
+      Result<ScalarArray<'a, u8>, ReadError>.Failure { .. } => ScalarArray<u8>.empty()
     }
   }
 
@@ -649,23 +624,18 @@ impl<'a> CompositeGlyph<'a> {
     ranges[0].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[0].end = end
-    let numberOfContoursValue = scalarOr<i16>(data, ranges[0].start, 0)
     ranges[1].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[1].end = end
-    let xMinValue = scalarOr<i16>(data, ranges[1].start, 0)
     ranges[2].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[2].end = end
-    let yMinValue = scalarOr<i16>(data, ranges[2].start, 0)
     ranges[3].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[3].end = end
-    let xMaxValue = scalarOr<i16>(data, ranges[3].start, 0)
     ranges[4].start = end
     end = usize.saturatingAdd(end, 2)
     ranges[4].end = end
-    let yMaxValue = scalarOr<i16>(data, ranges[4].start, 0)
     ranges[5].start = end
     end = usize.saturatingAdd(end, (usize.saturatingSubtract(FontData.len(&data), end) / 1 * 1))
     ranges[5].end = end
@@ -682,7 +652,7 @@ impl<'a> CompositeGlyph<'a> {
   pub fn numberOfContours(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[0].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -694,7 +664,7 @@ impl<'a> CompositeGlyph<'a> {
   pub fn xMin(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[1].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -706,7 +676,7 @@ impl<'a> CompositeGlyph<'a> {
   pub fn yMin(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[2].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -718,7 +688,7 @@ impl<'a> CompositeGlyph<'a> {
   pub fn xMax(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[3].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -730,7 +700,7 @@ impl<'a> CompositeGlyph<'a> {
   pub fn yMax(self: &Self) -> i16 {
     return match move FontData<'a>.readAt<i16>(&self._fontData, self._fieldRanges[4].start) {
       Result<i16, ReadError>.Success { value } => value
-      Result<i16, ReadError>.Failure { error } => 0
+      Result<i16, ReadError>.Failure { .. } => 0
     }
   }
 
@@ -747,7 +717,7 @@ impl<'a> CompositeGlyph<'a> {
       self._fieldRanges[5].end,
     ) {
       Result<ScalarArray<'a, u8>, ReadError>.Success { value } => value
-      Result<ScalarArray<'a, u8>, ReadError>.Failure { error } => ScalarArray<u8>.empty()
+      Result<ScalarArray<'a, u8>, ReadError>.Failure { .. } => ScalarArray<u8>.empty()
     }
   }
 
@@ -1165,7 +1135,6 @@ impl<'a> FontRead<'a, ()> for Glyph<'a> {
 import font_data { Cursor }
 import font_types.lib { F26Dot6 }
 import silk.geometry.point { Point2 }
-import silk.core.ops { Add, Multiply }
 import silk.num.i8
 import silk.num.f32
 

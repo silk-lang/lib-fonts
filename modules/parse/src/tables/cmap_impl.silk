@@ -1661,12 +1661,12 @@ impl<'a> Cmap<'a> {
               value: subtable
             } = move EncodingRecord<'a>.subtable(&record, Cmap<'a>.offsetData(self)) {
               let supported = match subtable {
-                CmapSubtable<'a>.Format0 { value } => true
-                CmapSubtable<'a>.Format4 { value } => true
-                CmapSubtable<'a>.Format6 { value } => true
-                CmapSubtable<'a>.Format10 { value } => true
-                CmapSubtable<'a>.Format12 { value } => true
-                CmapSubtable<'a>.Format13 { value } => true
+                CmapSubtable<'a>.Format0 { .. } => true
+                CmapSubtable<'a>.Format4 { .. } => true
+                CmapSubtable<'a>.Format6 { .. } => true
+                CmapSubtable<'a>.Format10 { .. } => true
+                CmapSubtable<'a>.Format12 { .. } => true
+                CmapSubtable<'a>.Format13 { .. } => true
                 _ => false
               }
               if supported {

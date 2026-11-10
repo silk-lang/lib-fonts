@@ -15,108 +15,227 @@ import silk.text.regex { Match }
 import silk.num.f64
 import silk.io.writer { WriterError }
 
-struct Named { symbol: string<'static>, name: string<'static> }
-
-effect fn integer(value: string) -> i64 ! TaskError | OutOfMemoryError ? &mut Allocator {
-  return match move Format.i64Value(value) { Result<i64, ParseError>.Success { value: found } => found _ => run Task.abort("Invalid fixture integer") }
+struct Named {
+  symbol: string<'static>,
+  name: string<'static>
 }
-effect fn coordinate(value: string) -> i64 ! TaskError | OutOfMemoryError ? &mut Allocator {
-  let parsed = match move Format.f64Value(value) { Result<f64, ParseError>.Success { value: found } => found _ => run Task.abort("Invalid fixture coordinate") }
-  let scaled = parsed * 16384.0 let floor = f64.floor(scaled) let mut n = f64.toI64(floor)
+
+effect fn integer(value: string) -> i64
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
+  return match move Format.i64Value(value) {
+    Result<i64, ParseError>.Success { value: found } => found
+    _ => run Task.abort("Invalid fixture integer")
+  }
+}
+
+effect fn coordinate(value: string) -> i64
+  ! TaskError | OutOfMemoryError
+  ? &mut Allocator {
+  let parsed = match move Format.f64Value(value) {
+    Result<f64, ParseError>.Success { value: found } => found
+    _ => run Task.abort("Invalid fixture coordinate")
+  }
+  let scaled = parsed * 16384.0
+  let floor = f64.floor(scaled)
+  let mut n = f64.toI64(floor)
   let fraction = scaled - floor
+
   // Python round uses nearest, with exact halves rounded to the even integer.
-  if fraction > 0.5 || (fraction == 0.5 && n % 2 != 0) { n = n + 1 }
+  if fraction > 0.5 || (fraction == 0.5 && n % 2 != 0) {
+    n = n + 1
+  }
   return n
 }
-effect fn cvar(out: &mut Bytes, root: &Path) -> () ! TaskError | FileError | OutOfMemoryError ? &mut Allocator | &mut FileSystem {
+
+effect fn cvar(out: &mut Bytes, root: &Path) -> ()
+  ! TaskError | FileError | OutOfMemoryError
+  ? &mut Allocator | &mut FileSystem {
   let source = run G.read(root, "modules/parse/upstream/read-fonts/src/tables/cvar.rs")
   let text = run G.text(Bytes.asSlice(&source))
   let body = run G.before(run G.after(text, "let cases = &["), "];")
   let cases = run G.matches("\\(\\s*\\[([0-9.,\\s-]+)\\],\\s*\\[([0-9,\\s-]+)\\],?\\s*\\)", body)
   run G.require(List<Match>.length(&cases) == 8, "Expected eight cvar scaled cases")
-  let mut records = Bytes.make() let mut count: usize = 0 let mut first = true
-  let caseSlice = List<Match>.asSlice(&cases) let mut caseIndex: usize = 0
+  let mut records = Bytes.make()
+  let mut count: usize = 0
+  let mut first = true
+  let caseSlice = List<Match>.asSlice(&cases)
+  let mut caseIndex: usize = 0
   while caseIndex < caseSlice.length {
-    let item = &caseSlice[caseIndex] caseIndex = caseIndex + 1
+    let item = &caseSlice[caseIndex]
+    caseIndex = caseIndex + 1
     let coordinates = run G.matches("-?[0-9]+(?:\\.[0-9]+)?", G.group(item, 1))
     let deltas = run G.matches("-?[0-9]+", G.group(item, 2))
     run G.require(List<Match>.length(&coordinates) == 2, "Expected two cvar coordinates")
-    if first { count = List<Match>.length(&deltas) first = false }
+    if first {
+      count = List<Match>.length(&deltas)
+      first = false
+    }
     run G.require(List<Match>.length(&deltas) == count, "Inconsistent cvar delta counts")
-    let coordinateSlice = List<Match>.asSlice(&coordinates) let mut coordinateIndex: usize = 0
-    while coordinateIndex < coordinateSlice.length { let value = &coordinateSlice[coordinateIndex] coordinateIndex = coordinateIndex + 1 run B.signed(&mut records, run coordinate(G.group(value, 0)), 2) }
-    let deltaSlice = List<Match>.asSlice(&deltas) let mut deltaIndex: usize = 0
-    while deltaIndex < deltaSlice.length { let value = &deltaSlice[deltaIndex] deltaIndex = deltaIndex + 1 run B.signed(&mut records, run integer(G.group(value, 0)), 4) }
+    let coordinateSlice = List<Match>.asSlice(&coordinates)
+    let mut coordinateIndex: usize = 0
+    while coordinateIndex < coordinateSlice.length {
+      let value = &coordinateSlice[coordinateIndex]
+      coordinateIndex = coordinateIndex + 1
+      run B.signed(&mut records, run coordinate(G.group(value, 0)), 2)
+    }
+    let deltaSlice = List<Match>.asSlice(&deltas)
+    let mut deltaIndex: usize = 0
+    while deltaIndex < deltaSlice.length {
+      let value = &deltaSlice[deltaIndex]
+      deltaIndex = deltaIndex + 1
+      run B.signed(&mut records, run integer(G.group(value, 0)), 4)
+    }
   }
-  let mut data = Bytes.make() run G.be(&mut data, List<Match>.length(&cases), 2) run G.be(&mut data, count, 2) run Bytes.append(&mut data, Bytes.asSlice(&records))
+  let mut data = Bytes.make()
+  run G.be(&mut data, List<Match>.length(&cases), 2)
+  run G.be(&mut data, count, 2)
+  run Bytes.append(&mut data, Bytes.asSlice(&records))
   run G.blob(&mut out, "cvarScaledExpected", Bytes.asSlice(&data), true)
-  let body2 = run G.before(run G.after(run G.after(text, "fn raw_tuple_deltas()"), "let expected = ["), "];")
+  let body2 = run G.before(
+    run G.after(run G.after(text, "fn raw_tuple_deltas()"), "let expected = ["),
+    "];",
+  )
   let rows = run G.matches("&\\[([^\\]]+)\\]", body2)
   run G.require(List<Match>.length(&rows) == 11, "Expected eleven cvar raw rows")
-  let mut data3 = Bytes.make() run G.be(&mut data3, List<Match>.length(&rows), 2)
-  let rowSlice = List<Match>.asSlice(&rows) let mut rowIndex: usize = 0
+  let mut data3 = Bytes.make()
+  run G.be(&mut data3, List<Match>.length(&rows), 2)
+  let rowSlice = List<Match>.asSlice(&rows)
+  let mut rowIndex: usize = 0
   while rowIndex < rowSlice.length {
-    let row = &rowSlice[rowIndex] rowIndex = rowIndex + 1
+    let row = &rowSlice[rowIndex]
+    rowIndex = rowIndex + 1
     let pairs = run G.matches("\\(([0-9]+),\\s*(-?[0-9]+)\\)", G.group(row, 1))
     run G.be(&mut data3, List<Match>.length(&pairs), 2)
-    let pairSlice = List<Match>.asSlice(&pairs) let mut pairIndex: usize = 0
-    while pairIndex < pairSlice.length { let pair = &pairSlice[pairIndex] pairIndex = pairIndex + 1 run G.be(&mut data3, run G.number(G.group(pair, 1)), 2) run B.signed(&mut data3, run integer(G.group(pair, 2)), 4) }
+    let pairSlice = List<Match>.asSlice(&pairs)
+    let mut pairIndex: usize = 0
+    while pairIndex < pairSlice.length {
+      let pair = &pairSlice[pairIndex]
+      pairIndex = pairIndex + 1
+      run G.be(&mut data3, run G.number(G.group(pair, 1)), 2)
+      run B.signed(&mut data3, run integer(G.group(pair, 2)), 4)
+    }
   }
   run G.blob(&mut out, "cvarRawExpected", Bytes.asSlice(&data3), true)
 }
 
-pub effect fn misc(root: &Path, check: bool) -> () ! TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError ? &mut HostInput | &mut Allocator | &mut ChildProcess | &mut FileSystem {
-  let mut out = Bytes.make() run G.add(&mut out, G.HEADER)
+pub effect fn misc(root: &Path, check: bool) -> ()
+  ! TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError
+  ? &mut HostInput | &mut Allocator | &mut ChildProcess | &mut FileSystem {
+  let mut out = Bytes.make()
+  run G.add(&mut out, G.HEADER)
   let source = run G.read(root, "modules/parse/upstream/font-test-data/src/lib.rs")
   let text = run G.text(Bytes.asSlice(&source))
-  let symbols = [Named { symbol: "CJK_6868", name: "varcCjkFont" }, Named { symbol: "CONDITIONALS", name: "varcConditionalsFont" }, Named { symbol: "STATIC_GVAR", name: "varcStaticFont" }, Named { symbol: "DELTA_PRECISION", name: "varcDeltaPrecisionFont" }, Named { symbol: "CVAR", name: "cvarFont" }, Named { symbol: "COLR_GRADIENT_RECT", name: "gradientFont" }, Named { symbol: "EMBEDDED_BITMAPS", name: "embeddedBitmaps" }, Named { symbol: "CBDT", name: "cbdtFont" }, Named { symbol: "COLRV0V1", name: "colrFont" }, Named { symbol: "COLRV0V1_VARIABLE", name: "variableColrFont" }, Named { symbol: "COLRV1_NO_CLIPLIST", name: "unclippedColrFont" }]
-  let mut cbdt = Bytes.make() let mut colr = Bytes.make()
+  let symbols = [
+    Named { symbol: "CJK_6868", name: "varcCjkFont" },
+    Named { symbol: "CONDITIONALS", name: "varcConditionalsFont" },
+    Named { symbol: "STATIC_GVAR", name: "varcStaticFont" },
+    Named { symbol: "DELTA_PRECISION", name: "varcDeltaPrecisionFont" },
+    Named { symbol: "CVAR", name: "cvarFont" },
+    Named { symbol: "COLR_GRADIENT_RECT", name: "gradientFont" },
+    Named { symbol: "EMBEDDED_BITMAPS", name: "embeddedBitmaps" },
+    Named { symbol: "CBDT", name: "cbdtFont" },
+    Named { symbol: "COLRV0V1", name: "colrFont" },
+    Named { symbol: "COLRV0V1_VARIABLE", name: "variableColrFont" },
+    Named { symbol: "COLRV1_NO_CLIPLIST", name: "unclippedColrFont" },
+  ]
+  let mut cbdt = Bytes.make()
+  let mut colr = Bytes.make()
   let mut symbolIndex: usize = 0
   while symbolIndex < symbols.length {
-    let item = &symbols[symbolIndex] symbolIndex = symbolIndex + 1
+    let item = &symbols[symbolIndex]
+    symbolIndex = symbolIndex + 1
     let data = run G.included(root, text, item.symbol)
     run G.blob(&mut out, item.name, Bytes.asSlice(&data), true)
-    if item.name == "cbdtFont" { cbdt = move data } else if item.name == "colrFont" { colr = move data }
+    if item.name == "cbdtFont" {
+      cbdt = move data
+    } else if item.name == "colrFont" {
+      colr = move data
+    }
   }
   let declaration = run G.after(text, "pub static SIMPLE_META_TABLE:")
   let body = run G.before(run G.after(run G.after(declaration, "&["), "&["), "];")
-  let clean = run G.comments(body) let data = run G.numericBytes(run G.text(Bytes.asSlice(&clean)), "0[xX][0-9A-Fa-f]+|0[bB][01]+|[0-9]+", 1)
+  let clean = run G.comments(body)
+  let data = run G.numericBytes(
+    run G.text(Bytes.asSlice(&clean)),
+    "0[xX][0-9A-Fa-f]+|0[bB][01]+|[0-9]+",
+    1,
+  )
   run G.blob(&mut out, "simpleMeta", Bytes.asSlice(&data), true)
-  let base = run Builders.baseTable() run G.blob(&mut out, "baseTable", Bytes.asSlice(&base), true)
+  let base = run Builders.baseTable()
+  run G.blob(&mut out, "baseTable", Bytes.asSlice(&base), true)
   let baseSource = run G.read(root, "modules/parse/upstream/read-fonts/src/tables/base.rs")
-  let scriptSymbols = [Named { symbol: "HANGING_SCRIPTS", name: "hangingScripts" }, Named { symbol: "IDEOGRAPHIC_SCRIPTS", name: "ideographicScripts" }] let mut scriptIndex: usize = 0
+  let scriptSymbols = [
+    Named { symbol: "HANGING_SCRIPTS", name: "hangingScripts" },
+    Named { symbol: "IDEOGRAPHIC_SCRIPTS", name: "ideographicScripts" },
+  ]
+  let mut scriptIndex: usize = 0
   while scriptIndex < scriptSymbols.length {
-    let item = &scriptSymbols[scriptIndex] scriptIndex = scriptIndex + 1
-    let mut marker = Bytes.make() run G.add(&mut marker, "const ") run G.add(&mut marker, item.symbol) run G.add(&mut marker, ":")
-    let body = run G.before(run G.after(run G.text(Bytes.asSlice(&baseSource)), run G.text(Bytes.asSlice(&marker))), "];")
-    let tags = run G.matches("Tag::new\\(b\"([^\"]+)\"\\)", body) let mut data = Bytes.make()
-    let tagSlice = List<Match>.asSlice(&tags) let mut tagIndex: usize = 0
-    while tagIndex < tagSlice.length { let tag = &tagSlice[tagIndex] tagIndex = tagIndex + 1 run G.add(&mut data, G.group(tag, 1)) }
+    let item = &scriptSymbols[scriptIndex]
+    scriptIndex = scriptIndex + 1
+    let mut marker = Bytes.make()
+    run G.add(&mut marker, "const ")
+    run G.add(&mut marker, item.symbol)
+    run G.add(&mut marker, ":")
+    let body = run G.before(
+      run G.after(run G.text(Bytes.asSlice(&baseSource)), run G.text(Bytes.asSlice(&marker))),
+      "];",
+    )
+    let tags = run G.matches("Tag::new\\(b\"([^\"]+)\"\\)", body)
+    let mut data = Bytes.make()
+    let tagSlice = List<Match>.asSlice(&tags)
+    let mut tagIndex: usize = 0
+    while tagIndex < tagSlice.length {
+      let tag = &tagSlice[tagIndex]
+      tagIndex = tagIndex + 1
+      run G.add(&mut data, G.group(tag, 1))
+    }
     run G.blob(&mut out, item.name, Bytes.asSlice(&data), true)
   }
   run cvar(&mut out, root)
   let mathSource = run G.read(root, "modules/parse/upstream/read-fonts/src/tables/math.rs")
-  let body4 = run G.before(run G.after(run G.text(Bytes.asSlice(&mathSource)), "const VALUE_RECORD_ORDER:"), "];")
+  let body4 = run G.before(
+    run G.after(run G.text(Bytes.asSlice(&mathSource)), "const VALUE_RECORD_ORDER:"),
+    "];",
+  )
   let order = run G.matches("\"([a-z_]+)\"", body4)
   run G.require(List<Match>.length(&order) == 51, "Expected 51 MATH value records")
-  let math = run Builders.mathTable(List<Match>.length(&order)) run G.blob(&mut out, "mathTable", Bytes.asSlice(&math), true)
+  let math = run Builders.mathTable(List<Match>.length(&order))
+  run G.blob(&mut out, "mathTable", Bytes.asSlice(&math), true)
 
-  let original = Bytes.asSlice(&cbdt) let mut changed = run Bytes.copy(original)
+  let original = Bytes.asSlice(&cbdt)
+  let mut changed = run Bytes.copy(original)
   let mut record: usize = 0
   while record < G.numberAt(original, 4, 2) {
-    let pos = 12 + record * 16 record = record + 1
-    if G.numberAt(original, pos, 4) != 1128418371 { continue }
-    let cblc = G.numberAt(original, pos + 8, 4) let count = G.numberAt(original, cblc + 4, 4)
+    let pos = 12 + record * 16
+    record = record + 1
+    if G.numberAt(original, pos, 4) != 1128418371 {
+      continue
+    }
+    let cblc = G.numberAt(original, pos + 8, 4)
+    let count = G.numberAt(original, cblc + 4, 4)
     let mut strike: usize = 0
     while strike < count {
-      let size = cblc + 8 + strike * 48 strike = strike + 1
-      if original[size + 44] != 16 { continue }
-      let begin = cblc + G.numberAt(original, size, 4) let length = G.numberAt(original, size + 8, 4)
+      let size = cblc + 8 + strike * 48
+      strike = strike + 1
+      if original[size + 44] != 16 {
+        continue
+      }
+      let begin = cblc + G.numberAt(original, size, 4)
+      let length = G.numberAt(original, size + 8, 4)
       let mut item: usize = 0
       while item < length {
-        let pos = begin + item * 8 item = item + 1
-        let first = G.numberAt(original, pos, 2) let last = G.numberAt(original, pos + 2, 2)
-        if first <= 2 && last >= 2 { if first < 2 { G.patch(&mut changed, pos + 2, 1, 2) } else { G.patch(&mut changed, pos, 3, 2) } }
+        let pos = begin + item * 8
+        item = item + 1
+        let first = G.numberAt(original, pos, 2)
+        let last = G.numberAt(original, pos + 2, 2)
+        if first <= 2 && last >= 2 {
+          if first < 2 {
+            G.patch(&mut changed, pos + 2, 1, 2)
+          } else {
+            G.patch(&mut changed, pos, 3, 2)
+          }
+        }
       }
     }
   }
@@ -124,18 +243,34 @@ pub effect fn misc(root: &Path, check: bool) -> () ! TaskError | ProcessError | 
   run Varc.fixtures(&mut out)
   let mut record5: usize = 0
   while record5 < G.numberAt(Bytes.asSlice(&colr), 4, 2) {
-    let at = 12 + record5 * 16 record5 = record5 + 1
+    let at = 12 + record5 * 16
+    record5 = record5 + 1
     if G.numberAt(Bytes.asSlice(&colr), at, 4) == 1129270354 {
-      let offset = G.numberAt(Bytes.asSlice(&colr), at + 8, 4) G.patch(&mut colr, offset, 0, 2)
+      let offset = G.numberAt(Bytes.asSlice(&colr), at + 8, 4)
+      G.patch(&mut colr, offset, 0, 2)
     }
   }
   run G.blob(&mut out, "colrV0Font", Bytes.asSlice(&colr), true)
-  let traversal = run G.read(root, "modules/parse/upstream/read-fonts/src/model/glyph/color/traversal.rs")
-  let body6 = run G.before(run G.after(run G.after(run G.text(Bytes.asSlice(&traversal)), "fn no_panic_on_empty_colorline()"), "let test_case: &[u8] = &["), "];")
-  let emptyLine = run G.numericBytes(body6, "[0-9]+", 1) run G.blob(&mut out, "colrEmptyColorLineFont", Bytes.asSlice(&emptyLine), true)
-  let invalid = run Builders.colorContour(1) run G.blob(&mut out, "colrInvalidCubicFont", Bytes.asSlice(&invalid), true)
-  let valid = run Builders.colorContour(128) run G.blob(&mut out, "colrValidCubicFont", Bytes.asSlice(&valid), true)
+  let traversal = run G.read(
+    root,
+    "modules/parse/upstream/read-fonts/src/model/glyph/color/traversal.rs",
+  )
+  let body6 = run G.before(
+    run G.after(
+      run G.after(run G.text(Bytes.asSlice(&traversal)), "fn no_panic_on_empty_colorline()"),
+      "let test_case: &[u8] = &[",
+    ),
+    "];",
+  )
+  let emptyLine = run G.numericBytes(body6, "[0-9]+", 1)
+  run G.blob(&mut out, "colrEmptyColorLineFont", Bytes.asSlice(&emptyLine), true)
+  let invalid = run Builders.colorContour(1)
+  run G.blob(&mut out, "colrInvalidCubicFont", Bytes.asSlice(&invalid), true)
+  let valid = run Builders.colorContour(128)
+  run G.blob(&mut out, "colrValidCubicFont", Bytes.asSlice(&valid), true)
   run G.save(root, "modules/parse/src/generated_misc_table_fixtures.silk", &out, check)
-  let mut message = Bytes.make() run G.decimal(&mut message, G.count(run G.text(Bytes.asSlice(&out)), "pub fn "))
-  run G.add(&mut message, " misc table fixtures") run G.report(check, run G.text(Bytes.asSlice(&message)))
+  let mut message = Bytes.make()
+  run G.decimal(&mut message, G.count(run G.text(Bytes.asSlice(&out)), "pub fn "))
+  run G.add(&mut message, " misc table fixtures")
+  run G.report(check, run G.text(Bytes.asSlice(&message)))
 }

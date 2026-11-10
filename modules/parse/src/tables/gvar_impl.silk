@@ -155,7 +155,7 @@ impl<'a> SelectedGvar<'a> {
 
   pub fn isExtended(self: &Self) -> bool {
     return match &self.* {
-      SelectedGvar<'a>.Extended { table } => true
+      SelectedGvar<'a>.Extended { .. } => true
       _ => false
     }
   }

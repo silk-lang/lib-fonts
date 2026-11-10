@@ -3,10 +3,9 @@ import silk.collections.bytes { Bytes }
 import silk.system.filesystem { FileError }
 import silk.system.host_input { HostInputError }
 //! Negative variable advances, clamping, and positioned scaling from upstream.
-import font { ShaperData, ConfiguredShaper, DefaultFontFuncs }
+import font { ShaperData, ConfiguredShaper }
 import shape { shapeWithFeatures }
 import buffer { Buffer, Glyph }
-import generated_fixtures as Fixtures
 import font_types.lib { Tag, GlyphId }
 import read_fonts.lib { FontRef, ReadError }
 import read_fonts.model.variation { Variation }

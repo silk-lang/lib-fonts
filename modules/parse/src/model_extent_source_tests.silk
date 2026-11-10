@@ -329,7 +329,7 @@ fn sameOptional(a: Option<GlyphExtents<F48Dot16>>, b: Option<GlyphExtents<F48Dot
 
 import model.charmap { Charmap }
 import table_provider { TableProvider }
-import tables.colr { Colr, ClipBox }
+import tables.colr { Colr }
 import tables.fvar { Fvar, UserCoordinate }
 import tables.avar { Avar }
 import font_types.lib { Tag, Fixed }

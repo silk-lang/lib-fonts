@@ -12,11 +12,16 @@ import font_generate_support as G
 import font_generate_binary as B
 import font_harness_fixtures as F { Fixtures, Errors, Literal }
 
-effect fn upstream(root: &Path, module: string) -> List<Literal> ! Errors ? &mut Allocator | &mut FileSystem {
+effect fn upstream(root: &Path, module: string) -> List<Literal>
+  ! Errors
+  ? &mut Allocator | &mut FileSystem {
   let path = run F.label(&["modules/parse/upstream/font-test-data/src/", module, ".rs"])
   let bytes = run G.read(root, String.view(&path))
   let clean = run G.comments(run G.text(bytes.asSlice()))
-  let matched = run G.matches("pub (?:static|const) (\\w+): &\\[u8\\] = &\\[([^]]*)\\];", run G.text(clean.asSlice()))
+  let matched = run G.matches(
+    "pub (?:static|const) (\\w+): &\\[u8\\] = &\\[([^]]*)\\];",
+    run G.text(clean.asSlice()),
+  )
   let rows = matched.asSlice()
   let mut result = List<Literal>.make()
   let mut at: usize = 0
@@ -27,16 +32,44 @@ effect fn upstream(root: &Path, module: string) -> List<Literal> ! Errors ? &mut
   }
   return move result
 }
-effect fn lookup(payload: &[u8], kind: usize, extension: bool, gsub: bool) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+
+effect fn lookup(payload: &[u8], kind: usize, extension: bool, gsub: bool) -> Bytes
+  ! OutOfMemoryError
+  ? &mut Allocator {
   let mut out = Bytes.make()
   run B.words(&mut out, &[1, 0, 0, 0, 10, 1, 4])
-  run G.be(&mut out, if extension { if gsub { 7 } else { 9 } } else { kind }, 2)
+  run G.be(
+    &mut out,
+    if extension {
+      if gsub {
+        7
+      } else {
+        9
+      }
+    } else {
+      kind
+    },
+    2,
+  )
   run B.words(&mut out, &[0, 1, 8])
-  if extension { run G.be(&mut out, 1, 2)  run G.be(&mut out, kind, 2)  run G.be(&mut out, 8, 4) }
+  if extension {
+    run G.be(&mut out, 1, 2)
+    run G.be(&mut out, kind, 2)
+    run G.be(&mut out, 8, 4)
+  }
   run out.append(payload)
   return move out
 }
-effect fn prefixes(fixtures: &mut Fixtures, name: string, tag: string, payload: &[u8], header: &[u8]) -> () ! Errors ? &mut Allocator | &mut FileSystem {
+
+effect fn prefixes(
+  fixtures: &mut Fixtures,
+  name: string,
+  tag: string,
+  payload: &[u8],
+  header: &[u8],
+) -> ()
+  ! Errors
+  ? &mut Allocator | &mut FileSystem {
   let mut length: usize = 0
   while length <= payload.length {
     let n = run F.number(length)
@@ -48,7 +81,10 @@ effect fn prefixes(fixtures: &mut Fixtures, name: string, tag: string, payload: 
     length = length + 1
   }
 }
-effect fn generate(fixtures: &mut Fixtures) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+
+effect fn generate(fixtures: &mut Fixtures) -> ()
+  ! Errors
+  ? &mut HostInput | &mut Allocator | &mut FileSystem {
   let root = run Task.root()
   let modules = ["gsub", "gpos"]
   let tags = ["GSUB", "GPOS"]
@@ -64,17 +100,44 @@ effect fn generate(fixtures: &mut Fixtures) -> () ! Errors ? &mut HostInput | &m
         let names = ["SINGLE", "MULTIPLE", "ALTERNATE", "LIGATURE", "CONTEXTUAL", "REVERSECHAIN"]
         let kinds: [usize; 6] = [1, 2, 3, 4, 5, 8]
         let mut i: usize = 0
-        while i < names.length { if String.startsWith(name, names[i]) { kind = kinds[i]  break }  i = i + 1 }
+        while i < names.length {
+          if String.startsWith(name, names[i]) {
+            kind = kinds[i]
+            break
+          }
+          i = i + 1
+        }
       } else {
-        let names = ["SINGLE", "PAIR", "CURSIVE", "MARKBASE", "MARKLIG", "MARKMARK", "CONTEXTUAL", "VALUEFORMATTABLE"]
+        let names = [
+          "SINGLE",
+          "PAIR",
+          "CURSIVE",
+          "MARKBASE",
+          "MARKLIG",
+          "MARKMARK",
+          "CONTEXTUAL",
+          "VALUEFORMATTABLE",
+        ]
         let kinds: [usize; 8] = [1, 2, 3, 4, 5, 6, 7, 1]
         let mut i: usize = 0
-        while i < names.length { if String.startsWith(name, names[i]) { kind = kinds[i]  break }  i = i + 1 }
+        while i < names.length {
+          if String.startsWith(name, names[i]) {
+            kind = kinds[i]
+            break
+          }
+          i = i + 1
+        }
       }
       if kind != 0 {
         let prefix = run F.label(&[modules[module], "-", name])
         let header = run lookup(&[], kind, false, module == 0)
-        run prefixes(&mut fixtures, String.view(&prefix), tags[module], rows[at].data.asSlice(), header.asSlice())
+        run prefixes(
+          &mut fixtures,
+          String.view(&prefix),
+          tags[module],
+          rows[at].data.asSlice(),
+          header.asSlice(),
+        )
         let data = run lookup(rows[at].data.asSlice(), kind, true, module == 0)
         let font = run F.one(tags[module], data.asSlice(), false)
         let label = run F.label(&[String.view(&prefix), "-extension"])
@@ -91,10 +154,20 @@ effect fn generate(fixtures: &mut Fixtures) -> () ! Errors ? &mut HostInput | &m
     let mut header = Bytes.make()
     run B.words(&mut header, &[1, 0])
     let feature = String.startsWith(String.view(&rows[at].name), "FEATURE")
-    let offsets: [i64; 3] = if feature { [0, 10, 0] } else { [10, 0, 0] }
+    let offsets: [i64; 3] = if feature {
+      [0, 10, 0]
+    } else {
+      [10, 0, 0]
+    }
     run B.words(&mut header, &offsets)
     let name = run F.label(&["layout-", String.view(&rows[at].name)])
-    run prefixes(&mut fixtures, String.view(&name), "GSUB", rows[at].data.asSlice(), header.asSlice())
+    run prefixes(
+      &mut fixtures,
+      String.view(&name),
+      "GSUB",
+      rows[at].data.asSlice(),
+      header.asSlice(),
+    )
     at = at + 1
   }
   let gdef = run upstream(&root, "gdef")
@@ -102,13 +175,24 @@ effect fn generate(fixtures: &mut Fixtures) -> () ! Errors ? &mut HostInput | &m
   at = 0
   while at < rows2.length {
     let name = String.view(&rows2[at].name)
-    let names = ["GLYPHCLASSDEF_TABLE", "ATTACHLIST_TABLE", "LIGCARETLIST_TABLE", "MARKATTACHCLASSDEF_TABLE"]
+    let names = [
+      "GLYPHCLASSDEF_TABLE",
+      "ATTACHLIST_TABLE",
+      "LIGCARETLIST_TABLE",
+      "MARKATTACHCLASSDEF_TABLE",
+    ]
     let mut payload = Bytes.make()
     let mut selected = name == "GDEF_HEADER"
     if !selected {
       let mut index: usize = 0
       while index < names.length {
-        if name == names[index] { payload = run Bytes.zeroed(12)  G.patch(&mut payload, 0, 1, 2)  G.patch(&mut payload, 4 + index * 2, 12, 2)  selected = true  break }
+        if name == names[index] {
+          payload = run Bytes.zeroed(12)
+          G.patch(&mut payload, 0, 1, 2)
+          G.patch(&mut payload, 4 + index * 2, 12, 2)
+          selected = true
+          break
+        }
         index = index + 1
       }
     }
@@ -133,11 +217,16 @@ effect fn generate(fixtures: &mut Fixtures) -> () ! Errors ? &mut HostInput | &m
         run B.words(&mut payload, &[26, 26, 26])
         run G.be(&mut payload, 0, 4)
         let mut i: usize = 0
-        while i < 3 { run G.be(&mut payload, offsets[o], 4)  i = i + 1 }
+        while i < 3 {
+          run G.be(&mut payload, offsets[o], 4)
+          i = i + 1
+        }
         run G.zeros(&mut payload, 4)
         let minor = run F.number(minors[m])
         let offset = run F.number(offsets[o])
-        let name = run F.label(&["header-", tags[module], "-", String.view(&minor), "-", String.view(&offset)])
+        let name = run F.label(
+          &["header-", tags[module], "-", String.view(&minor), "-", String.view(&offset)],
+        )
         run prefixes(&mut fixtures, String.view(&name), tags[module], payload.asSlice(), &[])
         o = o + 1
       }
@@ -149,7 +238,11 @@ effect fn generate(fixtures: &mut Fixtures) -> () ! Errors ? &mut HostInput | &m
   run B.words(&mut feature, &[1, 0, 0, 10, 0, 3])
   let featureTags = ["ss01", "ss02", "size"]
   at = 0
-  while at < featureTags.length { run feature.append(String.utf8Bytes(featureTags[at]))  run G.be(&mut feature, 20, 2)  at = at + 1 }
+  while at < featureTags.length {
+    run feature.append(String.utf8Bytes(featureTags[at]))
+    run G.be(&mut feature, 20, 2)
+    at = at + 1
+  }
   run B.words(&mut feature, &[4, 0])
   run G.zeros(&mut feature, 10)
   let font = run F.one("GSUB", feature.asSlice(), false)
@@ -163,18 +256,35 @@ effect fn generate(fixtures: &mut Fixtures) -> () ! Errors ? &mut HostInput | &m
       run B.words(&mut header, &[1, 1, 0, 0, 0])
       run G.be(&mut header, 14, 4)
       let name = run F.label(&["lookup-variations-", String.view(&rows3[at].name)])
-      run prefixes(&mut fixtures, String.view(&name), "GSUB", rows3[at].data.asSlice(), header.asSlice())
+      run prefixes(
+        &mut fixtures,
+        String.view(&name),
+        "GSUB",
+        rows3[at].data.asSlice(),
+        header.asSlice(),
+      )
     }
     at = at + 1
   }
 }
-effect fn perform(fixtures: &mut Fixtures, reference: string, silk: string, report: string) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+
+effect fn perform(fixtures: &mut Fixtures, reference: string, silk: string, report: string) -> ()
+  ! Errors
+  ? &mut HostInput | &mut Allocator | &mut FileSystem {
   run generate(&mut fixtures)
   run fixtures.compare(reference, silk, 10.0, report)
 }
-pub effect fn checkLayoutFixtures(reference: string, silk: string, report: string) -> () ! Errors ? &mut HostInput | &mut Allocator | &mut FileSystem {
+
+pub effect fn checkLayoutFixtures(reference: string, silk: string, report: string) -> ()
+  ! Errors
+  ? &mut HostInput | &mut Allocator | &mut FileSystem {
   let mut fixtures = run Fixtures.make("font-layout-fixtures-", ".ttf")
   let result = run Effect.result(perform(&mut fixtures, reference, silk, report))
   run fixtures.cleanup()
-  match move result { Result<(), Errors>.Success { .. } => {} Result<(), Errors>.Failure { error } => { fail move error } }
+  match move result {
+    Result<(), Errors>.Success { .. } => {}
+    Result<(), Errors>.Failure { error } => {
+      fail move error
+    }
+  }
 }

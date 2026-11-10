@@ -22,11 +22,10 @@ import lib {
   CheckedOffset
 }
 import array { representableLen }
-import font_types.lib { Tag, Offset16, Nullable, writeScalar }
+import font_types.lib { Tag, Offset16, Nullable }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.testing.testing { Testing, AssertionError }
-import silk.core.ownership { Copy }
 import silk.num.u8
 import silk.num.u16
 import silk.num.u32
@@ -36,7 +35,7 @@ effect fn must<T>(result: Result<T, ReadError>) -> T
   ! AssertionError<'static> {
   return match move result {
     Result<T, ReadError>.Success { value } => move value
-    Result<T, ReadError>.Failure { error } => {
+    Result<T, ReadError>.Failure { .. } => {
       run Testing.expect(false, "read succeeds")
       return Intrinsic.trap("unreachable after test failure")
     }
@@ -45,7 +44,7 @@ effect fn must<T>(result: Result<T, ReadError>) -> T
 
 fn isOob<T>(result: Result<T, ReadError>) -> bool {
   return match move result {
-    Result<T, ReadError>.Success { value } => false
+    Result<T, ReadError>.Success { .. } => false
     Result<T, ReadError>.Failure { error } => match error {
       ReadError.OutOfBounds => true
       _ => false
@@ -81,7 +80,7 @@ test effect fn fileRefNonCollection() -> ()
   let data = sfnt()
   let file = run must(FileRef.new(&data))
   let isFont = match file {
-    FileRef.Font { font } => true
+    FileRef.Font { .. } => true
     _ => false
   }
   run Testing.expect(isFont, "single sfnt file")
@@ -268,7 +267,7 @@ test effect fn representableLenBound() -> ()
     run Testing.expect(bounded <= counts[i], "bound never grows")
     let valid = usize.checkedAdd(starts[i], bounded * widths[i])
     let fits = match move valid {
-      Option<usize>.Some { value } => true
+      Option<usize>.Some { .. } => true
       _ => false
     }
     run Testing.expect(fits, "one-past offset fits")
@@ -540,49 +539,50 @@ test effect fn cursorComputedReadsAndCheckedOffsets() -> ()
   )
 }
 
-import table_tests
-import name_tests
-import metric_tests
-import post_tests
-import cmap_tests
-import provider_tests
-import layout_spec_tests
-import condition_tests
-import lookup_variation_tests
-import variation_tests
-import axis_tests
-import selected_variation_tests
-import metric_variation_tests
-import packed_variation_tests
-import gvar_tests
-import glyf_tests
-import glyph_delta_tests
-import extended_provider_tests
-import aat_tests
-import aat_misc_tests
-import morx_tests
-import kerning_tests
-import cff_basic_tests
-import ps_numeric_tests
-import cff_stack_tests
-import cff_dict_tests
-import cff_font_tests
-import ps.charstring
-import collections.int_set.bitpage_tests
-import collections.int_set.bitset_tests
-import collections.int_set.intset_tests
-import collections.int_set.stream_tests
-import collections.int_set.sparse_tests
-import layout_set_tests
-import model_tables_tests
-import model_glyph_name_tests
-import model_charmap_tests
-import model_global_metrics_tests
-import model_metrics_tests
-import model_scaled_metrics_tests
-import model_glyph_source_tests
-import misc_table_tests
-import bitmap_tests
-import colr_tests
-import math_tests
-import model_extent_source_tests
+// Imported only to register each module's tests with this root.
+import table_tests as _table_tests
+import name_tests as _name_tests
+import metric_tests as _metric_tests
+import post_tests as _post_tests
+import cmap_tests as _cmap_tests
+import provider_tests as _provider_tests
+import layout_spec_tests as _layout_spec_tests
+import condition_tests as _condition_tests
+import lookup_variation_tests as _lookup_variation_tests
+import variation_tests as _variation_tests
+import axis_tests as _axis_tests
+import selected_variation_tests as _selected_variation_tests
+import metric_variation_tests as _metric_variation_tests
+import packed_variation_tests as _packed_variation_tests
+import gvar_tests as _gvar_tests
+import glyf_tests as _glyf_tests
+import glyph_delta_tests as _glyph_delta_tests
+import extended_provider_tests as _extended_provider_tests
+import aat_tests as _aat_tests
+import aat_misc_tests as _aat_misc_tests
+import morx_tests as _morx_tests
+import kerning_tests as _kerning_tests
+import cff_basic_tests as _cff_basic_tests
+import ps_numeric_tests as _ps_numeric_tests
+import cff_stack_tests as _cff_stack_tests
+import cff_dict_tests as _cff_dict_tests
+import cff_font_tests as _cff_font_tests
+import ps.charstring as _charstring
+import collections.int_set.bitpage_tests as _bitpage_tests
+import collections.int_set.bitset_tests as _bitset_tests
+import collections.int_set.intset_tests as _intset_tests
+import collections.int_set.stream_tests as _stream_tests
+import collections.int_set.sparse_tests as _sparse_tests
+import layout_set_tests as _layout_set_tests
+import model_tables_tests as _model_tables_tests
+import model_glyph_name_tests as _model_glyph_name_tests
+import model_charmap_tests as _model_charmap_tests
+import model_global_metrics_tests as _model_global_metrics_tests
+import model_metrics_tests as _model_metrics_tests
+import model_scaled_metrics_tests as _model_scaled_metrics_tests
+import model_glyph_source_tests as _model_glyph_source_tests
+import misc_table_tests as _misc_table_tests
+import bitmap_tests as _bitmap_tests
+import colr_tests as _colr_tests
+import math_tests as _math_tests
+import model_extent_source_tests as _model_extent_source_tests

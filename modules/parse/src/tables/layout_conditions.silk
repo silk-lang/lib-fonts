@@ -88,10 +88,10 @@ fn evaluateConditionOffset<'a>(
   }
   let condition = match move Condition<'a>.read(data) {
     Result<Condition<'a>, ReadError>.Success { value } => value
-    Result<Condition<'a>, ReadError>.Failure { error: ReadError.InvalidFormat { value } } => {
+    Result<Condition<'a>, ReadError>.Failure { error: ReadError.InvalidFormat { .. } } => {
       return Result<bool, Error>.succeed(false)
     }
-    Result<Condition<'a>, ReadError>.Failure { error } => {
+    Result<Condition<'a>, ReadError>.Failure { .. } => {
       return Result<bool, Error>.failResult(Error.Malformed)
     }
   }
@@ -243,7 +243,7 @@ impl<'a> FeatureVariations<'a> {
         index,
       ) {
         Result<FeatureVariationRecord<'a>, ReadError>.Success { value } => value
-        Result<FeatureVariationRecord<'a>, ReadError>.Failure { error } => {
+        Result<FeatureVariationRecord<'a>, ReadError>.Failure { .. } => {
           continue
         }
       }
@@ -258,7 +258,7 @@ impl<'a> FeatureVariations<'a> {
       }
       let set = match move setResult {
         Result<ConditionSet<'a>, ReadError>.Success { value } => value
-        Result<ConditionSet<'a>, ReadError>.Failure { error } => {
+        Result<ConditionSet<'a>, ReadError>.Failure { .. } => {
           continue
         }
       }
@@ -268,7 +268,7 @@ impl<'a> FeatureVariations<'a> {
         fn(index: u32) -> Result<f64, Error> {
           return match move delta(index) {
             Result<f64, E>.Success { value } => Result<f64, Error>.succeed(value)
-            Result<f64, E>.Failure { error } => Result<f64, Error>.failResult(Error.Malformed)
+            Result<f64, E>.Failure { .. } => Result<f64, Error>.failResult(Error.Malformed)
           }
         },
       )

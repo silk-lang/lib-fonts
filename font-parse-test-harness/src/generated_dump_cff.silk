@@ -18,47 +18,13 @@ import read_fonts.ps.cff.v1 {
   EncodingRange1,
   EncodingSupplement
 }
-import read_fonts.lib {
-  FontData,
-  FontRead,
-  ReadError,
-  ScalarArray,
-  ComputedArray,
-  VarLenArray,
-  VarLenIter,
-  ReadArgs2,
-  ReadArgs3,
-  ArrayOfOffsets,
-  ArrayOfNullableOffsets
-}
-import font_types.lib {
-  Fixed,
-  F2Dot14,
-  FWord,
-  UfWord,
-  Tag,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
-  GlyphId16,
-  GlyphId24,
-  GlyphId,
-  NameId,
-  Nullable,
-  Offset16,
-  Offset24,
-  Offset32
-}
-import dump_support { DumpPath, DumpTable, scalar, absent, readError, versionBits, bytes }
+import read_fonts.lib { FontData, ReadError, ScalarArray, ComputedArray }
+import dump_support { DumpPath, scalar, readError }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.io.writer { Writer, WriterError }
 import silk.num.u8
 import silk.num.u16
-import silk.num.u32
-import silk.num.u64
 
 pub effect fn dumpCffHeader<'a>(path: &mut DumpPath, value: CffHeader<'a>) -> ()
   ! WriterError
@@ -72,7 +38,6 @@ pub effect fn dumpCffHeader<'a>(path: &mut DumpPath, value: CffHeader<'a>) -> ()
   ) {
     return
   }
-  let base = CffHeader<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "major")
     let fieldValue = CffHeader<'a>.major(&value)
@@ -145,7 +110,6 @@ pub effect fn dumpIndex<'a>(path: &mut DumpPath, value: Index<'a>) -> ()
   ) {
     return
   }
-  let base = Index<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "count")
     let fieldValue = Index<'a>.count(&value)
@@ -197,7 +161,6 @@ pub effect fn dumpIndex<'a>(path: &mut DumpPath, value: Index<'a>) -> ()
 pub effect fn dumpFdSelect<'a>(path: &mut DumpPath, value: FdSelect<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -236,7 +199,6 @@ pub effect fn dumpFdSelectFormat0<'a>(path: &mut DumpPath, value: FdSelectFormat
   ) {
     return
   }
-  let base = FdSelectFormat0<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = FdSelectFormat0<'a>.format(&value)
@@ -325,7 +287,6 @@ pub effect fn dumpFdSelectRange3<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -407,7 +368,6 @@ pub effect fn dumpFdSelectRange4<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -429,7 +389,6 @@ pub effect fn dumpFdSelectRange4<'a>(
 pub effect fn dumpCustomCharset<'a>(path: &mut DumpPath, value: CustomCharset<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -468,7 +427,6 @@ pub effect fn dumpCharsetFormat0<'a>(path: &mut DumpPath, value: CharsetFormat0<
   ) {
     return
   }
-  let base = CharsetFormat0<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = CharsetFormat0<'a>.format(&value)
@@ -545,7 +503,6 @@ pub effect fn dumpCharsetRange1<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -615,7 +572,6 @@ pub effect fn dumpCharsetRange2<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -641,7 +597,6 @@ pub effect fn dumpEncodingRange1<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -667,7 +622,6 @@ pub effect fn dumpEncodingSupplement<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return

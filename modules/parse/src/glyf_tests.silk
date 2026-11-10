@@ -1,7 +1,6 @@
 // Copyright 2022 the Fontations Authors. Licensed under Apache-2.0 or MIT.
 import lib { FontData, FontRef, ReadError, ScalarArray }
 import tables.glyf {
-  Glyf,
   Glyph,
   SimpleGlyph,
   CompositeGlyph,
@@ -10,16 +9,15 @@ import tables.glyf {
   ComponentIter,
   Component,
   CompositeGlyphFlags,
-  ComponentCountAndInstructions,
   Anchor,
   Transform,
   PointFlags,
   PointMarker,
   coordMidpoint
 }
-import tables.loca { Loca, LocaGlyph }
+import tables.loca { Loca }
 import generated_variation_fixtures as Fixtures
-import font_types.lib { GlyphId, Fixed, F2Dot14, F26Dot6, writeScalar }
+import font_types.lib { GlyphId, F2Dot14, F26Dot6 }
 import silk.geometry.point { Point2 }
 import silk.core.option { Option }
 import silk.core.result { Result }
@@ -206,7 +204,7 @@ test effect fn compositeInstructionsFlagOnAnyComponent() -> ()
       let glyph = run must(CompositeGlyph.read(FontData.new(Slice.view<u8>(&bytes, 0, pos))))
       let mut components = CompositeGlyph.components(&glyph)
       let mut count: usize = 0
-      while let Option<Component>.Some { value } = move ComponentIter.next(&mut components) {
+      while let Option<Component>.Some { .. } = move ComponentIter.next(&mut components) {
         count = count + 1
       }
       run Testing.expect(count == 2, "two components")
@@ -370,7 +368,7 @@ test effect fn pointIterRepeatCount255DoesNotOverflow() -> ()
   let glyph = run must(SimpleGlyph.read(FontData.new(&bytes)))
   let mut iter = SimpleGlyph.points(&glyph)
   let mut count: usize = 0
-  while let Option<CurvePoint>.Some { value } = move PointIter.next(&mut iter) {
+  while let Option<CurvePoint>.Some { .. } = move PointIter.next(&mut iter) {
     count = count + 1
   }
   run Testing.expect(count == 256, "repeat count 255 encodes 256 points")

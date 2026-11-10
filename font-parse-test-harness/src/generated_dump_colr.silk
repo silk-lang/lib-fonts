@@ -57,46 +57,23 @@ import read_fonts.tables.colr {
   PaintComposite,
   CompositeMode
 }
-import read_fonts.lib {
-  FontData,
-  FontRead,
-  ReadError,
-  ScalarArray,
-  ComputedArray,
-  VarLenArray,
-  VarLenIter,
-  ReadArgs2,
-  ReadArgs3,
-  ArrayOfOffsets,
-  ArrayOfNullableOffsets
-}
+import read_fonts.lib { FontData, ReadError, ScalarArray, ComputedArray, ArrayOfOffsets }
 import font_types.lib {
   Fixed,
   F2Dot14,
   FWord,
   UfWord,
   Tag,
-  MajorMinor,
-  Version16Dot16,
-  LongDateTime,
-  Uint24,
-  Int24,
   GlyphId16,
   GlyphId24,
-  GlyphId,
-  NameId,
   Nullable,
-  Offset16,
   Offset24,
   Offset32
 }
-import dump_support { DumpPath, DumpTable, scalar, absent, readError, versionBits, bytes }
+import dump_support { DumpPath, DumpTable, scalar, absent, readError }
 import silk.core.option { Option }
 import silk.core.result { Result }
 import silk.io.writer { Writer, WriterError }
-import silk.num.u8
-import silk.num.u16
-import silk.num.u32
 import silk.num.u64
 import read_fonts.tables.variations { DeltaSetIndexMap, ItemVariationStore }
 
@@ -366,7 +343,6 @@ pub effect fn dumpColr<'a>(path: &mut DumpPath, value: Colr<'a>) -> ()
 pub effect fn dumpBaseGlyph<'a>(path: &mut DumpPath, value: BaseGlyph<'a>, base: FontData<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -394,7 +370,6 @@ pub effect fn dumpBaseGlyph<'a>(path: &mut DumpPath, value: BaseGlyph<'a>, base:
 pub effect fn dumpLayer<'a>(path: &mut DumpPath, value: Layer<'a>, base: FontData<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -464,7 +439,6 @@ pub effect fn dumpBaseGlyphPaint<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -506,7 +480,6 @@ pub effect fn dumpLayerList<'a>(path: &mut DumpPath, value: LayerList<'a>) -> ()
   ) {
     return
   }
-  let base = LayerList<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "numLayers")
     let fieldValue = LayerList<'a>.numLayers(&value)
@@ -608,7 +581,6 @@ pub effect fn dumpClipList<'a>(path: &mut DumpPath, value: ClipList<'a>) -> ()
 pub effect fn dumpClip<'a>(path: &mut DumpPath, value: Clip<'a>, base: FontData<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -650,7 +622,6 @@ pub effect fn dumpClip<'a>(path: &mut DumpPath, value: Clip<'a>, base: FontData<
 pub effect fn dumpClipBox<'a>(path: &mut DumpPath, value: ClipBox<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -683,7 +654,6 @@ pub effect fn dumpClipBoxFormat1<'a>(path: &mut DumpPath, value: ClipBoxFormat1<
   ) {
     return
   }
-  let base = ClipBoxFormat1<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = ClipBoxFormat1<'a>.format(&value)
@@ -728,7 +698,6 @@ pub effect fn dumpClipBoxFormat2<'a>(path: &mut DumpPath, value: ClipBoxFormat2<
   ) {
     return
   }
-  let base = ClipBoxFormat2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = ClipBoxFormat2<'a>.format(&value)
@@ -774,7 +743,6 @@ pub effect fn dumpColorIndex<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -800,7 +768,6 @@ pub effect fn dumpVarColorIndex<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -828,7 +795,6 @@ pub effect fn dumpVarColorIndex<'a>(
 pub effect fn dumpColorStop<'a>(path: &mut DumpPath, value: ColorStop<'a>, base: FontData<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -860,7 +826,6 @@ pub effect fn dumpVarColorStop<'a>(
 ) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -994,7 +959,6 @@ pub effect fn dumpVarColorLine<'a>(path: &mut DumpPath, value: VarColorLine<'a>)
 pub effect fn dumpPaint<'a>(path: &mut DumpPath, value: Paint<'a>) -> ()
   ! WriterError
   ? &mut Writer {
-  let dumpArgs = DumpPath.arguments(&path)
   if !DumpPath.enter(&mut path) {
     run scalar(&path, "traversal-limit")
     return
@@ -1213,7 +1177,6 @@ pub effect fn dumpPaintColrLayers<'a>(path: &mut DumpPath, value: PaintColrLayer
   ) {
     return
   }
-  let base = PaintColrLayers<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintColrLayers<'a>.format(&value)
@@ -1246,7 +1209,6 @@ pub effect fn dumpPaintSolid<'a>(path: &mut DumpPath, value: PaintSolid<'a>) -> 
   ) {
     return
   }
-  let base = PaintSolid<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintSolid<'a>.format(&value)
@@ -1279,7 +1241,6 @@ pub effect fn dumpPaintVarSolid<'a>(path: &mut DumpPath, value: PaintVarSolid<'a
   ) {
     return
   }
-  let base = PaintVarSolid<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintVarSolid<'a>.format(&value)
@@ -1318,7 +1279,6 @@ pub effect fn dumpPaintLinearGradient<'a>(path: &mut DumpPath, value: PaintLinea
   ) {
     return
   }
-  let base = PaintLinearGradient<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintLinearGradient<'a>.format(&value)
@@ -1398,7 +1358,6 @@ pub effect fn dumpPaintVarLinearGradient<'a>(
   ) {
     return
   }
-  let base = PaintVarLinearGradient<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintVarLinearGradient<'a>.format(&value)
@@ -1481,7 +1440,6 @@ pub effect fn dumpPaintRadialGradient<'a>(path: &mut DumpPath, value: PaintRadia
   ) {
     return
   }
-  let base = PaintRadialGradient<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintRadialGradient<'a>.format(&value)
@@ -1561,7 +1519,6 @@ pub effect fn dumpPaintVarRadialGradient<'a>(
   ) {
     return
   }
-  let base = PaintVarRadialGradient<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintVarRadialGradient<'a>.format(&value)
@@ -1644,7 +1601,6 @@ pub effect fn dumpPaintSweepGradient<'a>(path: &mut DumpPath, value: PaintSweepG
   ) {
     return
   }
-  let base = PaintSweepGradient<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintSweepGradient<'a>.format(&value)
@@ -1712,7 +1668,6 @@ pub effect fn dumpPaintVarSweepGradient<'a>(
   ) {
     return
   }
-  let base = PaintVarSweepGradient<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintVarSweepGradient<'a>.format(&value)
@@ -1783,7 +1738,6 @@ pub effect fn dumpPaintGlyph<'a>(path: &mut DumpPath, value: PaintGlyph<'a>) -> 
   ) {
     return
   }
-  let base = PaintGlyph<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintGlyph<'a>.format(&value)
@@ -1827,7 +1781,6 @@ pub effect fn dumpPaintGlyph2<'a>(path: &mut DumpPath, value: PaintGlyph2<'a>) -
   ) {
     return
   }
-  let base = PaintGlyph2<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintGlyph2<'a>.format(&value)
@@ -1871,7 +1824,6 @@ pub effect fn dumpPaintColrGlyph<'a>(path: &mut DumpPath, value: PaintColrGlyph<
   ) {
     return
   }
-  let base = PaintColrGlyph<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintColrGlyph<'a>.format(&value)
@@ -1898,7 +1850,6 @@ pub effect fn dumpPaintTransform<'a>(path: &mut DumpPath, value: PaintTransform<
   ) {
     return
   }
-  let base = PaintTransform<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintTransform<'a>.format(&value)
@@ -1956,7 +1907,6 @@ pub effect fn dumpPaintVarTransform<'a>(path: &mut DumpPath, value: PaintVarTran
   ) {
     return
   }
-  let base = PaintVarTransform<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintVarTransform<'a>.format(&value)
@@ -2014,7 +1964,6 @@ pub effect fn dumpAffine2x3<'a>(path: &mut DumpPath, value: Affine2x3<'a>) -> ()
   ) {
     return
   }
-  let base = Affine2x3<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "xx")
     let fieldValue = Affine2x3<'a>.xx(&value)
@@ -2065,7 +2014,6 @@ pub effect fn dumpVarAffine2x3<'a>(path: &mut DumpPath, value: VarAffine2x3<'a>)
   ) {
     return
   }
-  let base = VarAffine2x3<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "xx")
     let fieldValue = VarAffine2x3<'a>.xx(&value)
@@ -2122,7 +2070,6 @@ pub effect fn dumpPaintTranslate<'a>(path: &mut DumpPath, value: PaintTranslate<
   ) {
     return
   }
-  let base = PaintTranslate<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintTranslate<'a>.format(&value)
@@ -2172,7 +2119,6 @@ pub effect fn dumpPaintVarTranslate<'a>(path: &mut DumpPath, value: PaintVarTran
   ) {
     return
   }
-  let base = PaintVarTranslate<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintVarTranslate<'a>.format(&value)
@@ -2228,7 +2174,6 @@ pub effect fn dumpPaintScale<'a>(path: &mut DumpPath, value: PaintScale<'a>) -> 
   ) {
     return
   }
-  let base = PaintScale<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintScale<'a>.format(&value)
@@ -2278,7 +2223,6 @@ pub effect fn dumpPaintVarScale<'a>(path: &mut DumpPath, value: PaintVarScale<'a
   ) {
     return
   }
-  let base = PaintVarScale<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintVarScale<'a>.format(&value)
@@ -2337,7 +2281,6 @@ pub effect fn dumpPaintScaleAroundCenter<'a>(
   ) {
     return
   }
-  let base = PaintScaleAroundCenter<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintScaleAroundCenter<'a>.format(&value)
@@ -2402,7 +2345,6 @@ pub effect fn dumpPaintVarScaleAroundCenter<'a>(
   ) {
     return
   }
-  let base = PaintVarScaleAroundCenter<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintVarScaleAroundCenter<'a>.format(&value)
@@ -2470,7 +2412,6 @@ pub effect fn dumpPaintScaleUniform<'a>(path: &mut DumpPath, value: PaintScaleUn
   ) {
     return
   }
-  let base = PaintScaleUniform<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintScaleUniform<'a>.format(&value)
@@ -2517,7 +2458,6 @@ pub effect fn dumpPaintVarScaleUniform<'a>(
   ) {
     return
   }
-  let base = PaintVarScaleUniform<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintVarScaleUniform<'a>.format(&value)
@@ -2570,7 +2510,6 @@ pub effect fn dumpPaintScaleUniformAroundCenter<'a>(
   ) {
     return
   }
-  let base = PaintScaleUniformAroundCenter<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintScaleUniformAroundCenter<'a>.format(&value)
@@ -2629,7 +2568,6 @@ pub effect fn dumpPaintVarScaleUniformAroundCenter<'a>(
   ) {
     return
   }
-  let base = PaintVarScaleUniformAroundCenter<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintVarScaleUniformAroundCenter<'a>.format(&value)
@@ -2691,7 +2629,6 @@ pub effect fn dumpPaintRotate<'a>(path: &mut DumpPath, value: PaintRotate<'a>) -
   ) {
     return
   }
-  let base = PaintRotate<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintRotate<'a>.format(&value)
@@ -2735,7 +2672,6 @@ pub effect fn dumpPaintVarRotate<'a>(path: &mut DumpPath, value: PaintVarRotate<
   ) {
     return
   }
-  let base = PaintVarRotate<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintVarRotate<'a>.format(&value)
@@ -2788,7 +2724,6 @@ pub effect fn dumpPaintRotateAroundCenter<'a>(
   ) {
     return
   }
-  let base = PaintRotateAroundCenter<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintRotateAroundCenter<'a>.format(&value)
@@ -2847,7 +2782,6 @@ pub effect fn dumpPaintVarRotateAroundCenter<'a>(
   ) {
     return
   }
-  let base = PaintVarRotateAroundCenter<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintVarRotateAroundCenter<'a>.format(&value)
@@ -2909,7 +2843,6 @@ pub effect fn dumpPaintSkew<'a>(path: &mut DumpPath, value: PaintSkew<'a>) -> ()
   ) {
     return
   }
-  let base = PaintSkew<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintSkew<'a>.format(&value)
@@ -2959,7 +2892,6 @@ pub effect fn dumpPaintVarSkew<'a>(path: &mut DumpPath, value: PaintVarSkew<'a>)
   ) {
     return
   }
-  let base = PaintVarSkew<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintVarSkew<'a>.format(&value)
@@ -3018,7 +2950,6 @@ pub effect fn dumpPaintSkewAroundCenter<'a>(
   ) {
     return
   }
-  let base = PaintSkewAroundCenter<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintSkewAroundCenter<'a>.format(&value)
@@ -3083,7 +3014,6 @@ pub effect fn dumpPaintVarSkewAroundCenter<'a>(
   ) {
     return
   }
-  let base = PaintVarSkewAroundCenter<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintVarSkewAroundCenter<'a>.format(&value)
@@ -3151,7 +3081,6 @@ pub effect fn dumpPaintComposite<'a>(path: &mut DumpPath, value: PaintComposite<
   ) {
     return
   }
-  let base = PaintComposite<'a>.offsetData(&value)
   if true {
     DumpPath.push(&mut path, "format")
     let fieldValue = PaintComposite<'a>.format(&value)

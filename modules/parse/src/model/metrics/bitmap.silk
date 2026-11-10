@@ -330,7 +330,7 @@ fn bdtExtents<'a>(size: &BitmapSize<'a>, data: BitmapData<'a>, upem: u16) -> Opt
   }
   let depth = BitmapSize.bitDepth(size)
   match data.content {
-    BitmapContent<'a>.Composite { value } => {
+    BitmapContent<'a>.Composite { .. } => {
       return Option<GlyphExtents<F48Dot16>>.None
     }
     BitmapContent<'a>.Data { format, bytes } => {

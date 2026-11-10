@@ -6,7 +6,8 @@
 //! so the host must copy them out before returning. See `js/` for the wrapper.
 import host { hostInput, hostOutput }
 import font_outline.outline { Outlines, Recorder }
-import libm
+// Imported only for the C math symbols it exports to the wasm32 runtime.
+import libm as _libm
 import harfrust.lib {
   Buffer,
   Direction,
@@ -263,7 +264,7 @@ effect fn shapeRequest(
   }
   Buffer.guessSegmentProperties(&mut buffer)
   let result = run shapeWithFeatures(&shaper, &mut buffer, List<Feature>.asSlice(&parsedFeatures))
-  if let Result<(), ShapeError>.Failure { error } = move result {
+  if let Result<(), ShapeError>.Failure { .. } = move result {
     return SHAPE_FAILED
   }
 
