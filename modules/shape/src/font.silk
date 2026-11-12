@@ -1,5 +1,5 @@
 //! Prepared borrowed font tables with owned variation coordinates per shaper.
-import read_fonts.model.metrics.glyph { GlyphMetrics }
+import read_fonts.model.metrics.glyph { GlyphMetrics, GlyphMetricsBase }
 import silk.collections.slice { Slice }
 import read_fonts.model.metrics {
   ScaledGlyphMetrics,
@@ -45,9 +45,17 @@ pub struct ShaperData<'a> {
   /// Backs the empty coordinate slice of default-instance metrics. An empty array literal
   /// cannot be borrowed for 'static (silk-lang/silk#2428).
   noCoords: [F2Dot14; 1],
+  /// Glyph metrics at the default instance. Building them looks up a dozen tables, which costs
+  /// more than shaping a short line, so every shaper made from this data starts from these.
+  defaultMetrics: GlyphMetricsBase<'a>,
   /// Nominal glyphs for U+0000 to U+2FFF, mapped once, since most text maps these codepoints
   /// over and over. 0xFFFF means the code point goes through `mapNominal`.
   bmpGlyphs: [u16; 12288],
+}
+
+fn defaultMetricsOf<'a>(font: &FontRef<'a>) -> GlyphMetricsBase<'a> {
+  let none: [F2Dot14; 1] = [F2Dot14.zero()]
+  return GlyphMetrics.withoutLocation(&GlyphMetrics.new(font, Slice.view(&none, 0, 0)))
 }
 
 impl<'a> ShaperData<'a> {
@@ -78,6 +86,7 @@ impl<'a> ShaperData<'a> {
       kern: table(font, 0x6b65726e),
       upem: upem,
       noCoords: [F2Dot14.zero()],
+      defaultMetrics: defaultMetricsOf(font),
       bmpGlyphs: [0xffff; 12288],
     }
 
@@ -165,7 +174,7 @@ impl<'a, 's, F> ConfiguredShaper<'a, 's, F> {
   }
 
   pub fn withFuncs(data: &'s ShaperData<'a>, funcs: F) -> Self {
-    let metrics = GlyphMetrics.new(&data.font, Slice.view(&data.noCoords, 0, 0))
+    let metrics = GlyphMetrics.fromDefault(data.defaultMetrics, Slice.view(&data.noCoords, 0, 0))
     return Self {
       data: data,
       coords: List<F2Dot14>.make(),
