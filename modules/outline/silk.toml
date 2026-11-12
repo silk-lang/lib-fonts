@@ -9,4 +9,4 @@ exports = ["outline", "vector_path"]
 [dependencies]
 read_fonts = { path = "../parse", package = "font-parse" }
 font_types = { path = "../types", package = "font-types" }
-vector = { git = "https://github.com/silk-lang/lib-graphics.git", rev = "1abcea13ffb39947c7375c196fc6e66b604ba741", path = "modules/vector", package = "graphics-vector" }
+vector = { git = "https://github.com/silk-lang/lib-graphics.git", rev = "c6be578f9e005814cd779bf3723f8611d440094e", path = "modules/vector", package = "graphics-vector" }
