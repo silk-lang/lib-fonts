@@ -14,7 +14,7 @@ Font parsing, shaping, outlines, rasterization, face matching and fallback for S
 | `font-faces` | [modules/faces](modules/faces) | Host-filled face database and CSS Fonts 4 matching |
 | `font-collection` | [modules/collection](modules/collection) | Application font collections and per-character fallback |
 
-The workspace uses Silk `0.1.0-dev.69+366225ca4dc5`. Graphics dependencies are
+The workspace uses Silk `0.1.0-dev.72+9c780a04d6ef`. Graphics dependencies are
 pinned Git dependencies on [silk-lang/lib-graphics](https://github.com/silk-lang/lib-graphics),
 not copied graphics libraries or sibling-checkout dependencies. Keep that revision aligned
 with `lib-css` and other consumers: Silk rejects duplicate physical copies of a named package.
@@ -36,9 +36,9 @@ repository root:
 
 ```sh
 curl --fail --silent --show-error --location \
-  'https://raw.githubusercontent.com/silk-lang/silk/v0.1.0-dev.69+366225ca4dc5/install.sh' \
+  'https://raw.githubusercontent.com/silk-lang/silk/v0.1.0-dev.72+9c780a04d6ef/install.sh' \
   -o /tmp/install-lib-fonts-silk.sh
-SILK_RELEASE='v0.1.0-dev.69+366225ca4dc5' sh /tmp/install-lib-fonts-silk.sh
+SILK_RELEASE='v0.1.0-dev.72+9c780a04d6ef' sh /tmp/install-lib-fonts-silk.sh
 export PATH="$HOME/.silk/bin:$PATH"
 silk use
 ```
