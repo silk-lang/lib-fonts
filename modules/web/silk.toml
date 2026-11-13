@@ -5,6 +5,3 @@ version = "0.1.0"
 silk-version = "0.1.0-dev.72+9c780a04d6ef"
 kind = "library"
 exports = ["lib", "error", "sfnt", "woff", "woff2", "stylesheet", "fetch"]
-
-[dependencies]
-svg_fonts = { path = "../faces", package = "font-faces" }

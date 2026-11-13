@@ -6,10 +6,10 @@
 //! dropped, as CSS does, and the rule keeps the descriptor's initial value. Relative URLs in
 //! `src` resolve against the stylesheet's URL, as on a page.
 //!
-//! The descriptors map to the face database's own types, so a rule can be given straight to
-//! `FontDatabase.addFace` once its font is loaded: `weight`, `width` and `style` are `None`
-//! for `auto`, and `ranges` is empty for the initial `U+0-10FFFF`.
-import svg_fonts.database { Range, FaceStyle }
+//! `weight`, `width` and `style` are `None` for `auto`, and `ranges` is empty for the initial
+//! `U+0-10FFFF`. [`Range`] and [`FaceStyle`] have the same shape as font-faces' types of the
+//! same names, so a rule maps field by field onto `FontDatabase.addFace`; this package does not
+//! depend on font-faces, so it can be pinned at any lib-fonts revision.
 import silk.collections.bytes { Bytes }
 import silk.collections.list { List }
 import silk.collections.slice { Slice }
@@ -21,6 +21,24 @@ import silk.num.u8
 import silk.num.u32
 import silk.text.string { String, InvalidUtf8 }
 import silk.url.url { Url }
+
+/// A closed range of descriptor values, such as `font-weight: 100 900`.
+pub struct Range {
+  pub min: f64,
+  pub max: f64,
+}
+
+impl Copy for Range {}
+
+/// A face's style as the `font-style` descriptor gives it.
+pub union FaceStyle {
+  Normal,
+  Italic,
+  /// `oblique`, with its angle range in degrees.
+  Oblique { pub min: f64, pub max: f64 },
+}
+
+impl Copy for FaceStyle {}
 
 /// Where a face's font data comes from: one entry of `src`.
 pub union FaceSource {
