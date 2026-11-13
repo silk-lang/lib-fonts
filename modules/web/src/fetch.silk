@@ -1,0 +1,136 @@
+//! Fetch font stylesheets and font files over HTTP, as a browser does for `<link>` and
+//! `@font-face`.
+//!
+//! The functions need `? &mut Http`: a native host gives `NativeHttp` from
+//! `silk.http.client_native`, and a test gives a fake. Requests send [`USER_AGENT`], a current
+//! desktop browser's, because font services such as Google Fonts choose the file format from
+//! it: with it they answer WOFF2, which is the smallest and which [`font`] decodes.
+import error { WebFontError, WebFontReason }
+import stylesheet { FontFaceRule, parse }
+import lib { decode }
+import silk.collections.bytes { Bytes }
+import silk.collections.list { List }
+import silk.core.option { Option }
+import silk.http.client { Http, HttpError, Request, Response }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.url.url { Url }
+import silk.core.result { Result }
+import silk.num.u8
+import silk.text.string { String, InvalidUtf8 }
+
+/// The `User-Agent` sent with every request: a desktop Chrome, which font services answer
+/// with WOFF2 files and `unicode-range` subsets.
+pub const USER_AGENT: string = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+
+/// The largest stylesheet or font file read: 32 MiB.
+pub const MAX_BODY_BYTES: usize = 33554432
+
+fn allowed(c: u8) -> bool {
+  // RFC 3986 unreserved and reserved characters, and `%` of an escape already made.
+  return c >= 97 && c <= 122 || c >= 65 && c <= 90 || c >= 48 && c <= 57 || c == 45 || c == 46
+    || c == 95
+    || c == 126
+    || c == 58
+    || c == 47
+    || c == 63
+    || c == 35
+    || c == 64
+    || c == 33
+    || c == 36
+    || c == 38
+    || c == 39
+    || c == 40
+    || c == 41
+    || c == 42
+    || c == 43
+    || c == 44
+    || c == 59
+    || c == 61
+    || c == 37
+}
+
+/// Percent-encodes the bytes RFC 3986 does not allow in a URI, as a browser does before it
+/// sends a URL such as Google Fonts' `family=Roboto|Lobster`.
+pub effect fn encode(url: string) -> String
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let raw = String.utf8Bytes(url)
+  let hex = b"0123456789ABCDEF"
+  let mut out = Bytes.make()
+  let mut i: usize = 0
+  while i < raw.length {
+    let c = raw[i]
+    if allowed(c) {
+      let one: [u8; 1] = [c]
+      run Bytes.append(&mut out, &one)
+    } else {
+      let three: [u8; 3] = [37, hex[u8.toUsize(c / 16)], hex[u8.toUsize(c % 16)]]
+      run Bytes.append(&mut out, &three)
+    }
+    i = i + 1
+  }
+  return match String.fromBytes(move out) {
+    Result<String, InvalidUtf8>.Success { value: text } => move text
+    Result<String, InvalidUtf8>.Failure { .. } => String.make()
+  }
+}
+
+effect fn get(url: string, accept: string) -> Response
+  ! HttpError | OutOfMemoryError
+  ? &mut Http | &mut Allocator {
+  let encoded = run encode(url)
+  let mut request = Request.get(String.view(&encoded)).maxBodyBytes(MAX_BODY_BYTES)
+  run request.header("User-Agent", USER_AGENT)
+  run request.header("Accept", accept)
+  let response = run Http.send(move request)
+  return run response.expectOk()
+}
+
+/// Fetches the stylesheet at `url` and returns its @font-face rules, with sources resolved
+/// against the URL the stylesheet came from (after redirects).
+///
+/// # Errors
+/// - `HttpError` when the request fails or the status is not 2xx.
+pub effect fn stylesheet(url: string) -> List<FontFaceRule>
+  ! HttpError | OutOfMemoryError
+  ? &mut Http | &mut Allocator {
+  let response = run get(url, "text/css,*/*;q=0.1")
+  let mut final = response.url()
+  if final == "" {
+    final = url
+  }
+  let base = run Url.parse(final, Option<&'static Url>.None)
+  return match move base {
+    Option<Url>.Some { value } => run parse(response.body(), Option<&Url>.Some { value: &value })
+    Option<Url>.None => run parse(response.body(), Option<&'static Url>.None)
+  }
+}
+
+/// Fetches the font file at `url` and returns it as an sfnt font or collection, decoding WOFF
+/// and WOFF2.
+///
+/// # Errors
+/// - `HttpError` when the request fails or the status is not 2xx.
+/// - [`WebFontError`] when the body is not a font this package reads.
+pub effect fn font(url: string) -> Bytes
+  ! WebFontError | HttpError | OutOfMemoryError
+  ? &mut Http | &mut Allocator {
+  let response = run get(url, "font/woff2,font/woff,font/ttf,font/otf,*/*;q=0.5")
+  return run decode(response.body())
+}
+
+/// Fetches and decodes the font of `rule`: its first source [`FontFaceRule.loadable`] names.
+///
+/// # Errors
+/// - [`WebFontError`] with `Unsupported` when the rule has no source this package can load,
+///   or the errors of [`font`].
+pub effect fn face(rule: &FontFaceRule) -> Bytes
+  ! WebFontError | HttpError | OutOfMemoryError
+  ? &mut Http | &mut Allocator {
+  return match rule.url() {
+    Option<string>.Some { value } => run font(value)
+    Option<string>.None => {
+      fail WebFontError.at(WebFontReason.Unsupported, 0)
+    }
+  }
+}

@@ -1,0 +1,1100 @@
+//! Read the @font-face rules of a stylesheet, such as the ones Google Fonts and other font
+//! services hand out (CSS Fonts 4, #font-face-rule).
+//!
+//! [`parse`] keeps each @font-face rule with a family and a source list and skips everything
+//! else: other at-rules, style rules and comments. A descriptor whose value is not valid is
+//! dropped, as CSS does, and the rule keeps the descriptor's initial value. Relative URLs in
+//! `src` resolve against the stylesheet's URL, as on a page.
+//!
+//! The descriptors map to the face database's own types, so a rule can be given straight to
+//! `FontDatabase.addFace` once its font is loaded: `weight`, `width` and `style` are `None`
+//! for `auto`, and `ranges` is empty for the initial `U+0-10FFFF`.
+import svg_fonts.database { Range, FaceStyle }
+import silk.collections.bytes { Bytes }
+import silk.collections.list { List }
+import silk.collections.slice { Slice }
+import silk.core.option { Option }
+import silk.core.ownership { Copy }
+import silk.core.result { Result }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.num.u8
+import silk.num.u32
+import silk.text.string { String, InvalidUtf8 }
+import silk.url.url { Url }
+
+/// Where a face's font data comes from: one entry of `src`.
+pub union FaceSource {
+  /// `url(...)`, resolved against the stylesheet, with its `format()` and `tech()` lowercased
+  /// (empty when not given).
+  Url { pub url: String, pub format: Bytes, pub tech: Bytes },
+  /// `local(...)`: a font installed on the system, by full or PostScript name.
+  Local { pub name: Bytes },
+}
+
+/// The `font-display` descriptor.
+pub enum FontDisplay {
+  Auto,
+  Block,
+  Swap,
+  Fallback,
+  Optional,
+}
+
+/// A `unicode-range` interval, both ends included.
+pub struct UnicodeRange {
+  pub start: u32,
+  pub end: u32,
+}
+
+impl Copy for UnicodeRange {}
+
+impl UnicodeRange {
+  pub fn contains(self: &Self, codePoint: u32) -> bool {
+    return codePoint >= self.start && codePoint <= self.end
+  }
+}
+
+/// One @font-face rule.
+pub struct FontFaceRule {
+  /// The family name text asks for, unquoted.
+  pub family: Bytes,
+  /// The sources in order of preference.
+  pub sources: List<FaceSource>,
+  /// `font-weight`, `None` for `auto`.
+  pub weight: Option<Range>,
+  /// `font-stretch` (`font-width`) in percent, `None` for `auto`.
+  pub width: Option<Range>,
+  /// `font-style`, `None` for `auto`.
+  pub style: Option<FaceStyle>,
+  /// `unicode-range`; empty means every character.
+  pub ranges: List<UnicodeRange>,
+  pub display: FontDisplay,
+}
+
+impl FontFaceRule {
+  /// Whether the face is meant for `codePoint`, from `unicode-range`. Text uses a face for a
+  /// character only when this holds (and its font has a glyph for it).
+  pub fn covers(self: &Self, codePoint: u32) -> bool {
+    let ranges = List<UnicodeRange>.asSlice(&self.ranges)
+    if ranges.length == 0 {
+      return true
+    }
+    let mut i: usize = 0
+    while i < ranges.length {
+      if ranges[i].contains(codePoint) {
+        return true
+      }
+      i = i + 1
+    }
+    return false
+  }
+
+  /// The index in `sources` of the first `url()` this package can load: no `format()` or a
+  /// format it decodes, and no `tech()` it lacks. `local()` sources are skipped.
+  pub fn loadable(self: &Self) -> Option<usize> {
+    let sources = List<FaceSource>.asSlice(&self.sources)
+    let mut i: usize = 0
+    while i < sources.length {
+      if let FaceSource.Url { format, tech, .. } = &sources[i] {
+        if knownFormat(Bytes.asSlice(&format)) && knownTech(Bytes.asSlice(&tech)) {
+          return Option<usize>.Some { value: i }
+        }
+      }
+      i = i + 1
+    }
+    return Option<usize>.None
+  }
+
+  /// The URL of the first loadable source, as in [`FontFaceRule.loadable`].
+  pub fn url(self: &Self) -> Option<string> {
+    if let Option<usize>.Some { value } = self.loadable() {
+      if let FaceSource.Url { url, .. } = &List<FaceSource>.asSlice(&self.sources)[value] {
+        return Option<string>.Some { value: String.view(&url) }
+      }
+    }
+    return Option<string>.None
+  }
+}
+
+/// Whether a `format()` value names a format this package reads. An empty value means no
+/// `format()` was given, so the data decides.
+pub fn knownFormat(format: &[u8]) -> bool {
+  return format.length == 0 || same(format, b"woff2") || same(format, b"woff")
+    || same(format, b"truetype")
+    || same(format, b"opentype")
+    || same(format, b"collection")
+    || same(format, b"woff2-variations")
+    || same(format, b"woff-variations")
+    || same(format, b"truetype-variations")
+    || same(format, b"opentype-variations")
+}
+
+/// Whether every `tech()` keyword is one the font stack supports. Incremental transfer and
+/// Graphite are not.
+pub fn knownTech(tech: &[u8]) -> bool {
+  return !contains(tech, b"incremental") && !contains(tech, b"graphite")
+}
+
+fn same(left: &[u8], right: &[u8]) -> bool {
+  if left.length != right.length {
+    return false
+  }
+  let mut i: usize = 0
+  while i < left.length {
+    if lower(left[i]) != lower(right[i]) {
+      return false
+    }
+    i = i + 1
+  }
+  return true
+}
+
+fn contains(text: &[u8], needle: &[u8]) -> bool {
+  if needle.length > text.length {
+    return false
+  }
+  let mut i: usize = 0
+  while i + needle.length <= text.length {
+    if same(Slice.view<u8>(text, i, needle.length), needle) {
+      return true
+    }
+    i = i + 1
+  }
+  return false
+}
+
+fn lower(c: u8) -> u8 {
+  if c >= 65 && c <= 90 {
+    return c + 32
+  }
+  return c
+}
+
+fn space(c: u8) -> bool {
+  return c == 32 || c == 9 || c == 10 || c == 13 || c == 12
+}
+
+fn nameChar(c: u8) -> bool {
+  return c >= 97 && c <= 122 || c >= 65 && c <= 90 || c >= 48 && c <= 57 || c == 45 || c == 95
+    || c >= 128
+    || c == 92
+}
+
+/// A span `[start, end)` of the stylesheet.
+struct Span {
+  start: usize,
+  end: usize,
+}
+
+impl Copy for Span {}
+
+fn text(css: &[u8], span: Span) -> &[u8] {
+  return Slice.view<u8>(css, span.start, span.end - span.start)
+}
+
+/// Skips white space and comments from `at`.
+fn skipSpace(css: &[u8], at: usize) -> usize {
+  let mut i = at
+  while i < css.length {
+    if space(css[i]) {
+      i = i + 1
+    } else if css[i] == 47 && i + 1 < css.length && css[i + 1] == 42 {
+      i = i + 2
+      while i < css.length && !(css[i] == 42 && i + 1 < css.length && css[i + 1] == 47) {
+        i = i + 1
+      }
+      i = i + 2
+      if i > css.length {
+        i = css.length
+      }
+    } else {
+      return i
+    }
+  }
+  return i
+}
+
+/// The end of the string token that starts with the quote at `at` (after the closing quote).
+fn skipString(css: &[u8], at: usize) -> usize {
+  let quote = css[at]
+  let mut i = at + 1
+  while i < css.length && css[i] != quote {
+    if css[i] == 92 {
+      i = i + 1
+    } else if css[i] == 10 {
+      return i
+    }
+    i = i + 1
+  }
+  if i < css.length {
+    return i + 1
+  }
+  return css.length
+}
+
+/// Finds the end of a component value list from `at`: the first `stop` byte outside strings,
+/// comments and brackets, or the `}` that closes the enclosing block.
+fn scan(css: &[u8], at: usize, stop: u8) -> usize {
+  let mut depth: usize = 0
+  let mut i = at
+  while i < css.length {
+    let c = css[i]
+    if c == 34 || c == 39 {
+      i = skipString(css, i)
+      continue
+    }
+    if c == 47 && i + 1 < css.length && css[i + 1] == 42 {
+      i = skipSpace(css, i)
+      continue
+    }
+    if c == 40 || c == 91 || c == 123 {
+      depth = depth + 1
+    } else if c == 41 || c == 93 || c == 125 {
+      if depth == 0 {
+        if c == 125 {
+          return i
+        }
+      } else {
+        depth = depth - 1
+      }
+    } else if c == stop && depth == 0 {
+      return i
+    }
+    i = i + 1
+  }
+  return css.length
+}
+
+/// The position after the block that opens with `{` at `at`.
+fn skipBlock(css: &[u8], at: usize) -> usize {
+  let end = scan(css, at + 1, 0)
+  if end < css.length {
+    return end + 1
+  }
+  return end
+}
+
+fn trim(css: &[u8], span: Span) -> Span {
+  let mut start = span.start
+  let mut end = span.end
+  while start < end && space(css[start]) {
+    start = start + 1
+  }
+  while end > start && space(css[end - 1]) {
+    end = end - 1
+  }
+  return Span { start: start, end: end }
+}
+
+/// Splits `span` at top-level `separator` bytes.
+effect fn split(css: &[u8], span: Span, separator: u8) -> List<Span>
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let mut parts = List<Span>.make()
+  let mut start = span.start
+  let mut depth: usize = 0
+  let mut i = span.start
+  while i < span.end {
+    let c = css[i]
+    if c == 34 || c == 39 {
+      i = skipString(css, i)
+      if i > span.end {
+        i = span.end
+      }
+      continue
+    }
+    if c == 40 || c == 91 {
+      depth = depth + 1
+    } else if (c == 41 || c == 93) && depth > 0 {
+      depth = depth - 1
+    } else if depth == 0 && (c == separator || separator == 32 && space(c)) {
+      let part = trim(css, Span { start: start, end: i })
+      if part.end > part.start {
+        run parts.append(part)
+      }
+      start = i + 1
+    }
+    i = i + 1
+  }
+  let last = trim(css, Span { start: start, end: span.end })
+  if last.end > last.start {
+    run parts.append(last)
+  }
+  return move parts
+}
+
+fn hexValue(c: u8) -> Option<u32> {
+  if c >= 48 && c <= 57 {
+    return Option<u32>.Some { value: u8.toU32(c) - 48 }
+  }
+  if c >= 97 && c <= 102 {
+    return Option<u32>.Some { value: u8.toU32(c) - 87 }
+  }
+  if c >= 65 && c <= 70 {
+    return Option<u32>.Some { value: u8.toU32(c) - 55 }
+  }
+  return Option<u32>.None
+}
+
+/// Appends a code point as UTF-8.
+effect fn putScalar(out: &mut Bytes, codePoint: u32) -> ()
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let mut cp = codePoint
+  if cp == 0 || cp > 0x10ffff || cp >= 0xd800 && cp <= 0xdfff {
+    cp = 0xfffd
+  }
+  if cp < 0x80 {
+    let one: [u8; 1] = [u32.wrappingToU8(cp)]
+    run Bytes.append(&mut out, &one)
+  } else if cp < 0x800 {
+    let two: [u8; 2] = [u32.wrappingToU8(0xc0 + cp / 64), u32.wrappingToU8(0x80 + cp % 64)]
+    run Bytes.append(&mut out, &two)
+  } else if cp < 0x10000 {
+    let three: [u8; 3] = [
+      u32.wrappingToU8(0xe0 + cp / 4096),
+      u32.wrappingToU8(0x80 + cp / 64 % 64),
+      u32.wrappingToU8(0x80 + cp % 64),
+    ]
+    run Bytes.append(&mut out, &three)
+  } else {
+    let four: [u8; 4] = [
+      u32.wrappingToU8(0xf0 + cp / 262144),
+      u32.wrappingToU8(0x80 + cp / 4096 % 64),
+      u32.wrappingToU8(0x80 + cp / 64 % 64),
+      u32.wrappingToU8(0x80 + cp % 64),
+    ]
+    run Bytes.append(&mut out, &four)
+  }
+}
+
+/// The text of a string or identifier token, without quotes and with CSS escapes resolved.
+effect fn unescape(css: &[u8], span: Span) -> Bytes
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let mut start = span.start
+  let mut end = span.end
+  if end > start && (css[start] == 34 || css[start] == 39) {
+    let quote = css[start]
+    start = start + 1
+    if end > start && css[end - 1] == quote {
+      end = end - 1
+    }
+  }
+  let mut out = Bytes.make()
+  let mut i = start
+  while i < end {
+    let c = css[i]
+    if c != 92 {
+      let one: [u8; 1] = [c]
+      run Bytes.append(&mut out, &one)
+      i = i + 1
+      continue
+    }
+    i = i + 1
+    if i >= end {
+      break
+    }
+    if css[i] == 10 {
+      i = i + 1
+      continue
+    }
+    let mut value: u32 = 0
+    let mut digits: usize = 0
+    while i < end && digits < 6 {
+      if let Option<u32>.Some { value: digit } = hexValue(css[i]) {
+        value = value * 16 + digit
+        digits = digits + 1
+        i = i + 1
+      } else {
+        break
+      }
+    }
+    if digits == 0 {
+      let one: [u8; 1] = [css[i]]
+      run Bytes.append(&mut out, &one)
+      i = i + 1
+    } else {
+      run putScalar(&mut out, value)
+      if i < end && space(css[i]) {
+        i = i + 1
+      }
+    }
+  }
+  return move out
+}
+
+effect fn lowered(css: &[u8], span: Span) -> Bytes
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let mut out = run unescape(css, span)
+  let bytes = Bytes.asMutSlice(&mut out)
+  let mut i: usize = 0
+  while i < bytes.length {
+    bytes[i] = lower(bytes[i])
+    i = i + 1
+  }
+  return move out
+}
+
+/// A number with its unit, such as `700`, `12.5deg` or `75%`.
+struct Number {
+  value: f64,
+  unit: Span,
+}
+
+impl Copy for Number {}
+
+fn number(css: &[u8], span: Span) -> Option<Number> {
+  let mut i = span.start
+  let mut negative = false
+  if i < span.end && (css[i] == 43 || css[i] == 45) {
+    negative = css[i] == 45
+    i = i + 1
+  }
+  let mut value: f64 = 0.0
+  let mut digits: usize = 0
+  while i < span.end && css[i] >= 48 && css[i] <= 57 {
+    value = value * 10.0 + u8.toF64(css[i] - 48)
+    digits = digits + 1
+    i = i + 1
+  }
+  if i < span.end && css[i] == 46 {
+    i = i + 1
+    let mut scale: f64 = 0.1
+    while i < span.end && css[i] >= 48 && css[i] <= 57 {
+      value = value + u8.toF64(css[i] - 48) * scale
+      scale = scale / 10.0
+      digits = digits + 1
+      i = i + 1
+    }
+  }
+  if digits == 0 {
+    return Option<Number>.None
+  }
+  if i + 1 < span.end && (css[i] == 101 || css[i] == 69)
+    && (css[i + 1] >= 48 && css[i + 1] <= 57 || css[i + 1] == 45 || css[i + 1] == 43) {
+    let mut j = i + 1
+    let mut down = false
+    if css[j] == 45 || css[j] == 43 {
+      down = css[j] == 45
+      j = j + 1
+    }
+    let mut exponent: u32 = 0
+    let mut any = false
+    while j < span.end && css[j] >= 48 && css[j] <= 57 && exponent < 1000 {
+      exponent = exponent * 10 + u8.toU32(css[j] - 48)
+      any = true
+      j = j + 1
+    }
+    if any {
+      while exponent > 0 {
+        if down {
+          value = value / 10.0
+        } else {
+          value = value * 10.0
+        }
+        exponent = exponent - 1
+      }
+      i = j
+    }
+  }
+  if negative {
+    value = 0.0 - value
+  }
+  return Option<Number>.Some {
+    value: Number { value: value, unit: Span { start: i, end: span.end } }
+  }
+}
+
+fn keyword(css: &[u8], span: Span, name: &[u8]) -> bool {
+  return same(text(css, span), name)
+}
+
+/// `font-weight`: `auto`, or one or two of `normal`, `bold` and numbers from 1 to 1000.
+effect fn weight(css: &[u8], value: Span) -> Option<Option<Range>>
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let words = run split(css, value, 32)
+  let list = List<Span>.asSlice(&words)
+  if list.length == 1 && keyword(css, list[0], b"auto") {
+    return Option<Option<Range>>.Some { value: Option<Range>.None }
+  }
+  if list.length < 1 || list.length > 2 {
+    return Option<Option<Range>>.None
+  }
+  let mut values: [f64; 2] = [0.0, 0.0]
+  let mut i: usize = 0
+  while i < list.length {
+    if keyword(css, list[i], b"normal") {
+      values[i] = 400.0
+    } else if keyword(css, list[i], b"bold") {
+      values[i] = 700.0
+    } else if let Option<Number>.Some { value: n } = number(css, list[i]) {
+      if n.unit.end != n.unit.start || n.value < 1.0 || n.value > 1000.0 {
+        return Option<Option<Range>>.None
+      }
+      values[i] = n.value
+    } else {
+      return Option<Option<Range>>.None
+    }
+    i = i + 1
+  }
+  if list.length == 1 {
+    values[1] = values[0]
+  }
+  return Option<Option<Range>>.Some {
+    value: Option<Range>.Some { value: ordered(values[0], values[1]) }
+  }
+}
+
+fn ordered(a: f64, b: f64) -> Range {
+  if b < a {
+    return Range { min: b, max: a }
+  }
+  return Range { min: a, max: b }
+}
+
+fn widthKeyword(css: &[u8], span: Span) -> Option<f64> {
+  let names = [
+    "ultra-condensed",
+    "extra-condensed",
+    "condensed",
+    "semi-condensed",
+    "normal",
+    "semi-expanded",
+    "expanded",
+    "extra-expanded",
+    "ultra-expanded",
+  ]
+  let values: [f64; 9] = [50.0, 62.5, 75.0, 87.5, 100.0, 112.5, 125.0, 150.0, 200.0]
+  let mut i: usize = 0
+  while i < 9 {
+    if keyword(css, span, String.utf8Bytes(names[i])) {
+      return Option<f64>.Some { value: values[i] }
+    }
+    i = i + 1
+  }
+  return Option<f64>.None
+}
+
+/// `font-stretch` / `font-width`: `auto`, or one or two keywords or percentages.
+effect fn width(css: &[u8], value: Span) -> Option<Option<Range>>
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let words = run split(css, value, 32)
+  let list = List<Span>.asSlice(&words)
+  if list.length == 1 && keyword(css, list[0], b"auto") {
+    return Option<Option<Range>>.Some { value: Option<Range>.None }
+  }
+  if list.length < 1 || list.length > 2 {
+    return Option<Option<Range>>.None
+  }
+  let mut values: [f64; 2] = [0.0, 0.0]
+  let mut i: usize = 0
+  while i < list.length {
+    if let Option<f64>.Some { value: named } = widthKeyword(css, list[i]) {
+      values[i] = named
+    } else if let Option<Number>.Some { value: n } = number(css, list[i]) {
+      if !keyword(css, n.unit, b"%") || n.value < 0.0 {
+        return Option<Option<Range>>.None
+      }
+      values[i] = n.value
+    } else {
+      return Option<Option<Range>>.None
+    }
+    i = i + 1
+  }
+  if list.length == 1 {
+    values[1] = values[0]
+  }
+  return Option<Option<Range>>.Some {
+    value: Option<Range>.Some { value: ordered(values[0], values[1]) }
+  }
+}
+
+fn degrees(css: &[u8], span: Span) -> Option<f64> {
+  if let Option<Number>.Some { value: n } = number(css, span) {
+    let mut value = n.value
+    if keyword(css, n.unit, b"deg") {} else if keyword(css, n.unit, b"rad") {
+      value = value * 57.29577951308232
+    } else if keyword(css, n.unit, b"grad") {
+      value = value * 0.9
+    } else if keyword(css, n.unit, b"turn") {
+      value = value * 360.0
+    } else if !(n.unit.end == n.unit.start && value == 0.0) {
+      return Option<f64>.None
+    }
+    if value < -90.0 || value > 90.0 {
+      return Option<f64>.None
+    }
+    return Option<f64>.Some { value: value }
+  }
+  return Option<f64>.None
+}
+
+/// `font-style`: `auto`, `normal`, `italic`, or `oblique` with up to two angles.
+effect fn style(css: &[u8], value: Span) -> Option<Option<FaceStyle>>
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let words = run split(css, value, 32)
+  let list = List<Span>.asSlice(&words)
+  if list.length == 0 {
+    return Option<Option<FaceStyle>>.None
+  }
+  if list.length == 1 {
+    if keyword(css, list[0], b"auto") {
+      return Option<Option<FaceStyle>>.Some { value: Option<FaceStyle>.None }
+    }
+    if keyword(css, list[0], b"normal") {
+      return Option<Option<FaceStyle>>.Some {
+        value: Option<FaceStyle>.Some { value: FaceStyle.Normal }
+      }
+    }
+    if keyword(css, list[0], b"italic") {
+      return Option<Option<FaceStyle>>.Some {
+        value: Option<FaceStyle>.Some { value: FaceStyle.Italic }
+      }
+    }
+  }
+  if !keyword(css, list[0], b"oblique") || list.length > 3 {
+    return Option<Option<FaceStyle>>.None
+  }
+  let mut low: f64 = 14.0
+  let mut high: f64 = 14.0
+  if list.length >= 2 {
+    if let Option<f64>.Some { value: a } = degrees(css, list[1]) {
+      low = a
+      high = a
+    } else {
+      return Option<Option<FaceStyle>>.None
+    }
+  }
+  if list.length == 3 {
+    if let Option<f64>.Some { value: b } = degrees(css, list[2]) {
+      high = b
+    } else {
+      return Option<Option<FaceStyle>>.None
+    }
+  }
+  let range = ordered(low, high)
+  return Option<Option<FaceStyle>>.Some {
+    value: Option<FaceStyle>.Some { value: FaceStyle.Oblique { min: range.min, max: range.max } },
+  }
+}
+
+/// Reads `U+` followed by hex digits and `?` wildcards; `None` when there are none.
+fn hexRun(css: &[u8], at: usize, end: usize, wild: bool) -> Option<Span> {
+  let mut i = at
+  let mut seenWild = false
+  while i < end && i - at < 6 {
+    if css[i] == 63 && wild {
+      seenWild = true
+    } else if seenWild {
+      break
+    } else if let Option<u32>.None = hexValue(css[i]) {
+      break
+    }
+    i = i + 1
+  }
+  if i == at {
+    return Option<Span>.None
+  }
+  return Option<Span>.Some { value: Span { start: at, end: i } }
+}
+
+fn hexNumber(css: &[u8], span: Span, wildcard: u32) -> u32 {
+  let mut value: u32 = 0
+  let mut i = span.start
+  while i < span.end {
+    let digit = match hexValue(css[i]) {
+      Option<u32>.Some { value: known } => known
+      Option<u32>.None => wildcard
+    }
+    value = value * 16 + digit
+    i = i + 1
+  }
+  return value
+}
+
+/// One `unicode-range` item: `U+26`, `U+0-7F`, `U+4??`.
+fn unicodeRange(css: &[u8], span: Span) -> Option<UnicodeRange> {
+  if span.end - span.start < 3 || lower(css[span.start]) != 117 || css[span.start + 1] != 43 {
+    return Option<UnicodeRange>.None
+  }
+  let first = match hexRun(css, span.start + 2, span.end, true) {
+    Option<Span>.Some { value: got } => got
+    Option<Span>.None => {
+      return Option<UnicodeRange>.None
+    }
+  }
+  let start = hexNumber(css, first, 0)
+  let mut end = hexNumber(css, first, 15)
+  if first.end < span.end {
+    if css[first.end] != 45 || start != end {
+      return Option<UnicodeRange>.None
+    }
+    let second = match hexRun(css, first.end + 1, span.end, false) {
+      Option<Span>.Some { value: got } => got
+      Option<Span>.None => {
+        return Option<UnicodeRange>.None
+      }
+    }
+    if second.end != span.end {
+      return Option<UnicodeRange>.None
+    }
+    end = hexNumber(css, second, 0)
+  }
+  if end > 0x10ffff {
+    end = 0x10ffff
+  }
+  if start > end {
+    return Option<UnicodeRange>.None
+  }
+  return Option<UnicodeRange>.Some { value: UnicodeRange { start: start, end: end } }
+}
+
+/// The name and the argument span of a function token such as `url(...)`.
+struct Function {
+  name: Span,
+  arguments: Span,
+}
+
+impl Copy for Function {}
+
+fn function(css: &[u8], span: Span) -> Option<Function> {
+  let mut i = span.start
+  while i < span.end && nameChar(css[i]) {
+    i = i + 1
+  }
+  if i == span.start || i >= span.end || css[i] != 40 || css[span.end - 1] != 41 {
+    return Option<Function>.None
+  }
+  return Option<Function>.Some {
+    value: Function {
+      name: Span { start: span.start, end: i },
+      arguments: trim(css, Span { start: i + 1, end: span.end - 1 }),
+    },
+  }
+}
+
+/// The lowercased keywords or strings of a `format()` or `tech()` argument list, joined
+/// with commas.
+effect fn keywords(css: &[u8], arguments: Span) -> Bytes
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let parts = run split(css, arguments, 44)
+  let list = List<Span>.asSlice(&parts)
+  let mut out = Bytes.make()
+  let mut i: usize = 0
+  while i < list.length {
+    if i > 0 {
+      run Bytes.append(&mut out, b",")
+    }
+    let one = run lowered(css, list[i])
+    run Bytes.append(&mut out, Bytes.asSlice(&one))
+    i = i + 1
+  }
+  return move out
+}
+
+/// Resolves a `url()` value against `base`. A URL that does not parse is kept as written.
+effect fn resolve(raw: &[u8], base: Option<&Url>) -> String
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let input = match String.fromUtf8(raw) {
+    Result<string, InvalidUtf8>.Success { value: got } => got
+    Result<string, InvalidUtf8>.Failure { .. } => {
+      return String.make()
+    }
+  }
+  let parsed = run Url.parse(input, base)
+  return match move parsed {
+    Option<Url>.Some { value } => run String.copy(value.href())
+    Option<Url>.None => run String.copy(input)
+  }
+}
+
+/// `src`: a comma-separated list of `url() [format()] [tech()]` and `local()`.
+effect fn sources(css: &[u8], value: Span, base: Option<&Url>) -> Option<List<FaceSource>>
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let items = run split(css, value, 44)
+  let list = List<Span>.asSlice(&items)
+  let mut found = List<FaceSource>.make()
+  let mut i: usize = 0
+  while i < list.length {
+    let words = run split(css, list[i], 32)
+    let parts = List<Span>.asSlice(&words)
+    i = i + 1
+    if parts.length == 0 {
+      continue
+    }
+    let head = match function(css, parts[0]) {
+      Option<Function>.Some { value: got } => got
+      Option<Function>.None => {
+        continue
+      }
+    }
+    if keyword(css, head.name, b"local") {
+      if parts.length == 1 {
+        let mut name = Bytes.make()
+        let names = run split(css, head.arguments, 32)
+        let pieces = List<Span>.asSlice(&names)
+        let mut k: usize = 0
+        while k < pieces.length {
+          if k > 0 {
+            run Bytes.append(&mut name, b" ")
+          }
+          let piece = run unescape(css, pieces[k])
+          run Bytes.append(&mut name, Bytes.asSlice(&piece))
+          k = k + 1
+        }
+        run found.append(FaceSource.Local { name: move name })
+      }
+      continue
+    }
+    if !keyword(css, head.name, b"url") {
+      continue
+    }
+    let raw = run unescape(css, head.arguments)
+    let url = run resolve(Bytes.asSlice(&raw), base)
+    let mut format = Bytes.make()
+    let mut tech = Bytes.make()
+    let mut valid = true
+    let mut k: usize = 1
+    while k < parts.length {
+      if let Option<Function>.Some { value: hint } = function(css, parts[k]) {
+        if keyword(css, hint.name, b"format") && Bytes.length(&format) == 0 {
+          format = run keywords(css, hint.arguments)
+        } else if keyword(css, hint.name, b"tech") && Bytes.length(&tech) == 0 {
+          tech = run keywords(css, hint.arguments)
+        } else {
+          valid = false
+        }
+      } else {
+        valid = false
+      }
+      k = k + 1
+    }
+    if valid {
+      run found.append(FaceSource.Url { url: move url, format: move format, tech: move tech })
+    }
+  }
+  if List<FaceSource>.length(&found) == 0 {
+    return Option<List<FaceSource>>.None
+  }
+  return Option<List<FaceSource>>.Some { value: move found }
+}
+
+/// `font-family`: one string, or identifiers joined by single spaces.
+effect fn family(css: &[u8], value: Span) -> Option<Bytes>
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let words = run split(css, value, 32)
+  let list = List<Span>.asSlice(&words)
+  if list.length == 0 {
+    return Option<Bytes>.None
+  }
+  if css[list[0].start] == 34 || css[list[0].start] == 39 {
+    if list.length != 1 {
+      return Option<Bytes>.None
+    }
+    return Option<Bytes>.Some { value: run unescape(css, list[0]) }
+  }
+  let mut out = Bytes.make()
+  let mut i: usize = 0
+  while i < list.length {
+    let mut k = list[i].start
+    while k < list[i].end {
+      if !nameChar(css[k]) {
+        return Option<Bytes>.None
+      }
+      k = k + 1
+    }
+    if i > 0 {
+      run Bytes.append(&mut out, b" ")
+    }
+    let word = run unescape(css, list[i])
+    run Bytes.append(&mut out, Bytes.asSlice(&word))
+    i = i + 1
+  }
+  return Option<Bytes>.Some { value: move out }
+}
+
+/// Reads the declarations of one @font-face block, from after `{` to its `}`.
+effect fn face(
+  css: &[u8],
+  start: usize,
+  end: usize,
+  base: Option<&Url>,
+  rules: &mut List<FontFaceRule>,
+) -> ()
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let mut rule = FontFaceRule {
+    family: Bytes.make(),
+    sources: List<FaceSource>.make(),
+    weight: Option<Range>.None,
+    width: Option<Range>.None,
+    style: Option<FaceStyle>.None,
+    ranges: List<UnicodeRange>.make(),
+    display: FontDisplay.Auto,
+  }
+  let mut named = false
+  let mut sourced = false
+  let mut at = start
+  while at < end {
+    at = skipSpace(css, at)
+    if at >= end {
+      break
+    }
+    let stop = scan(css, at, 59)
+    let declarationEnd = if stop < end {
+      stop
+    } else {
+      end
+    }
+    let mut colon = at
+    while colon < declarationEnd && css[colon] != 58 {
+      colon = colon + 1
+    }
+    let next = declarationEnd + 1
+    if colon >= declarationEnd {
+      at = next
+      continue
+    }
+    let name = trim(css, Span { start: at, end: colon })
+    let mut value = trim(css, Span { start: colon + 1, end: declarationEnd })
+
+    // `!important` is not valid in @font-face; such a declaration is dropped.
+    if contains(text(css, value), b"!important") {
+      at = next
+      continue
+    }
+    if keyword(css, name, b"font-family") {
+      if let Option<Bytes>.Some { value: found } = run family(css, value) {
+        rule.family = move found
+        named = true
+      }
+    } else if keyword(css, name, b"src") {
+      if let Option<List<FaceSource>>.Some { value: found } = run sources(css, value, base) {
+        rule.sources = move found
+        sourced = true
+      }
+    } else if keyword(css, name, b"font-weight") {
+      if let Option<Option<Range>>.Some { value: found } = run weight(css, value) {
+        rule.weight = found
+      }
+    } else if keyword(css, name, b"font-stretch") || keyword(css, name, b"font-width") {
+      if let Option<Option<Range>>.Some { value: found } = run width(css, value) {
+        rule.width = found
+      }
+    } else if keyword(css, name, b"font-style") {
+      if let Option<Option<FaceStyle>>.Some { value: found } = run style(css, value) {
+        rule.style = found
+      }
+    } else if keyword(css, name, b"unicode-range") {
+      let items = run split(css, value, 44)
+      let list = List<Span>.asSlice(&items)
+      let mut ranges = List<UnicodeRange>.make()
+      let mut valid = list.length > 0
+      let mut i: usize = 0
+      while i < list.length {
+        if let Option<UnicodeRange>.Some { value: range } = unicodeRange(css, list[i]) {
+          run ranges.append(range)
+        } else {
+          valid = false
+        }
+        i = i + 1
+      }
+      if valid {
+        rule.ranges = move ranges
+      }
+    } else if keyword(css, name, b"font-display") {
+      if keyword(css, value, b"auto") {
+        rule.display = FontDisplay.Auto
+      } else if keyword(css, value, b"block") {
+        rule.display = FontDisplay.Block
+      } else if keyword(css, value, b"swap") {
+        rule.display = FontDisplay.Swap
+      } else if keyword(css, value, b"fallback") {
+        rule.display = FontDisplay.Fallback
+      } else if keyword(css, value, b"optional") {
+        rule.display = FontDisplay.Optional
+      }
+    }
+    drop value
+    at = next
+  }
+  if named && sourced {
+    run rules.append(move rule)
+  }
+}
+
+/// Returns the @font-face rules of `css` in order. `base` is the stylesheet's URL, which
+/// relative `url()` sources resolve against; without one they are kept as written.
+pub effect fn parse(css: &[u8], base: Option<&Url>) -> List<FontFaceRule>
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let mut rules = List<FontFaceRule>.make()
+  let mut at: usize = 0
+  while at < css.length {
+    at = skipSpace(css, at)
+    if at >= css.length {
+      break
+    }
+    let c = css[at]
+    if c == 125 || c == 59 {
+      at = at + 1
+      continue
+    }
+    if c == 64 {
+      let mut nameEnd = at + 1
+      while nameEnd < css.length && nameChar(css[nameEnd]) {
+        nameEnd = nameEnd + 1
+      }
+      let isFace = keyword(css, Span { start: at + 1, end: nameEnd }, b"font-face")
+
+      // An at-rule ends at its `;` or after its block.
+      let mut i = nameEnd
+      let mut ended = false
+      while i < css.length && !ended {
+        let k = css[i]
+        if k == 34 || k == 39 {
+          i = skipString(css, i)
+        } else if k == 59 {
+          i = i + 1
+          ended = true
+        } else if k == 123 {
+          let close = scan(css, i + 1, 0)
+          if isFace && skipSpace(css, nameEnd) == i {
+            run face(css, i + 1, close, base, &mut rules)
+          }
+          i = close + 1
+          ended = true
+        } else {
+          i = i + 1
+        }
+      }
+      at = i
+      continue
+    }
+
+    // A style rule: skip its prelude and block.
+    let mut i = at
+    while i < css.length && css[i] != 123 && css[i] != 59 {
+      if css[i] == 34 || css[i] == 39 {
+        i = skipString(css, i)
+      } else {
+        i = i + 1
+      }
+    }
+    if i < css.length && css[i] == 123 {
+      at = skipBlock(css, i)
+    } else {
+      at = i + 1
+    }
+  }
+  return move rules
+}

@@ -1,0 +1,34 @@
+//! Web fonts for native hosts: WOFF and WOFF2 decoding, @font-face stylesheets, fetching.
+import woff
+import woff2
+import silk.collections.bytes { Bytes }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+pub import error { WebFontError, WebFontReason }
+pub import sfnt { Format, detect }
+pub import stylesheet {
+  FontFaceRule,
+  FaceSource,
+  FontDisplay,
+  UnicodeRange,
+  parse as parseStylesheet
+}
+
+/// Returns the sfnt font or collection in `data`: WOFF and WOFF2 are decoded, and TrueType,
+/// OpenType and collection files are copied as they are.
+///
+/// # Errors
+/// - [`WebFontError`] with `UnknownFormat` for anything else, or the decoder's error.
+pub effect fn decode(data: &[u8]) -> Bytes
+  ! WebFontError | OutOfMemoryError
+  ? &mut Allocator {
+  return match detect(data) {
+    Format.Woff2 => run woff2.decode(data)
+    Format.Woff => run woff.decode(data)
+    Format.TrueType => run Bytes.copy(data)
+    Format.OpenType => run Bytes.copy(data)
+    Format.Collection => run Bytes.copy(data)
+    Format.Unknown => {
+      fail WebFontError.at(WebFontReason.UnknownFormat, 0)
+    }
+  }
+}

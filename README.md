@@ -13,6 +13,7 @@ Font parsing, shaping, outlines, rasterization, face matching and fallback for S
 | `font-raster` | [modules/raster](modules/raster) | Glyph atlas and shaped-line caches, rasterization and text gamma correction |
 | `font-faces` | [modules/faces](modules/faces) | Host-filled face database and CSS Fonts 4 matching |
 | `font-collection` | [modules/collection](modules/collection) | Application font collections and per-character fallback |
+| `font-web` | [modules/web](modules/web) | WOFF and WOFF2 decoding, @font-face stylesheets and fetching them |
 
 The workspace uses Silk `0.1.0-dev.72+9c780a04d6ef`. Graphics dependencies are
 pinned Git dependencies on [silk-lang/lib-graphics](https://github.com/silk-lang/lib-graphics),
@@ -69,7 +70,7 @@ explicitly refresh the pins. `--fetch` never updates the lock.
 
 ### Internal executables and WebAssembly
 
-These tools are separate from the seven consumer libraries:
+These tools are separate from the eight consumer libraries:
 
 - [font-parse-test-harness](font-parse-test-harness): internal parse dumper;
   package and binary name `font-parse-test-harness`.
@@ -91,7 +92,7 @@ The task also installs the artifact at
 ### CI and optional maintainer tooling
 
 [Fonts CI](.github/workflows/fonts.yml) installs the workspace-pinned Silk release,
-checks the workspace, runs the six native test roots on Linux and macOS, and
+checks the workspace, runs the seven native test roots on Linux and macOS, and
 builds the two internal harnesses and parser benchmark. Its Linux job also checks
 and builds the WebAssembly wrapper. CI runs the same Silk tasks used locally;
 WebAssembly compilation is not a JavaScript wrapper runtime test.

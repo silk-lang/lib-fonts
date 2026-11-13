@@ -1,0 +1,370 @@
+//! Recognize font container formats, and write sfnt fonts and collections from decoded tables.
+//!
+//! The WOFF and WOFF2 decoders end here: they gather each table's bytes into one store and
+//! [`write`] lays out the offset table, the table records in tag order, 4-byte aligned table
+//! data and the checksums, so the result reads like the font the WOFF file was made from.
+import error { WebFontError, WebFontReason }
+import silk.collections.bytes { Bytes }
+import silk.collections.list { List }
+import silk.collections.slice { Slice }
+import silk.core.ownership { Copy }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.num.u8
+import silk.num.u32
+import silk.num.i32
+import silk.num.usize
+
+/// A font container format, told from the first four bytes.
+pub enum Format {
+  /// An sfnt font with TrueType outlines (`0x00010000` or `true`).
+  TrueType,
+  /// An sfnt font with CFF outlines (`OTTO`).
+  OpenType,
+  /// A TrueType or OpenType collection (`ttcf`).
+  Collection,
+  /// WOFF 1.0 (`wOFF`).
+  Woff,
+  /// WOFF 2.0 (`wOF2`).
+  Woff2,
+  /// None of the above.
+  Unknown,
+}
+
+pub const TAG_TTCF: u32 = 0x74746366
+
+pub const TAG_WOFF: u32 = 0x774f4646
+
+pub const TAG_WOFF2: u32 = 0x774f4632
+
+pub const TAG_OTTO: u32 = 0x4f54544f
+
+pub const TAG_TRUE: u32 = 0x74727565
+
+pub const TAG_HEAD: u32 = 0x68656164
+
+pub const VERSION_TRUETYPE: u32 = 0x00010000
+
+/// The format of `data`, from its signature only.
+pub fn detect(data: &[u8]) -> Format {
+  if data.length < 4 {
+    return Format.Unknown
+  }
+  let tag = u32At(data, 0)
+  if tag == VERSION_TRUETYPE || tag == TAG_TRUE {
+    return Format.TrueType
+  }
+  if tag == TAG_OTTO {
+    return Format.OpenType
+  }
+  if tag == TAG_TTCF {
+    return Format.Collection
+  }
+  if tag == TAG_WOFF {
+    return Format.Woff
+  }
+  if tag == TAG_WOFF2 {
+    return Format.Woff2
+  }
+  return Format.Unknown
+}
+
+/// The big-endian `u16` at `at`. The caller checks that two bytes are there.
+pub fn u16At(data: &[u8], at: usize) -> u32 {
+  return u8.toU32(data[at]) * 256 + u8.toU32(data[at + 1])
+}
+
+/// The big-endian `u32` at `at`. The caller checks that four bytes are there.
+pub fn u32At(data: &[u8], at: usize) -> u32 {
+  return u8.toU32(data[at]) * 16777216 + u8.toU32(data[at + 1]) * 65536
+    + u8.toU32(data[at + 2]) * 256
+    + u8.toU32(data[at + 3])
+}
+
+/// The big-endian `i16` at `at`. The caller checks that two bytes are there.
+pub fn i16At(data: &[u8], at: usize) -> i32 {
+  let value = u32.toI32(u16At(data, at))
+  if value >= 32768 {
+    return value - 65536
+  }
+  return value
+}
+
+/// Whether `length` bytes from `at` are inside `data`, without overflow.
+pub fn fits(data: &[u8], at: usize, length: usize) -> bool {
+  return at <= data.length && length <= data.length - at
+}
+
+pub effect fn putU8(out: &mut Bytes, value: u32) -> ()
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let one: [u8; 1] = [u32.wrappingToU8(value)]
+  run Bytes.append(&mut out, &one)
+}
+
+pub effect fn putU16(out: &mut Bytes, value: u32) -> ()
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let two: [u8; 2] = [u32.wrappingToU8(value / 256), u32.wrappingToU8(value)]
+  run Bytes.append(&mut out, &two)
+}
+
+/// Appends the low 16 bits of `value` in two's complement.
+pub effect fn putI16(out: &mut Bytes, value: i32) -> ()
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let mut bits = value
+  if bits < 0 {
+    bits = bits + 65536
+  }
+  run putU16(&mut out, i32.toU32(bits))
+}
+
+pub effect fn putU32(out: &mut Bytes, value: u32) -> ()
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let four: [u8; 4] = [
+    u32.wrappingToU8(value / 16777216),
+    u32.wrappingToU8(value / 65536),
+    u32.wrappingToU8(value / 256),
+    u32.wrappingToU8(value),
+  ]
+  run Bytes.append(&mut out, &four)
+}
+
+/// Overwrites four bytes at `at` with big-endian `value`.
+pub fn setU32(out: &mut Bytes, at: usize, value: u32) -> () {
+  let bytes = Bytes.asMutSlice(&mut out)
+  bytes[at] = u32.wrappingToU8(value / 16777216)
+  bytes[at + 1] = u32.wrappingToU8(value / 65536)
+  bytes[at + 2] = u32.wrappingToU8(value / 256)
+  bytes[at + 3] = u32.wrappingToU8(value)
+}
+
+/// Appends zero bytes until the length is a multiple of four.
+pub effect fn pad4(out: &mut Bytes) -> ()
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  while Bytes.length(&out) % 4 != 0 {
+    run putU8(&mut out, 0)
+  }
+}
+
+/// The OpenType checksum of `data`: the sum of its big-endian `u32` words, the last padded
+/// with zeros, modulo 2^32.
+pub fn checksum(data: &[u8]) -> u32 {
+  let mut sum: u32 = 0
+  let mut at: usize = 0
+  while at + 4 <= data.length {
+    sum = u32.wrappingAdd(sum, u32At(data, at))
+    at = at + 4
+  }
+  if at < data.length {
+    let mut last: u32 = 0
+    let mut shift: u32 = 24
+    while at < data.length {
+      last = last | u32.shiftLeft(u8.toU32(data[at]), shift)
+      at = at + 1
+      if shift >= 8 {
+        shift = shift - 8
+      }
+    }
+    sum = u32.wrappingAdd(sum, last)
+  }
+  return sum
+}
+
+/// One table of a font being written: its tag and where its bytes are in the store.
+pub struct Table {
+  pub tag: u32,
+  pub offset: usize,
+  pub length: usize,
+}
+
+impl Copy for Table {}
+
+impl Table {
+  pub fn make(tag: u32, offset: usize, length: usize) -> Table {
+    return Table { tag: tag, offset: offset, length: length }
+  }
+}
+
+/// One font of a collection: its sfnt version and the tables it uses, by index into the
+/// collection's table list.
+pub struct CollectionFont {
+  pub flavor: u32,
+  pub tables: List<usize>,
+}
+
+/// Sorts tables by tag, as the table directory requires.
+pub fn sortByTag(tables: &mut List<Table>) -> () {
+  let items = List<Table>.asMutSlice(&mut tables)
+  let mut i: usize = 1
+  while i < items.length {
+    let mut j = i
+    while j > 0 && items[j - 1].tag > items[j].tag {
+      let keep = items[j]
+      items[j] = items[j - 1]
+      items[j - 1] = keep
+      j = j - 1
+    }
+    i = i + 1
+  }
+}
+
+effect fn putDirectoryHeader(out: &mut Bytes, flavor: u32, count: usize) -> ()
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let mut power: usize = 1
+  let mut log: u32 = 0
+  while power * 2 <= count {
+    power = power * 2
+    log = log + 1
+  }
+  let searchRange = usize.toU32(power) * 16
+  run putU32(&mut out, flavor)
+  run putU16(&mut out, usize.toU32(count))
+  run putU16(&mut out, searchRange)
+  run putU16(&mut out, log)
+  run putU16(&mut out, usize.toU32(count) * 16 - searchRange)
+}
+
+/// Writes one sfnt font with the sfnt version `flavor` from `tables`, whose bytes are in
+/// `store`. Tables are written in tag order; the `head` checksum adjustment is recomputed.
+pub effect fn write(flavor: u32, tables: &mut List<Table>, store: &[u8]) -> Bytes
+  ! WebFontError | OutOfMemoryError
+  ? &mut Allocator {
+  sortByTag(&mut tables)
+  let items = List<Table>.asSlice(&tables)
+  let mut total: usize = 12 + 16 * items.length
+  let mut i: usize = 0
+  while i < items.length {
+    if !fits(store, items[i].offset, items[i].length) {
+      fail WebFontError.at(WebFontReason.Malformed, 0)
+    }
+    total = total + (items[i].length + 3) / 4 * 4
+    i = i + 1
+  }
+  let mut out = run Bytes.makeWithCapacity(total)
+  run putDirectoryHeader(&mut out, flavor, items.length)
+  let mut offset: usize = 12 + 16 * items.length
+  let mut headOffset: usize = 0
+  let mut headLength: usize = 0
+  i = 0
+  while i < items.length {
+    let table = &items[i]
+    run putU32(&mut out, table.tag)
+    let data = Slice.view<u8>(store, table.offset, table.length)
+    let mut sum = checksum(data)
+    if table.tag == TAG_HEAD && table.length >= 12 {
+      // The checksum of `head` counts checkSumAdjustment as zero.
+      sum = u32.wrappingSubtract(sum, u32At(data, 8))
+      headOffset = offset
+      headLength = table.length
+    }
+    run putU32(&mut out, sum)
+    run putU32(&mut out, usize.toU32(offset))
+    run putU32(&mut out, usize.toU32(table.length))
+    offset = offset + (table.length + 3) / 4 * 4
+    i = i + 1
+  }
+  i = 0
+  while i < items.length {
+    let table = &items[i]
+    run Bytes.append(&mut out, Slice.view<u8>(store, table.offset, table.length))
+    run pad4(&mut out)
+    i = i + 1
+  }
+  if headLength >= 12 {
+    setU32(&mut out, headOffset + 8, 0)
+    let whole = checksum(Bytes.asSlice(&out))
+    setU32(&mut out, headOffset + 8, u32.wrappingSubtract(0xB1B0AFBA, whole))
+  }
+  return move out
+}
+
+/// Writes a TrueType collection (version 2.0 without a DSIG) whose fonts share `tables`,
+/// with each table's bytes in `store` and written once.
+pub effect fn writeCollection(
+  version: u32,
+  fonts: &List<CollectionFont>,
+  tables: &List<Table>,
+  store: &[u8],
+) -> Bytes
+  ! WebFontError | OutOfMemoryError
+  ? &mut Allocator {
+  let shared = List<Table>.asSlice(&tables)
+  let members = List<CollectionFont>.asSlice(&fonts)
+  let mut headerLength: usize = 12 + 4 * members.length
+  if version == 0x00020000 {
+    headerLength = headerLength + 12
+  }
+  let mut directories: usize = 0
+  let mut f: usize = 0
+  while f < members.length {
+    directories = directories + 12 + 16 * List<usize>.length(&members[f].tables)
+    f = f + 1
+  }
+  let mut dataOffset = headerLength + directories
+  let mut placed = run List<usize>.makeWithCapacity(shared.length)
+  let mut i: usize = 0
+  while i < shared.length {
+    if !fits(store, shared[i].offset, shared[i].length) {
+      fail WebFontError.at(WebFontReason.Malformed, 0)
+    }
+    run placed.append(dataOffset)
+    dataOffset = dataOffset + (shared[i].length + 3) / 4 * 4
+    i = i + 1
+  }
+  let mut out = run Bytes.makeWithCapacity(dataOffset)
+  run putU32(&mut out, TAG_TTCF)
+  run putU32(&mut out, version)
+  run putU32(&mut out, usize.toU32(members.length))
+  let mut directory = headerLength
+  f = 0
+  while f < members.length {
+    run putU32(&mut out, usize.toU32(directory))
+    directory = directory + 12 + 16 * List<usize>.length(&members[f].tables)
+    f = f + 1
+  }
+  if version == 0x00020000 {
+    run putU32(&mut out, 0)
+    run putU32(&mut out, 0)
+    run putU32(&mut out, 0)
+  }
+  f = 0
+  while f < members.length {
+    // Each directory lists its tables in tag order.
+    let mut order = List<Table>.make()
+    let indices = List<usize>.asSlice(&members[f].tables)
+    let mut k: usize = 0
+    while k < indices.length {
+      if indices[k] >= shared.length {
+        fail WebFontError.at(WebFontReason.Malformed, 0)
+      }
+      run order.append(Table.make(shared[indices[k]].tag, indices[k], 0))
+      k = k + 1
+    }
+    sortByTag(&mut order)
+    let sorted = List<Table>.asSlice(&order)
+    run putDirectoryHeader(&mut out, members[f].flavor, sorted.length)
+    k = 0
+    while k < sorted.length {
+      let table = &shared[sorted[k].offset]
+      let data = Slice.view<u8>(store, table.offset, table.length)
+      run putU32(&mut out, table.tag)
+      run putU32(&mut out, checksum(data))
+      run putU32(&mut out, usize.toU32(List<usize>.asSlice(&placed)[sorted[k].offset]))
+      run putU32(&mut out, usize.toU32(table.length))
+      k = k + 1
+    }
+    f = f + 1
+  }
+  i = 0
+  while i < shared.length {
+    let table = &shared[i]
+    run Bytes.append(&mut out, Slice.view<u8>(store, table.offset, table.length))
+    run pad4(&mut out)
+    i = i + 1
+  }
+  return move out
+}
