@@ -1,0 +1,10 @@
+[package]
+name = "font-web"
+description = "Web fonts: WOFF and WOFF2 decoding, @font-face stylesheets and fetching them"
+version = "0.1.0"
+silk-version = "0.1.0-dev.72+9c780a04d6ef"
+kind = "library"
+exports = ["lib", "error", "sfnt", "woff", "woff2", "stylesheet", "fetch"]
+
+[dependencies]
+svg_fonts = { path = "../faces", package = "font-faces" }

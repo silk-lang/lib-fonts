@@ -1,0 +1,133 @@
+//! Decode WOFF 1.0 files (https://www.w3.org/TR/WOFF/) to the sfnt font they wrap.
+//!
+//! Each table is stored as is or zlib-compressed. [`decode`] inflates the tables and writes
+//! an sfnt font in tag order with fresh checksums. Metadata and private data are dropped,
+//! as a browser does once it has the font.
+import error { WebFontError, WebFontReason }
+import sfnt { Table, u16At, u32At, fits, TAG_WOFF }
+import sfnt
+import silk.collections.bytes { Bytes }
+import silk.collections.list { List }
+import silk.collections.slice { Slice }
+import silk.compress.inflate {
+  DecodeError,
+  Decoder,
+  Format,
+  Limits,
+  Progress,
+  Status,
+  MEMORY_BOUND
+}
+import silk.core.effect { Effect }
+import silk.core.result { Result }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.num.u32
+import silk.num.usize
+
+/// The largest font [`decode`] produces: 256 MiB.
+pub const MAX_FONT_BYTES: usize = 268435456
+
+const HEADER: usize = 44
+
+const ENTRY: usize = 20
+
+/// Decodes a WOFF 1.0 file to an sfnt font.
+///
+/// # Errors
+/// - [`WebFontError`] when `data` is not WOFF, is cut short, has a table outside the file or a
+///   compressed table that does not inflate to its declared size, or declares more than
+///   [`MAX_FONT_BYTES`].
+pub effect fn decode(data: &[u8]) -> Bytes
+  ! WebFontError | OutOfMemoryError
+  ? &mut Allocator {
+  if data.length < HEADER || u32At(data, 0) != TAG_WOFF {
+    fail WebFontError.at(WebFontReason.UnknownFormat, 0)
+  }
+  let flavor = u32At(data, 4)
+  let count = u32.toUsize(u16At(data, 12))
+  if u16At(data, 14) != 0 || count == 0 {
+    fail WebFontError.at(WebFontReason.Malformed, 12)
+  }
+  if !fits(data, HEADER, count * ENTRY) {
+    fail WebFontError.at(WebFontReason.Truncated, HEADER)
+  }
+  let mut tables = run List<Table>.makeWithCapacity(count)
+  let mut total: usize = 0
+  let mut i: usize = 0
+  while i < count {
+    let at = HEADER + i * ENTRY
+    let origLength = u32.toUsize(u32At(data, at + 12))
+    if origLength > MAX_FONT_BYTES - total {
+      fail WebFontError.at(WebFontReason.TooLarge, at)
+    }
+    total = total + origLength
+    i = i + 1
+  }
+  let mut store = run Bytes.makeWithCapacity(total)
+  i = 0
+  while i < count {
+    let at = HEADER + i * ENTRY
+    let tag = u32At(data, at)
+    let offset = u32.toUsize(u32At(data, at + 4))
+    let compLength = u32.toUsize(u32At(data, at + 8))
+    let origLength = u32.toUsize(u32At(data, at + 12))
+    if !fits(data, offset, compLength) {
+      fail WebFontError.at(WebFontReason.Truncated, at)
+    }
+    if compLength > origLength {
+      fail WebFontError.at(WebFontReason.Malformed, at)
+    }
+    let start = Bytes.length(&store)
+    let packed = Slice.view<u8>(data, offset, compLength)
+    if compLength == origLength {
+      run Bytes.append(&mut store, packed)
+    } else {
+      run inflateInto(&mut store, packed, origLength, offset)
+    }
+    run tables.append(Table.make(tag, start, origLength))
+    i = i + 1
+  }
+  return run sfnt.write(flavor, &mut tables, Bytes.asSlice(&store))
+}
+
+/// Inflates one zlib stream onto the end of `out`; it must give exactly `length` bytes.
+pub effect fn inflateInto(out: &mut Bytes, input: &[u8], length: usize, offset: usize) -> ()
+  ! WebFontError | OutOfMemoryError
+  ? &mut Allocator {
+  let limits = Limits {
+    maxInputBytes: usize.toU64(input.length),
+    maxOutputBytes: usize.toU64(length),
+    maxMembers: 1,
+    maxHeaderBytes: 2,
+    maxMemoryBytes: MEMORY_BOUND,
+  }
+  let made = run Effect.result(Decoder.make(Format.Zlib, move limits))
+  let mut decoder = match move made {
+    Result.Success { value } => move value
+    Result.Failure { error } => match move error {
+      OutOfMemoryError failure => {
+        fail move failure
+      }
+      DecodeError failure => {
+        drop failure
+        fail WebFontError.at(WebFontReason.Decompression, offset)
+      }
+    }
+  }
+  let start = Bytes.length(&out)
+  run Bytes.reserve(&mut out, length)
+  let mut zeros: usize = 0
+  while zeros < length {
+    drop Bytes.appendWithinCapacity(&mut out, 0)
+    zeros = zeros + 1
+  }
+  let target = Slice.viewMut<u8>(Bytes.asMutSlice(&mut out), start, length)
+  let ok = match Decoder.step(&mut decoder, input, &mut target, true) {
+    Result<Progress, DecodeError>.Success { value } => value.status == Status.Finished
+      && value.written == length
+    Result<Progress, DecodeError>.Failure { .. } => false
+  }
+  if !ok {
+    fail WebFontError.at(WebFontReason.Decompression, offset)
+  }
+}

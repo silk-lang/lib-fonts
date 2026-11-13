@@ -1,0 +1,922 @@
+//! Decode WOFF 2.0 files (https://www.w3.org/TR/WOFF2/) to the sfnt font or collection they
+//! wrap.
+//!
+//! A WOFF2 file is one Brotli stream holding every table, after a directory with compact
+//! tags and variable-length sizes. Encoders usually also transform `glyf` and `loca` (split
+//! into streams of contour counts, point counts, flags, triplet-coded coordinates, composite
+//! records, boxes and instructions) and can transform `hmtx` (side bearings dropped where they
+//! equal the glyph's `xMin`). [`decode`] inflates the stream, rebuilds those tables as the
+//! reference decoder does, and writes an sfnt font with checksums, so any font file Google
+//! Fonts or another service hands out reads like the original TrueType or OpenType font.
+import error { WebFontError, WebFontReason }
+import sfnt {
+  Table,
+  CollectionFont,
+  u16At,
+  u32At,
+  i16At,
+  fits,
+  putU8,
+  putU16,
+  putI16,
+  putU32,
+  pad4
+}
+import sfnt
+import silk.collections.bytes { Bytes }
+import silk.collections.list { List }
+import silk.collections.slice { Slice }
+import silk.compress.brotli { Brotli, BrotliError, BrotliLimits, BrotliProgress, BrotliStatus }
+import silk.core.effect { Effect }
+import silk.core.option { Option }
+import silk.core.ownership { Copy }
+import silk.core.result { Result }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.num.i32
+import silk.num.u8
+import silk.num.u32
+import silk.num.usize
+
+/// The largest font [`decode`] produces: 256 MiB.
+pub const MAX_FONT_BYTES: usize = 268435456
+
+const HEADER: usize = 48
+
+const TAG_GLYF: u32 = 0x676c7966
+
+const TAG_LOCA: u32 = 0x6c6f6361
+
+const TAG_HMTX: u32 = 0x686d7478
+
+const TAG_HHEA: u32 = 0x68686561
+
+const TAG_TTCF: u32 = 0x74746366
+
+const TAG_WOFF2: u32 = 0x774f4632
+
+// Composite glyph flags (OpenType glyf).
+const ARG_1_AND_2_ARE_WORDS: u32 = 0x0001
+
+const WE_HAVE_A_SCALE: u32 = 0x0008
+
+const MORE_COMPONENTS: u32 = 0x0020
+
+const WE_HAVE_AN_X_AND_Y_SCALE: u32 = 0x0040
+
+const WE_HAVE_A_TWO_BY_TWO: u32 = 0x0080
+
+const WE_HAVE_INSTRUCTIONS: u32 = 0x0100
+
+// Simple glyph flags (OpenType glyf).
+const ON_CURVE: u32 = 0x01
+
+const X_SHORT: u32 = 0x02
+
+const Y_SHORT: u32 = 0x04
+
+const REPEAT: u32 = 0x08
+
+const X_SAME: u32 = 0x10
+
+const Y_SAME: u32 = 0x20
+
+const OVERLAP_SIMPLE: u32 = 0x40
+
+/// The tag of known-table index `index` (WOFF2 section 4.1, table 1).
+fn knownTag(index: u32) -> u32 {
+  let known = b"cmapheadhheahmtxmaxpnameOS/2postcvt fpgmglyflocaprepCFF VORGEBDTEBLCgasphdmxkernLTSHPCLTVDMXvheavmtxBASEGDEFGPOSGSUBEBSCJSTFMATHCBDTCBLCCOLRCPALSVG sbixacntavarbdatblocbslncvarfdscfeatfmtxfvargvarhstyjustlcarmortmorxopbdproptrakZapfSilfGlatGlocFeatSill"
+  return u32At(&known, u32.toUsize(index) * 4)
+}
+
+/// A read position inside `[at, end)` of some input.
+struct Stream {
+  at: usize,
+  end: usize,
+}
+
+impl Copy for Stream {}
+
+impl Stream {
+  fn make(start: usize, length: usize) -> Stream {
+    return Stream { at: start, end: start + length }
+  }
+}
+
+effect fn byte(data: &[u8], stream: &mut Stream) -> u32
+  ! WebFontError {
+  if stream.at >= stream.end {
+    fail WebFontError.at(WebFontReason.Truncated, stream.at)
+  }
+  let value = u8.toU32(data[stream.at])
+  stream.at = stream.at + 1
+  return value
+}
+
+effect fn word(data: &[u8], stream: &mut Stream) -> u32
+  ! WebFontError {
+  if stream.end - stream.at < 2 {
+    fail WebFontError.at(WebFontReason.Truncated, stream.at)
+  }
+  let value = u16At(data, stream.at)
+  stream.at = stream.at + 2
+  return value
+}
+
+effect fn signedWord(data: &[u8], stream: &mut Stream) -> i32
+  ! WebFontError {
+  if stream.end - stream.at < 2 {
+    fail WebFontError.at(WebFontReason.Truncated, stream.at)
+  }
+  let value = i16At(data, stream.at)
+  stream.at = stream.at + 2
+  return value
+}
+
+effect fn long(data: &[u8], stream: &mut Stream) -> u32
+  ! WebFontError {
+  if stream.end - stream.at < 4 {
+    fail WebFontError.at(WebFontReason.Truncated, stream.at)
+  }
+  let value = u32At(data, stream.at)
+  stream.at = stream.at + 4
+  return value
+}
+
+/// Skips `length` bytes and returns where they start.
+effect fn take(stream: &mut Stream, length: usize) -> usize
+  ! WebFontError {
+  if stream.end - stream.at < length {
+    fail WebFontError.at(WebFontReason.Truncated, stream.at)
+  }
+  let start = stream.at
+  stream.at = stream.at + length
+  return start
+}
+
+/// A `255UInt16` (WOFF2 section 4.1).
+effect fn uint255(data: &[u8], stream: &mut Stream) -> u32
+  ! WebFontError {
+  let code = run byte(data, &mut stream)
+  if code == 253 {
+    return run word(data, &mut stream)
+  }
+  if code == 255 {
+    let next = run byte(data, &mut stream)
+    return next + 253
+  }
+  if code == 254 {
+    let next = run byte(data, &mut stream)
+    return next + 506
+  }
+  return code
+}
+
+/// A `UIntBase128` (WOFF2 section 4.1): at most five bytes, no leading zeros, fits in 32 bits.
+effect fn base128(data: &[u8], stream: &mut Stream) -> u32
+  ! WebFontError {
+  let start = stream.at
+  let mut value: u32 = 0
+  let mut i: usize = 0
+  while i < 5 {
+    let code = run byte(data, &mut stream)
+    if i == 0 && code == 0x80 {
+      fail WebFontError.at(WebFontReason.Malformed, start)
+    }
+    if value >= 0x02000000 {
+      fail WebFontError.at(WebFontReason.Malformed, start)
+    }
+    value = value * 128 + (code & 0x7f)
+    if code < 0x80 {
+      return value
+    }
+    i = i + 1
+  }
+  fail WebFontError.at(WebFontReason.Malformed, start)
+}
+
+/// One directory entry. `source` is where its bytes start in the decompressed stream.
+struct Entry {
+  tag: u32,
+  version: u32,
+  origLength: usize,
+  length: usize,
+  source: usize,
+  transformed: bool,
+}
+
+impl Copy for Entry {}
+
+struct Point {
+  x: i32,
+  y: i32,
+  on: bool,
+}
+
+impl Copy for Point {}
+
+/// The `xMin` of each glyph of a rebuilt `glyf`, which a transformed `hmtx` needs.
+struct Bounds {
+  table: usize,
+  xMins: List<i32>,
+}
+
+/// Decodes a WOFF 2.0 file to an sfnt font, or to a collection when it wraps one.
+///
+/// # Errors
+/// - [`WebFontError`] when `data` is not WOFF2, is cut short, does not decompress to the sizes
+///   its directory declares, has a transformed table that does not rebuild, uses a transform
+///   this decoder does not know (`Unsupported`), or declares more than [`MAX_FONT_BYTES`].
+pub effect fn decode(data: &[u8]) -> Bytes
+  ! WebFontError | OutOfMemoryError
+  ? &mut Allocator {
+  if data.length < HEADER || u32At(data, 0) != TAG_WOFF2 {
+    fail WebFontError.at(WebFontReason.UnknownFormat, 0)
+  }
+  let flavor = u32At(data, 4)
+  let count = u32.toUsize(u16At(data, 12))
+  let compressedLength = u32.toUsize(u32At(data, 20))
+  if count == 0 {
+    fail WebFontError.at(WebFontReason.Malformed, 12)
+  }
+  let mut stream = Stream.make(HEADER, data.length - HEADER)
+  let mut entries = run List<Entry>.makeWithCapacity(count)
+  let mut total: usize = 0
+  let mut i: usize = 0
+  while i < count {
+    let at = stream.at
+    let flags = run byte(data, &mut stream)
+    let index = flags & 63
+    let version = flags / 64
+    let mut tag: u32 = 0
+    if index == 63 {
+      tag = run long(data, &mut stream)
+    } else {
+      tag = knownTag(index)
+    }
+    let origLength = u32.toUsize(run base128(data, &mut stream))
+    let mut transformed = version != 0
+    if tag == TAG_GLYF || tag == TAG_LOCA {
+      // For glyf and loca, version 0 is the transform and 3 is none.
+      if version != 0 && version != 3 {
+        fail WebFontError.at(WebFontReason.Unsupported, at)
+      }
+      transformed = version == 0
+    } else if transformed && !(tag == TAG_HMTX && version == 1) {
+      fail WebFontError.at(WebFontReason.Unsupported, at)
+    }
+    let mut length = origLength
+    if transformed {
+      length = u32.toUsize(run base128(data, &mut stream))
+      if tag == TAG_LOCA && length != 0 {
+        fail WebFontError.at(WebFontReason.Malformed, at)
+      }
+    }
+    if length > MAX_FONT_BYTES - total || origLength > MAX_FONT_BYTES {
+      fail WebFontError.at(WebFontReason.TooLarge, at)
+    }
+    run entries.append(
+      Entry {
+        tag: tag,
+        version: version,
+        origLength: origLength,
+        length: length,
+        source: total,
+        transformed: transformed,
+      },
+    )
+    total = total + length
+    i = i + 1
+  }
+  let mut fonts = List<CollectionFont>.make()
+  let mut collectionVersion: u32 = 0
+  if flavor == TAG_TTCF {
+    collectionVersion = run long(data, &mut stream)
+    let fontCount = u32.toUsize(run uint255(data, &mut stream))
+    if fontCount == 0 {
+      fail WebFontError.at(WebFontReason.Malformed, stream.at)
+    }
+    let mut f: usize = 0
+    while f < fontCount {
+      let tableCount = u32.toUsize(run uint255(data, &mut stream))
+      let fontFlavor = run long(data, &mut stream)
+      let mut tables = List<usize>.make()
+      let mut k: usize = 0
+      while k < tableCount {
+        let index = u32.toUsize(run uint255(data, &mut stream))
+        if index >= count {
+          fail WebFontError.at(WebFontReason.Malformed, stream.at)
+        }
+        run tables.append(index)
+        k = k + 1
+      }
+      run fonts.append(CollectionFont { flavor: fontFlavor, tables: move tables })
+      f = f + 1
+    }
+  } else {
+    let mut tables = run List<usize>.makeWithCapacity(count)
+    i = 0
+    while i < count {
+      run tables.append(i)
+      i = i + 1
+    }
+    run fonts.append(CollectionFont { flavor: flavor, tables: move tables })
+  }
+  if !fits(data, stream.at, compressedLength) {
+    fail WebFontError.at(WebFontReason.Truncated, stream.at)
+  }
+  let tables = run decompress(Slice.view<u8>(data, stream.at, compressedLength), total, stream.at)
+  return run rebuild(
+    flavor,
+    collectionVersion,
+    &fonts,
+    List<Entry>.asSlice(&entries),
+    Bytes.asSlice(&tables),
+  )
+}
+
+/// Decompresses the table stream, which must give exactly `length` bytes.
+effect fn decompress(input: &[u8], length: usize, offset: usize) -> Bytes
+  ! WebFontError | OutOfMemoryError
+  ? &mut Allocator {
+  // A back-reference cannot reach before the start of the output, so a window as large as
+  // the output decodes any valid stream.
+  let mut window: usize = 1024
+  while window < length && window < 16777216 {
+    window = window * 2
+  }
+  let limits = BrotliLimits {
+    inputBytes: usize.toU64(input.length),
+    outputBytes: usize.toU64(length),
+    windowBytes: window,
+    workspaceBytes: 3145728,
+  }
+  let made = run Effect.result(Brotli.make(move limits))
+  let mut decoder = match move made {
+    Result.Success { value } => move value
+    Result.Failure { error } => match move error {
+      OutOfMemoryError failure => {
+        fail move failure
+      }
+      BrotliError failure => {
+        drop failure
+        fail WebFontError.at(WebFontReason.Decompression, offset)
+      }
+    }
+  }
+  let mut out = run Bytes.zeroed(length)
+  let ok = match Brotli.step(&mut decoder, input, Bytes.asMutSlice(&mut out), true) {
+    Result<BrotliProgress, BrotliError>.Success { value } => value.status == BrotliStatus.Finished
+      && value.written == length
+    Result<BrotliProgress, BrotliError>.Failure { .. } => false
+  }
+  if !ok {
+    fail WebFontError.at(WebFontReason.Decompression, offset)
+  }
+  return move out
+}
+
+fn findTable(entries: &[Entry], font: &CollectionFont, tag: u32) -> Option<usize> {
+  let indices = List<usize>.asSlice(&font.tables)
+  let mut k: usize = 0
+  while k < indices.length {
+    if entries[indices[k]].tag == tag {
+      return Option<usize>.Some { value: indices[k] }
+    }
+    k = k + 1
+  }
+  return Option<usize>.None
+}
+
+/// Rebuilds every table the fonts use and writes the font or the collection.
+effect fn rebuild(
+  flavor: u32,
+  collectionVersion: u32,
+  fonts: &List<CollectionFont>,
+  entries: &[Entry],
+  tables: &[u8],
+) -> Bytes
+  ! WebFontError | OutOfMemoryError
+  ? &mut Allocator {
+  let mut store = Bytes.make()
+  let mut out = run List<Table>.makeWithCapacity(entries.length)
+  let mut done = run List<bool>.makeWithCapacity(entries.length)
+  let mut i: usize = 0
+  while i < entries.length {
+    run out.append(Table.make(entries[i].tag, 0, 0))
+    run done.append(false)
+    i = i + 1
+  }
+  let mut bounds = List<Bounds>.make()
+  let members = List<CollectionFont>.asSlice(&fonts)
+  let mut f: usize = 0
+  while f < members.length {
+    let font = &members[f]
+    let glyf = findTable(entries, font, TAG_GLYF)
+    if let Option<usize>.Some { value: g } = glyf {
+      if entries[g].transformed && !List<bool>.asSlice(&done)[g] {
+        let l = match findTable(entries, font, TAG_LOCA) {
+          Option<usize>.Some { value } => value
+          Option<usize>.None => {
+            fail WebFontError.at(WebFontReason.Malformed, 0)
+          }
+        }
+        if !entries[l].transformed {
+          fail WebFontError.at(WebFontReason.Malformed, 0)
+        }
+        let mut xMins = List<i32>.make()
+        let mut glyfTable = Table.make(TAG_GLYF, 0, 0)
+        let mut locaTable = Table.make(TAG_LOCA, 0, 0)
+        run rebuildGlyf(
+          Slice.view<u8>(tables, entries[g].source, entries[g].length),
+          &mut store,
+          &mut glyfTable,
+          &mut locaTable,
+          &mut xMins,
+        )
+        List<Table>.set(&mut out, g, glyfTable)
+        List<Table>.set(&mut out, l, locaTable)
+        List<bool>.set(&mut done, g, true)
+        List<bool>.set(&mut done, l, true)
+        run bounds.append(Bounds { table: g, xMins: move xMins })
+      }
+    }
+    let indices = List<usize>.asSlice(&font.tables)
+    let mut k: usize = 0
+    while k < indices.length {
+      let index = indices[k]
+      k = k + 1
+      if List<bool>.asSlice(&done)[index] {
+        continue
+      }
+      let entry = entries[index]
+      if entry.tag == TAG_LOCA && entry.transformed {
+        // A transformed loca comes only from its transformed glyf.
+        fail WebFontError.at(WebFontReason.Malformed, 0)
+      }
+      if entry.tag == TAG_GLYF && entry.transformed {
+        fail WebFontError.at(WebFontReason.Malformed, 0)
+      }
+      let source = Slice.view<u8>(tables, entry.source, entry.length)
+      if entry.tag == TAG_HMTX && entry.transformed {
+        let g = match glyf {
+          Option<usize>.Some { value } => value
+          Option<usize>.None => {
+            fail WebFontError.at(WebFontReason.Malformed, 0)
+          }
+        }
+        let h = match findTable(entries, font, TAG_HHEA) {
+          Option<usize>.Some { value } => value
+          Option<usize>.None => {
+            fail WebFontError.at(WebFontReason.Malformed, 0)
+          }
+        }
+        if entries[h].transformed || entries[h].length < 36 {
+          fail WebFontError.at(WebFontReason.Malformed, 0)
+        }
+        let numHMetrics = u32.toUsize(u16At(tables, entries[h].source + 34))
+        let known = List<Bounds>.asSlice(&bounds)
+        let mut b: usize = 0
+        while b < known.length && known[b].table != g {
+          b = b + 1
+        }
+        if b == known.length {
+          // Only a transformed glyf gives the xMin values.
+          fail WebFontError.at(WebFontReason.Unsupported, 0)
+        }
+        let start = Bytes.length(&store)
+        run rebuildHmtx(source, numHMetrics, List<i32>.asSlice(&known[b].xMins), &mut store)
+        List<Table>.set(&mut out, index, Table.make(TAG_HMTX, start, Bytes.length(&store) - start))
+      } else {
+        let start = Bytes.length(&store)
+        run Bytes.append(&mut store, source)
+        List<Table>.set(&mut out, index, Table.make(entry.tag, start, entry.length))
+      }
+      List<bool>.set(&mut done, index, true)
+    }
+    f = f + 1
+  }
+  if flavor == TAG_TTCF {
+    return run sfnt.writeCollection(collectionVersion, &fonts, &out, Bytes.asSlice(&store))
+  }
+  return run sfnt.write(flavor, &mut out, Bytes.asSlice(&store))
+}
+
+fn bboxBit(bitmap: &[u8], start: usize, glyph: usize) -> bool {
+  let value = bitmap[start + glyph / 8]
+  let mut mask: u8 = 128
+  let mut shift = glyph % 8
+  while shift > 0 {
+    mask = mask / 2
+    shift = shift - 1
+  }
+  return value & mask != 0
+}
+
+fn magnitude(value: i32) -> i32 {
+  if value < 0 {
+    return 0 - value
+  }
+  return value
+}
+
+fn minOf(a: i32, b: i32) -> i32 {
+  if a < b {
+    return a
+  }
+  return b
+}
+
+fn maxOf(a: i32, b: i32) -> i32 {
+  if a > b {
+    return a
+  }
+  return b
+}
+
+fn withSign(flag: u32, value: i32) -> i32 {
+  if flag & 1 != 0 {
+    return value
+  }
+  return 0 - value
+}
+
+/// Decodes `flags.length` triplet-coded points (WOFF2 section 5.2) from `stream`.
+effect fn triplets(
+  flagData: &[u8],
+  flagStart: usize,
+  count: usize,
+  data: &[u8],
+  stream: &mut Stream,
+  points: &mut List<Point>,
+) -> ()
+  ! WebFontError | OutOfMemoryError
+  ? &mut Allocator {
+  let mut x: i32 = 0
+  let mut y: i32 = 0
+  let mut i: usize = 0
+  while i < count {
+    let raw = u8.toU32(flagData[flagStart + i])
+    let on = raw < 128
+    let flag = raw & 0x7f
+    let mut need: usize = 4
+    if flag < 84 {
+      need = 1
+    } else if flag < 120 {
+      need = 2
+    } else if flag < 124 {
+      need = 3
+    }
+    let at = run take(&mut stream, need)
+    let mut dx: i32 = 0
+    let mut dy: i32 = 0
+    if flag < 10 {
+      dy = withSign(flag, u32.toI32((flag & 14) * 128) + u8.toI32(data[at]))
+    } else if flag < 20 {
+      dx = withSign(flag, u32.toI32(((flag - 10) & 14) * 128) + u8.toI32(data[at]))
+    } else if flag < 84 {
+      let b0 = flag - 20
+      let b1 = u8.toU32(data[at])
+      dx = withSign(flag, u32.toI32(1 + (b0 & 0x30) + b1 / 16))
+      dy = withSign(flag / 2, u32.toI32(1 + (b0 & 0x0c) * 4 + (b1 & 0x0f)))
+    } else if flag < 120 {
+      let b0 = flag - 84
+      dx = withSign(flag, u32.toI32(1 + (b0 / 12) * 256) + u8.toI32(data[at]))
+      dy = withSign(flag / 2, u32.toI32(1 + ((b0 % 12) / 4) * 256) + u8.toI32(data[at + 1]))
+    } else if flag < 124 {
+      let b2 = u8.toU32(data[at + 1])
+      dx = withSign(flag, u32.toI32(u8.toU32(data[at]) * 16 + b2 / 16))
+      dy = withSign(flag / 2, u32.toI32((b2 & 0x0f) * 256 + u8.toU32(data[at + 2])))
+    } else {
+      dx = withSign(flag, u32.toI32(u8.toU32(data[at]) * 256 + u8.toU32(data[at + 1])))
+      dy = withSign(flag / 2, u32.toI32(u8.toU32(data[at + 2]) * 256 + u8.toU32(data[at + 3])))
+    }
+    x = x + dx
+    y = y + dy
+    run points.append(Point { x: x, y: y, on: on })
+    i = i + 1
+  }
+}
+
+/// Writes the flags and coordinates of a simple glyph in the smallest standard form.
+effect fn putPoints(out: &mut Bytes, points: &[Point], overlap: bool) -> ()
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let flagStart = Bytes.length(&out)
+  let mut lastFlag: u32 = 256
+  let mut repeat: u32 = 0
+  let mut lastX: i32 = 0
+  let mut lastY: i32 = 0
+  let mut i: usize = 0
+  while i < points.length {
+    let point = points[i]
+    let mut flag: u32 = 0
+    if point.on {
+      flag = ON_CURVE
+    }
+    if overlap && i == 0 {
+      flag = flag | OVERLAP_SIMPLE
+    }
+    let dx = point.x - lastX
+    let dy = point.y - lastY
+    if dx == 0 {
+      flag = flag | X_SAME
+    } else if dx > -256 && dx < 256 {
+      flag = flag | X_SHORT
+      if dx > 0 {
+        flag = flag | X_SAME
+      }
+    }
+    if dy == 0 {
+      flag = flag | Y_SAME
+    } else if dy > -256 && dy < 256 {
+      flag = flag | Y_SHORT
+      if dy > 0 {
+        flag = flag | Y_SAME
+      }
+    }
+    if flag == lastFlag && repeat != 255 {
+      let bytes = Bytes.asMutSlice(&mut out)
+      let last = bytes.length - 1
+      bytes[last] = bytes[last] | u32.wrappingToU8(REPEAT)
+      repeat = repeat + 1
+    } else {
+      if repeat != 0 {
+        run putU8(&mut out, repeat)
+      }
+      run putU8(&mut out, flag)
+      repeat = 0
+    }
+    lastX = point.x
+    lastY = point.y
+    lastFlag = flag
+    i = i + 1
+  }
+  if repeat != 0 {
+    run putU8(&mut out, repeat)
+  }
+  drop flagStart
+  lastX = 0
+  i = 0
+  while i < points.length {
+    let dx = points[i].x - lastX
+    if dx != 0 {
+      if dx > -256 && dx < 256 {
+        run putU8(&mut out, i32.toU32(magnitude(dx)))
+      } else {
+        run putI16(&mut out, dx)
+      }
+    }
+    lastX = points[i].x
+    i = i + 1
+  }
+  lastY = 0
+  i = 0
+  while i < points.length {
+    let dy = points[i].y - lastY
+    if dy != 0 {
+      if dy > -256 && dy < 256 {
+        run putU8(&mut out, i32.toU32(magnitude(dy)))
+      } else {
+        run putI16(&mut out, dy)
+      }
+    }
+    lastY = points[i].y
+    i = i + 1
+  }
+}
+
+/// Rebuilds `glyf` and `loca` from a transformed `glyf` (WOFF2 section 5.1) onto `store`.
+effect fn rebuildGlyf(
+  source: &[u8],
+  store: &mut Bytes,
+  glyfTable: &mut Table,
+  locaTable: &mut Table,
+  xMins: &mut List<i32>,
+) -> ()
+  ! WebFontError | OutOfMemoryError
+  ? &mut Allocator {
+  if source.length < 36 {
+    fail WebFontError.at(WebFontReason.Truncated, 0)
+  }
+  let options = u16At(source, 2)
+  let glyphs = u32.toUsize(u16At(source, 4))
+  let indexFormat = u16At(source, 6)
+  if indexFormat > 1 {
+    fail WebFontError.at(WebFontReason.Malformed, 6)
+  }
+  let mut cursor = Stream.make(36, source.length - 36)
+  let contourStart = run take(&mut cursor, u32.toUsize(u32At(source, 8)))
+  let contourLength = u32.toUsize(u32At(source, 8))
+  let pointLength = u32.toUsize(u32At(source, 12))
+  let pointStart = run take(&mut cursor, pointLength)
+  let flagLength = u32.toUsize(u32At(source, 16))
+  let flagStart = run take(&mut cursor, flagLength)
+  let glyphLength = u32.toUsize(u32At(source, 20))
+  let glyphStart = run take(&mut cursor, glyphLength)
+  let compositeLength = u32.toUsize(u32At(source, 24))
+  let compositeStart = run take(&mut cursor, compositeLength)
+  let bboxLength = u32.toUsize(u32At(source, 28))
+  let bboxStart = run take(&mut cursor, bboxLength)
+  let instructionLength = u32.toUsize(u32At(source, 32))
+  let instructionStart = run take(&mut cursor, instructionLength)
+  let mut overlapStart: usize = 0
+  let hasOverlap = options & 1 != 0
+  if hasOverlap {
+    overlapStart = run take(&mut cursor, (glyphs + 7) / 8)
+  }
+  let bitmapLength = (glyphs + 31) / 32 * 4
+  if bboxLength < bitmapLength {
+    fail WebFontError.at(WebFontReason.Truncated, bboxStart)
+  }
+  let mut contours = Stream.make(contourStart, contourLength)
+  let mut pointCounts = Stream.make(pointStart, pointLength)
+  let mut flags = Stream.make(flagStart, flagLength)
+  let mut glyphStream = Stream.make(glyphStart, glyphLength)
+  let mut composites = Stream.make(compositeStart, compositeLength)
+  let mut boxes = Stream.make(bboxStart + bitmapLength, bboxLength - bitmapLength)
+  let mut instructions = Stream.make(instructionStart, instructionLength)
+
+  let start = Bytes.length(&store)
+  let mut offsets = run List<usize>.makeWithCapacity(glyphs + 1)
+  let mut points = List<Point>.make()
+  let mut ends = List<u32>.make()
+  run List<i32>.reserve(&mut xMins, glyphs)
+  let mut g: usize = 0
+  while g < glyphs {
+    run offsets.append(Bytes.length(&store) - start)
+    let contourCount = run signedWord(source, &mut contours)
+    let hasBox = bboxBit(source, bboxStart, g)
+    if contourCount == 0 {
+      if hasBox {
+        fail WebFontError.at(WebFontReason.Malformed, bboxStart)
+      }
+      run xMins.append(0)
+    } else if contourCount == -1 {
+      if !hasBox {
+        fail WebFontError.at(WebFontReason.Malformed, bboxStart)
+      }
+      let recordStart = composites.at
+      let mut instructed = false
+      let mut more = true
+      while more {
+        let flag = run word(source, &mut composites)
+        drop run word(source, &mut composites)
+        let mut skip: usize = 2
+        if flag & ARG_1_AND_2_ARE_WORDS != 0 {
+          skip = 4
+        }
+        if flag & WE_HAVE_A_SCALE != 0 {
+          skip = skip + 2
+        } else if flag & WE_HAVE_AN_X_AND_Y_SCALE != 0 {
+          skip = skip + 4
+        } else if flag & WE_HAVE_A_TWO_BY_TWO != 0 {
+          skip = skip + 8
+        }
+        drop run take(&mut composites, skip)
+        if flag & WE_HAVE_INSTRUCTIONS != 0 {
+          instructed = true
+        }
+        more = flag & MORE_COMPONENTS != 0
+      }
+      run putI16(&mut store, -1)
+      let xMin = run signedWord(source, &mut boxes)
+      run putI16(&mut store, xMin)
+      run putI16(&mut store, run signedWord(source, &mut boxes))
+      run putI16(&mut store, run signedWord(source, &mut boxes))
+      run putI16(&mut store, run signedWord(source, &mut boxes))
+      run Bytes.append(&mut store, Slice.view<u8>(source, recordStart, composites.at - recordStart))
+      if instructed {
+        let count = u32.toUsize(run uint255(source, &mut glyphStream))
+        let at = run take(&mut instructions, count)
+        run putU16(&mut store, usize.toU32(count))
+        run Bytes.append(&mut store, Slice.view<u8>(source, at, count))
+      }
+      run xMins.append(xMin)
+    } else if contourCount > 0 {
+      List<u32>.clear(&mut ends)
+      List<Point>.clear(&mut points)
+      let mut total: u32 = 0
+      let mut c: i32 = 0
+      while c < contourCount {
+        let n = run uint255(source, &mut pointCounts)
+        total = total + n
+        if total == 0 || total > 65535 {
+          fail WebFontError.at(WebFontReason.Malformed, pointCounts.at)
+        }
+        run ends.append(total - 1)
+        c = c + 1
+      }
+      let count = u32.toUsize(total)
+      let flagAt = run take(&mut flags, count)
+      run triplets(source, flagAt, count, source, &mut glyphStream, &mut points)
+      let codeLength = u32.toUsize(run uint255(source, &mut glyphStream))
+      let codeAt = run take(&mut instructions, codeLength)
+      let mut xMin: i32 = 0
+      let mut yMin: i32 = 0
+      let mut xMax: i32 = 0
+      let mut yMax: i32 = 0
+      if hasBox {
+        xMin = run signedWord(source, &mut boxes)
+        yMin = run signedWord(source, &mut boxes)
+        xMax = run signedWord(source, &mut boxes)
+        yMax = run signedWord(source, &mut boxes)
+      } else {
+        let list = List<Point>.asSlice(&points)
+        xMin = list[0].x
+        xMax = list[0].x
+        yMin = list[0].y
+        yMax = list[0].y
+        let mut p: usize = 1
+        while p < list.length {
+          xMin = minOf(xMin, list[p].x)
+          xMax = maxOf(xMax, list[p].x)
+          yMin = minOf(yMin, list[p].y)
+          yMax = maxOf(yMax, list[p].y)
+          p = p + 1
+        }
+      }
+      run putI16(&mut store, contourCount)
+      run putI16(&mut store, xMin)
+      run putI16(&mut store, yMin)
+      run putI16(&mut store, xMax)
+      run putI16(&mut store, yMax)
+      let endList = List<u32>.asSlice(&ends)
+      let mut e: usize = 0
+      while e < endList.length {
+        run putU16(&mut store, endList[e])
+        e = e + 1
+      }
+      run putU16(&mut store, usize.toU32(codeLength))
+      run Bytes.append(&mut store, Slice.view<u8>(source, codeAt, codeLength))
+      let overlap = hasOverlap && bboxBit(source, overlapStart, g)
+      run putPoints(&mut store, List<Point>.asSlice(&points), overlap)
+      run xMins.append(xMin)
+    } else {
+      fail WebFontError.at(WebFontReason.Malformed, contours.at)
+    }
+    run pad4(&mut store)
+    g = g + 1
+  }
+  let glyfLength = Bytes.length(&store) - start
+  run offsets.append(glyfLength)
+  glyfTable.offset = start
+  glyfTable.length = glyfLength
+  let locaStart = Bytes.length(&store)
+  let list = List<usize>.asSlice(&offsets)
+  let mut o: usize = 0
+  while o < list.length {
+    if indexFormat == 0 {
+      if list[o] / 2 > 65535 {
+        fail WebFontError.at(WebFontReason.Malformed, 6)
+      }
+      run putU16(&mut store, usize.toU32(list[o] / 2))
+    } else {
+      run putU32(&mut store, usize.toU32(list[o]))
+    }
+    o = o + 1
+  }
+  locaTable.offset = locaStart
+  locaTable.length = Bytes.length(&store) - locaStart
+}
+
+/// Rebuilds `hmtx` from its transform (WOFF2 section 5.4) with the glyphs' `xMin` values.
+effect fn rebuildHmtx(source: &[u8], numHMetrics: usize, xMins: &[i32], store: &mut Bytes) -> ()
+  ! WebFontError | OutOfMemoryError
+  ? &mut Allocator {
+  let glyphs = xMins.length
+  if source.length < 1 || numHMetrics == 0 || numHMetrics > glyphs {
+    fail WebFontError.at(WebFontReason.Malformed, 0)
+  }
+  let flags = u8.toU32(source[0])
+  if flags & 0xfc != 0 || flags & 3 == 0 {
+    fail WebFontError.at(WebFontReason.Malformed, 0)
+  }
+  let mut cursor = Stream.make(1, source.length - 1)
+  let advances = run take(&mut cursor, numHMetrics * 2)
+  let mut bearings: usize = 0
+  if flags & 1 == 0 {
+    bearings = run take(&mut cursor, numHMetrics * 2)
+  }
+  let mut moreBearings: usize = 0
+  if flags & 2 == 0 {
+    moreBearings = run take(&mut cursor, (glyphs - numHMetrics) * 2)
+  }
+  let mut g: usize = 0
+  while g < numHMetrics {
+    run putU16(&mut store, u16At(source, advances + g * 2))
+    if flags & 1 == 0 {
+      run putI16(&mut store, i16At(source, bearings + g * 2))
+    } else {
+      run putI16(&mut store, xMins[g])
+    }
+    g = g + 1
+  }
+  while g < glyphs {
+    if flags & 2 == 0 {
+      run putI16(&mut store, i16At(source, moreBearings + (g - numHMetrics) * 2))
+    } else {
+      run putI16(&mut store, xMins[g])
+    }
+    g = g + 1
+  }
+}

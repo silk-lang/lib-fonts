@@ -1,0 +1,54 @@
+//! The error of every decoder and loader in this package.
+import silk.io.writer { Writer, WriterError }
+import silk.text.format { Debug, Format, Formatter }
+
+/// Why a web font could not be read.
+pub enum WebFontReason {
+  /// The data is not a font this package reads: not sfnt, WOFF or WOFF2.
+  UnknownFormat,
+  /// The data ends before a structure it declares.
+  Truncated,
+  /// A field has a value the format does not allow.
+  Malformed,
+  /// The compressed data does not decompress to the size the header declares.
+  Decompression,
+  /// The font declares more data than the limits allow.
+  TooLarge,
+  /// A valid feature this decoder does not implement, or a rule with no source it can load.
+  Unsupported,
+}
+
+impl Debug for WebFontReason {
+  effect fn debug(self: &Self, formatter: &mut Formatter) -> ()
+    ! WriterError
+    ? &mut Writer {
+    return match &self.* {
+      WebFontReason.UnknownFormat => run Format.write(&mut formatter, b"UnknownFormat")
+      WebFontReason.Truncated => run Format.write(&mut formatter, b"Truncated")
+      WebFontReason.Malformed => run Format.write(&mut formatter, b"Malformed")
+      WebFontReason.Decompression => run Format.write(&mut formatter, b"Decompression")
+      WebFontReason.TooLarge => run Format.write(&mut formatter, b"TooLarge")
+      WebFontReason.Unsupported => run Format.write(&mut formatter, b"Unsupported")
+    }
+  }
+}
+
+/// A font or stylesheet that could not be read, and the input offset where reading stopped.
+pub struct WebFontError {
+  pub reason: WebFontReason,
+  pub offset: usize,
+}
+
+impl Debug for WebFontError {
+  effect fn debug(self: &Self, formatter: &mut Formatter) -> ()
+    ! WriterError
+    ? &mut Writer {
+    return run Format.debugFields(self, "WebFontError", &mut formatter)
+  }
+}
+
+impl WebFontError {
+  pub fn at(reason: WebFontReason, offset: usize) -> WebFontError {
+    return WebFontError { reason: reason, offset: offset }
+  }
+}

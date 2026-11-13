@@ -1,0 +1,658 @@
+//! WOFF, WOFF2, stylesheet and fetch tests over the fixtures in modules/web/tests.
+import lib { decode }
+import error { WebFontError, WebFontReason }
+import sfnt { Format, detect, u16At, u32At, checksum, TAG_HEAD }
+import stylesheet { FontFaceRule, FaceSource, FontDisplay, UnicodeRange, parse }
+import fetch
+import woff2
+import svg_fonts.database { FontDatabase, FaceStyle, Range }
+
+static if Intrinsic.targetOperatingSystem() == "windows" {
+  import silk.platform.windows.host_input { WindowsHostInput }
+  import silk.system.host_input { HostInput }
+} else {
+  import silk.platform.native.host_input { NativeHostInput }
+}
+
+import silk.system.host_input { HostInputError }
+import silk.system.filesystem { Path, FileSystem, FileError }
+import silk.system.filesystem_native { OsFileSystem }
+import silk.collections.bytes { Bytes }
+import silk.collections.list { List }
+import silk.collections.slice { Slice }
+import silk.core.effect { Effect }
+import silk.core.option { Option }
+import silk.core.result { Result }
+import silk.http.client { Http, HttpError, Request, Response }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.num.u8
+import silk.num.u32
+import silk.text.string { String }
+import silk.url.url { Url }
+import silk.testing.testing { Testing, AssertionError }
+
+effect fn workingDirectory() -> Bytes
+  ! HostInputError | OutOfMemoryError
+  ? &mut Allocator {
+  static if Intrinsic.targetOperatingSystem() == "windows" {
+    let mut inputs = run WindowsHostInput.capture()
+    return run HostInput.workingDirectory() |> Effect.provideMut<HostInput>(&mut inputs)
+  } else {
+    return run NativeHostInput.workingDirectory()
+  }
+}
+
+effect fn read(name: string) -> Bytes
+  ! FileError | HostInputError | OutOfMemoryError
+  ? &mut Allocator {
+  let cwd = run workingDirectory()
+  let root = run Path.root()
+  let mut relative = run String.copy("modules/web/tests/")
+  run String.append(&mut relative, name)
+  let path = run Path.resolve(&root, String.view(&relative))
+  let mut files = run OsFileSystem.makeBytes(Bytes.asSlice(&cwd))
+  return run FileSystem.readFile(&path) |> Effect.provideMut<FileSystem>(&mut files)
+}
+
+/// The bytes of table `tag` of the sfnt font at `base` in `font`, or an empty slice.
+fn table(font: &[u8], base: usize, tag: u32) -> &[u8] {
+  let count = u32.toUsize(u16At(font, base + 4))
+  let mut i: usize = 0
+  while i < count {
+    let at = base + 12 + 16 * i
+    if u32At(font, at) == tag {
+      return Slice.view<u8>(
+        font,
+        u32.toUsize(u32At(font, at + 8)),
+        u32.toUsize(u32At(font, at + 12)),
+      )
+    }
+    i = i + 1
+  }
+  return Slice.view<u8>(font, 0, 0)
+}
+
+fn equalBytes(a: &[u8], b: &[u8]) -> bool {
+  if a.length != b.length {
+    return false
+  }
+  let mut i: usize = 0
+  while i < a.length {
+    if a[i] != b[i] {
+      return false
+    }
+    i = i + 1
+  }
+  return true
+}
+
+/// Whether `head` tables are equal but for checkSumAdjustment and the WOFF2 "lossless
+/// modified" flag (bit 11), which encoders set.
+fn sameHead(a: &[u8], b: &[u8]) -> bool {
+  if a.length != b.length || a.length < 54 {
+    return false
+  }
+  let mut i: usize = 0
+  while i < a.length {
+    let same = a[i] == b[i] || i >= 8 && i < 12 || i == 16 && (a[i] | 8) == (b[i] | 8)
+    if !same {
+      return false
+    }
+    i = i + 1
+  }
+  return true
+}
+
+/// Every table of `original` (except the ones in `skip`) is in `decoded` with the same bytes.
+fn sameTables(original: &[u8], decoded: &[u8], decodedBase: usize, skip: &[u32]) -> bool {
+  let count = u32.toUsize(u16At(original, 4))
+  let mut i: usize = 0
+  while i < count {
+    let tag = u32At(original, 12 + 16 * i)
+    let mut skipped = false
+    let mut k: usize = 0
+    while k < skip.length {
+      skipped = skipped || skip[k] == tag
+      k = k + 1
+    }
+    let mine = table(decoded, decodedBase, tag)
+    let theirs = table(original, 0, tag)
+    if tag == TAG_HEAD {
+      if !sameHead(theirs, mine) {
+        return false
+      }
+    } else if !skipped && !equalBytes(theirs, mine) {
+      return false
+    }
+    i = i + 1
+  }
+  return u16At(original, 4) == u16At(decoded, decodedBase + 4)
+}
+
+/// Table records carry each table's checksum, and the whole font sums to 0xB1B0AFBA.
+fn checksumsHold(font: &[u8]) -> bool {
+  let count = u32.toUsize(u16At(font, 4))
+  let mut i: usize = 0
+  while i < count {
+    let at = 12 + 16 * i
+    let data = table(font, 0, u32At(font, at))
+    let mut sum = checksum(data)
+    if u32At(font, at) == TAG_HEAD {
+      sum = u32.wrappingSubtract(sum, u32At(data, 8))
+    }
+    if sum != u32At(font, at + 4) {
+      return false
+    }
+    i = i + 1
+  }
+  return checksum(font) == 0xB1B0AFBA
+}
+
+effect fn decodes(name: string) -> Bytes
+  ! AssertionError<'static> | FileError | HostInputError | OutOfMemoryError
+  ? &mut Allocator {
+  let data = run read(name)
+  let result = run Effect.result(decode(Bytes.asSlice(&data)))
+  return match move result {
+    Result.Success { value } => move value
+    Result.Failure { error } => match move error {
+      OutOfMemoryError failure => {
+        fail move failure
+      }
+      WebFontError failure => {
+        drop failure
+        run Testing.expect(false, "the fixture does not decode")
+        Bytes.make()
+      }
+    }
+  }
+}
+
+effect fn checkFormats() -> ()
+  ! AssertionError<'static> | FileError | HostInputError | OutOfMemoryError
+  ? &mut Allocator {
+  let ttf = run read("fonts/noto.ttf")
+  let otf = run read("fonts/cff.otf")
+  let w1 = run read("fonts/noto.woff")
+  let w2 = run read("fonts/noto.woff2")
+  run Testing.expect(detect(Bytes.asSlice(&ttf)) == Format.TrueType, "TrueType")
+  run Testing.expect(detect(Bytes.asSlice(&otf)) == Format.OpenType, "OpenType")
+  run Testing.expect(detect(Bytes.asSlice(&w1)) == Format.Woff, "WOFF")
+  run Testing.expect(detect(Bytes.asSlice(&w2)) == Format.Woff2, "WOFF2")
+  run Testing.expect(detect(&b"abc") == Format.Unknown, "too short")
+  let copied = run decodes("fonts/noto.ttf")
+  run Testing.expect(equalBytes(Bytes.asSlice(&copied), Bytes.asSlice(&ttf)), "sfnt passes through")
+}
+
+test effect fn detectsFormats() -> ()
+  ! AssertionError<'static> | FileError | HostInputError | OutOfMemoryError {
+  let mut allocator = Allocator.systemAllocatorProvider()
+  run checkFormats() |> Effect.provideMut<Allocator>(&mut allocator)
+}
+
+effect fn checkWoff() -> ()
+  ! AssertionError<'static> | FileError | HostInputError | OutOfMemoryError
+  ? &mut Allocator {
+  let names = ["noto", "flex", "cff"]
+  let originals = ["fonts/noto.ttf", "fonts/flex.ttf", "fonts/cff.otf"]
+  let wrapped = ["fonts/noto.woff", "fonts/flex.woff", "fonts/cff.woff"]
+  let mut i: usize = 0
+  while i < 3 {
+    drop names[i]
+    let original = run read(originals[i])
+    let decoded = run decodes(wrapped[i])
+    let skip: [u32; 0] = []
+    run Testing.expect(
+      sameTables(Bytes.asSlice(&original), Bytes.asSlice(&decoded), 0, &skip),
+      "WOFF tables are the original tables",
+    )
+    run Testing.expect(checksumsHold(Bytes.asSlice(&decoded)), "WOFF output checksums")
+    let mut database = FontDatabase.make()
+    let added = run database.add(move decoded)
+    run Testing.expect(added == 1, "the face database reads the font")
+    i = i + 1
+  }
+}
+
+test effect fn woffDecodesToTheOriginalTables() -> ()
+  ! AssertionError<'static> | FileError | HostInputError | OutOfMemoryError {
+  let mut allocator = Allocator.systemAllocatorProvider()
+  run checkWoff() |> Effect.provideMut<Allocator>(&mut allocator)
+}
+
+effect fn checkWoff2() -> ()
+  ! AssertionError<'static> | FileError | HostInputError | OutOfMemoryError
+  ? &mut Allocator {
+  // glyf and loca rebuilt from the transform match the reference output.
+  let wrapped = [
+    "fonts/noto.woff2",
+    "fonts/noto.hmtx.woff2",
+    "fonts/flex.woff2",
+    "fonts/inter.woff2",
+  ]
+  let expected = [
+    "fonts/noto.woff2.decoded.ttf",
+    "fonts/noto.woff2.decoded.ttf",
+    "fonts/flex.woff2.decoded.ttf",
+    "fonts/inter.woff2.decoded.ttf",
+  ]
+  let mut i: usize = 0
+  while i < 4 {
+    let decoded = run decodes(wrapped[i])
+    let reference = run read(expected[i])
+    run Testing.expect(
+      equalBytes(Bytes.asSlice(&decoded), Bytes.asSlice(&reference)),
+      "WOFF2 output",
+    )
+    run Testing.expect(checksumsHold(Bytes.asSlice(&decoded)), "WOFF2 output checksums")
+    let mut database = FontDatabase.make()
+    let added = run database.add(move decoded)
+    run Testing.expect(added == 1, "the face database reads the font")
+    i = i + 1
+  }
+
+  // Tables that are not transformed come out as they went in.
+  let originals = ["fonts/noto.ttf", "fonts/flex.ttf", "fonts/cff.otf"]
+  let sources = ["fonts/noto.woff2", "fonts/flex.woff2", "fonts/cff.woff2"]
+  let skip: [u32; 2] = [0x676c7966, 0x6c6f6361]
+  i = 0
+  while i < 3 {
+    let original = run read(originals[i])
+    let decoded = run decodes(sources[i])
+    run Testing.expect(
+      sameTables(Bytes.asSlice(&original), Bytes.asSlice(&decoded), 0, &skip),
+      "untransformed WOFF2 tables are the original tables",
+    )
+    i = i + 1
+  }
+}
+
+test effect fn woff2RebuildsTransformedTables() -> ()
+  ! AssertionError<'static> | FileError | HostInputError | OutOfMemoryError {
+  let mut allocator = Allocator.systemAllocatorProvider()
+  run checkWoff2() |> Effect.provideMut<Allocator>(&mut allocator)
+}
+
+effect fn checkCollection() -> ()
+  ! AssertionError<'static> | FileError | HostInputError | OutOfMemoryError
+  ? &mut Allocator {
+  let decoded = run decodes("fonts/pair.woff2")
+  let font = Bytes.asSlice(&decoded)
+  run Testing.expect(detect(font) == Format.Collection, "a collection comes out")
+  run Testing.expect(u32At(font, 8) == 2, "two fonts")
+  let regular = run read("fonts/noto.ttf")
+  let bold = run read("fonts/noto-bold.ttf")
+  let skip: [u32; 0] = []
+  run Testing.expect(
+    sameTables(Bytes.asSlice(&regular), font, u32.toUsize(u32At(font, 12)), &skip),
+    "first font",
+  )
+  run Testing.expect(
+    sameTables(Bytes.asSlice(&bold), font, u32.toUsize(u32At(font, 16)), &skip),
+    "second font",
+  )
+  let mut database = FontDatabase.make()
+  let added = run database.add(move decoded)
+  run Testing.expect(added == 2, "both faces read")
+}
+
+test effect fn woff2Collections() -> ()
+  ! AssertionError<'static> | FileError | HostInputError | OutOfMemoryError {
+  let mut allocator = Allocator.systemAllocatorProvider()
+  run checkCollection() |> Effect.provideMut<Allocator>(&mut allocator)
+}
+
+/// Decoding `data` fails with a WebFontError or succeeds; it must not trap.
+effect fn survives(data: &[u8]) -> bool
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let result = run Effect.result(decode(data))
+  return match move result {
+    Result.Success { value } => {
+      drop value
+      true
+    }
+    Result.Failure { error } => match move error {
+      OutOfMemoryError failure => {
+        fail move failure
+      }
+      WebFontError failure => {
+        drop failure
+        false
+      }
+    }
+  }
+}
+
+effect fn checkDamage() -> ()
+  ! AssertionError<'static> | FileError | HostInputError | OutOfMemoryError
+  ? &mut Allocator {
+  let files = ["fonts/noto.woff", "fonts/noto.woff2", "fonts/noto.hmtx.woff2", "fonts/pair.woff2"]
+  let mut f: usize = 0
+  while f < 4 {
+    let data = run read(files[f])
+    let bytes = Bytes.asSlice(&data)
+
+    // Every cut short file fails cleanly.
+    let mut cut: usize = 0
+    while cut < bytes.length {
+      let whole = run survives(Slice.view<u8>(bytes, 0, cut))
+      run Testing.expect(!whole, "a truncated file is an error")
+      cut = cut + 1 + cut / 64
+    }
+
+    // Damaged bytes decode or fail, but never trap.
+    let mut copy = run Bytes.copy(bytes)
+    let mut at: usize = 0
+    while at < bytes.length {
+      let keep = Bytes.asSlice(&copy)[at]
+      let bytesMut = Bytes.asMutSlice(&mut copy)
+      bytesMut[at] = keep ^ 0x5a
+      drop run survives(Bytes.asSlice(&copy))
+      let restore = Bytes.asMutSlice(&mut copy)
+      restore[at] = keep
+      at = at + 1 + at / 97
+    }
+    f = f + 1
+  }
+}
+
+test effect fn damagedFilesFailCleanly() -> ()
+  ! AssertionError<'static> | FileError | HostInputError | OutOfMemoryError {
+  let mut allocator = Allocator.systemAllocatorProvider()
+  run checkDamage() |> Effect.provideMut<Allocator>(&mut allocator)
+}
+
+effect fn reason(data: &[u8], expected: WebFontReason) -> bool
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let result = run Effect.result(woff2.decode(data))
+  return match move result {
+    Result.Success { value } => {
+      drop value
+      false
+    }
+    Result.Failure { error } => match move error {
+      OutOfMemoryError failure => {
+        fail move failure
+      }
+      WebFontError failure => failure.reason == expected
+    }
+  }
+}
+
+effect fn checkHeaders() -> ()
+  ! AssertionError<'static> | FileError | HostInputError | OutOfMemoryError
+  ? &mut Allocator {
+  let data = run read("fonts/cff.woff2")
+  let mut copy = run Bytes.copy(Bytes.asSlice(&data))
+
+  // The first directory entry's origLength with a leading zero byte (0x80) is malformed.
+  let first = Bytes.asSlice(&copy)[48]
+  run Testing.expect(first & 63 != 63, "the fixture's first tag is a known one")
+  let editable = Bytes.asMutSlice(&mut copy)
+  editable[49] = 0x80
+  let leading = run reason(Bytes.asSlice(&copy), WebFontReason.Malformed)
+  run Testing.expect(leading, "UIntBase128 with a leading zero")
+  let other1 = run reason(
+    &b"wOFFxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    WebFontReason.UnknownFormat,
+  )
+  run Testing.expect(other1, "WOFF is not WOFF2")
+
+  // A transform version a table does not have is not supported.
+  let mut other = run Bytes.copy(Bytes.asSlice(&data))
+  let editable2 = Bytes.asMutSlice(&mut other)
+  editable2[48] = (first & 63) | 0x80
+  let unknown = run reason(Bytes.asSlice(&other), WebFontReason.Unsupported)
+  run Testing.expect(unknown, "unknown transform")
+}
+
+test effect fn rejectsBadHeaders() -> ()
+  ! AssertionError<'static> | FileError | HostInputError | OutOfMemoryError {
+  let mut allocator = Allocator.systemAllocatorProvider()
+  run checkHeaders() |> Effect.provideMut<Allocator>(&mut allocator)
+}
+
+fn rangeIs(range: Option<Range>, min: f64, max: f64) -> bool {
+  return match range {
+    Option<Range>.Some { value } => value.min == min && value.max == max
+    Option<Range>.None => false
+  }
+}
+
+fn styleIs(style: Option<FaceStyle>, kind: u32, min: f64, max: f64) -> bool {
+  return match style {
+    Option<FaceStyle>.None => kind == 0
+    Option<FaceStyle>.Some { value } => match value {
+      FaceStyle.Normal => kind == 1
+      FaceStyle.Italic => kind == 2
+      FaceStyle.Oblique { min: low, max: high } => kind == 3 && low == min && high == max
+    }
+  }
+}
+
+fn isAuto(range: Option<Range>) -> bool {
+  return match range {
+    Option<Range>.Some { .. } => false
+    Option<Range>.None => true
+  }
+}
+
+fn urlOf(rule: &FontFaceRule) -> string {
+  return match rule.url() {
+    Option<string>.Some { value } => value
+    Option<string>.None => ""
+  }
+}
+
+effect fn checkGoogleStylesheet() -> ()
+  ! AssertionError<'static> | FileError | HostInputError | OutOfMemoryError
+  ? &mut Allocator {
+  let css = run read("inter.css")
+  let rules = run parse(Bytes.asSlice(&css), Option<&'static Url>.None)
+  let list = List<FontFaceRule>.asSlice(&rules)
+  run Testing.expect(list.length == 14, "seven subsets in two styles")
+  let first = &list[0]
+  run Testing.expect(Bytes.asSlice(&first.family) == b"Inter", "family")
+  run Testing.expect(styleIs(first.style, 2, 0.0, 0.0), "italic")
+  run Testing.expect(rangeIs(first.weight, 100.0, 900.0), "weight range")
+  run Testing.expect(isAuto(first.width), "width is auto")
+  run Testing.expect(first.display == FontDisplay.Swap, "display")
+  run Testing.expect(
+    urlOf(first)
+      == "https://fonts.gstatic.com/s/inter/v20/UcC53FwrK3iLTcvneQg7Ca725JhhKnNqk6L0UUMJng.woff2",
+    "source",
+  )
+  run Testing.expect(List<UnicodeRange>.length(&first.ranges) == 6, "cyrillic-ext ranges")
+  run Testing.expect(
+    first.covers(0x0460) && first.covers(0x052f) && first.covers(0xfe2f),
+    "covered",
+  )
+  run Testing.expect(!first.covers(0x41) && !first.covers(0x0530), "not covered")
+  let latin = &list[13]
+  run Testing.expect(styleIs(latin.style, 1, 0.0, 0.0), "normal")
+  run Testing.expect(latin.covers(0x41) && latin.covers(0x2122), "latin covers ASCII")
+}
+
+test effect fn readsGoogleFontsStylesheets() -> ()
+  ! AssertionError<'static> | FileError | HostInputError | OutOfMemoryError {
+  let mut allocator = Allocator.systemAllocatorProvider()
+  run checkGoogleStylesheet() |> Effect.provideMut<Allocator>(&mut allocator)
+}
+
+effect fn checkDescriptors() -> ()
+  ! AssertionError<'static> | OutOfMemoryError
+  ? &mut Allocator {
+  let css = b"@charset \"utf-8\"; @import url(other.css); /* @font-face { nope } */ body { font-family: X; } @media print { @font-face { font-family: Hidden; src: url(h.woff2); } } @font-face { font-family: My  Font; src: local(\"My Font Bold\"), local(MyFont-Bold), url('fonts/my.woff2') format(\"woff2\"), url(fonts/my.ttf) format(truetype); font-weight: bold 300; font-stretch: condensed 125%; font-style: oblique 10deg 20deg; unicode-range: U+4??, u+0-7F, U+1F600-1F64F; font-display: optional; } @font-face { font-family: 'No Source'; } @font-face { font-family: \"Quoted \\\"Name\\\"\"; src: url(data.woff) format(woff); font-weight: 1001; font-style: oblique; font-stretch: 50%; unicode-range: U+zz; } @font-face { src: url(a.woff2); font-family: Late; font-weight: 500 !important; font-style: sideways; } @font-face { font-family: Future; src: url(x.woff2) format(woff2) tech(incremental-patch), url(y.otf) format(opentype) tech(color-COLRv1, variations), url(z.svg) format(svg); }"
+  let base = run Url.parse("https://example.com/css/site.css?v=2", Option<&'static Url>.None)
+  let rules = match move base {
+    Option<Url>.Some { value } => run parse(&css, Option<&Url>.Some { value: &value })
+    Option<Url>.None => List<FontFaceRule>.make()
+  }
+  let list = List<FontFaceRule>.asSlice(&rules)
+  run Testing.expect(list.length == 4, "rules with a family and a source, outside @media")
+  let my = &list[0]
+  run Testing.expect(Bytes.asSlice(&my.family) == b"My Font", "identifiers join with one space")
+  let sources = List<FaceSource>.asSlice(&my.sources)
+  run Testing.expect(sources.length == 4, "four sources")
+  if let FaceSource.Local { name } = &sources[0] {
+    run Testing.expect(Bytes.asSlice(&name) == b"My Font Bold", "quoted local")
+  } else {
+    run Testing.expect(false, "local first")
+  }
+  if let FaceSource.Local { name } = &sources[1] {
+    run Testing.expect(Bytes.asSlice(&name) == b"MyFont-Bold", "bare local")
+  } else {
+    run Testing.expect(false, "local second")
+  }
+  if let FaceSource.Url { url, format, .. } = &sources[2] {
+    run Testing.expect(
+      String.view(&url) == "https://example.com/css/fonts/my.woff2",
+      "relative URL",
+    )
+    run Testing.expect(Bytes.asSlice(&format) == b"woff2", "format")
+  } else {
+    run Testing.expect(false, "url third")
+  }
+  run Testing.expect(&my.loadable() == &Option<usize>.Some { value: 2 }, "first url is loadable")
+  run Testing.expect(rangeIs(my.weight, 300.0, 700.0), "weights are ordered")
+  run Testing.expect(rangeIs(my.width, 75.0, 125.0), "keyword and percentage widths")
+  run Testing.expect(styleIs(my.style, 3, 10.0, 20.0), "oblique range")
+  run Testing.expect(my.covers(0x400) && my.covers(0x4ff) && !my.covers(0x500), "wildcard range")
+  run Testing.expect(my.covers(0x7f) && my.covers(0x1f600) && !my.covers(0x80), "ranges")
+  run Testing.expect(my.display == FontDisplay.Optional, "display")
+
+  let quoted = &list[1]
+  run Testing.expect(Bytes.asSlice(&quoted.family) == b"Quoted \"Name\"", "escapes")
+  run Testing.expect(isAuto(quoted.weight), "an invalid weight is dropped")
+  run Testing.expect(styleIs(quoted.style, 3, 14.0, 14.0), "oblique defaults to 14deg")
+  run Testing.expect(rangeIs(quoted.width, 50.0, 50.0), "percent width")
+  run Testing.expect(
+    List<UnicodeRange>.length(&quoted.ranges) == 0 && quoted.covers(0x10ffff),
+    "bad range dropped",
+  )
+  run Testing.expect(urlOf(quoted) == "https://example.com/css/data.woff", "woff source")
+
+  let late = &list[2]
+  run Testing.expect(Bytes.asSlice(&late.family) == b"Late", "order of descriptors does not matter")
+  run Testing.expect(isAuto(late.weight), "!important is dropped")
+  run Testing.expect(styleIs(late.style, 0, 0.0, 0.0), "unknown style is dropped")
+
+  let future = &list[3]
+  run Testing.expect(
+    &future.loadable() == &Option<usize>.Some { value: 1 },
+    "skips incremental and svg",
+  )
+  run Testing.expect(urlOf(future) == "https://example.com/css/y.otf", "opentype source")
+}
+
+test effect fn readsFontFaceDescriptors() -> ()
+  ! AssertionError<'static> | OutOfMemoryError {
+  let mut allocator = Allocator.systemAllocatorProvider()
+  run checkDescriptors() |> Effect.provideMut<Allocator>(&mut allocator)
+}
+
+/// Answers the stylesheet and the font from fixtures, and records what was asked.
+struct FakeHttp {
+  css: Bytes,
+  font: Bytes,
+  calls: usize,
+  agents: usize,
+  encoded: bool,
+}
+
+impl Http for FakeHttp {
+  effect fn sendAll(self: &mut Self, requests: List<Request<'_>>) -> List<
+    Result<Response, HttpError>
+  >
+    ! OutOfMemoryError
+    ? &mut Allocator {
+    return run Http.sendEach(move requests) |> Effect.provideMut<Http>(&mut self.*)
+  }
+
+  effect fn send(self: &mut Self, request: Request<'_>) -> Response
+    ! HttpError | OutOfMemoryError
+    ? &mut Allocator {
+    self.calls = self.calls + 1
+    let mut i: usize = 0
+    while i < request.headerCount() {
+      let field = request.headerAt(i)
+      if field.name == "User-Agent" && String.contains(field.value, "Chrome/") {
+        self.agents = self.agents + 1
+      }
+      i = i + 1
+    }
+    let url = request.url()
+    if String.startsWith(url, "https://fonts.example/css2") {
+      self.encoded = url == "https://fonts.example/css2?family=Inter%7CLobster"
+      return run Response.make(200, Bytes.asSlice(&self.css))
+    }
+    if url == "https://fonts.example/s/inter.woff2" {
+      return run Response.make(200, Bytes.asSlice(&self.font))
+    }
+    return run Response.make(404, b"")
+  }
+}
+
+effect fn checkFetch() -> ()
+  ! AssertionError<'static>
+    | FileError
+    | HostInputError
+    | HttpError
+    | WebFontError
+    | OutOfMemoryError
+  ? &mut Allocator {
+  let font = run read("fonts/inter.woff2")
+  let mut fake = FakeHttp {
+    css: run Bytes.copy(
+      &b"@font-face { font-family: Inter; src: url(/s/inter.woff2) format('woff2'); }",
+    ),
+    font: move font,
+    calls: 0,
+    agents: 0,
+    encoded: false,
+  }
+  let rules = run fetch.stylesheet("https://fonts.example/css2?family=Inter|Lobster")
+    |> Effect.provideMut<Http>(&mut fake)
+  run Testing.expect(fake.encoded, "the URL is percent-encoded")
+  let list = List<FontFaceRule>.asSlice(&rules)
+  run Testing.expect(list.length == 1, "one rule")
+  run Testing.expect(
+    urlOf(&list[0]) == "https://fonts.example/s/inter.woff2",
+    "resolved against the stylesheet",
+  )
+  let decoded = run fetch.face(&list[0]) |> Effect.provideMut<Http>(&mut fake)
+  let expected = run read("fonts/inter.woff2.decoded.ttf")
+  run Testing.expect(
+    equalBytes(Bytes.asSlice(&decoded), Bytes.asSlice(&expected)),
+    "fetched and decoded",
+  )
+  run Testing.expect(fake.calls == 2 && fake.agents == 2, "a browser User-Agent on every request")
+  let missing = run Effect.result(fetch.font("https://fonts.example/missing.woff2"))
+    |> Effect.provideMut<Http>(&mut fake)
+  run Testing.expect(
+    match move missing {
+      Result.Success { value } => {
+        drop value
+        false
+      }
+      Result.Failure { error } => {
+        drop error
+        true
+      }
+    },
+    "a 404 is an error",
+  )
+}
+
+test effect fn fetchesStylesheetsAndFonts() -> ()
+  ! AssertionError<'static>
+    | FileError
+    | HostInputError
+    | HttpError
+    | WebFontError
+    | OutOfMemoryError {
+  let mut allocator = Allocator.systemAllocatorProvider()
+  run checkFetch() |> Effect.provideMut<Allocator>(&mut allocator)
+}
