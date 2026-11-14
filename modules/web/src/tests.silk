@@ -2,10 +2,9 @@
 import lib { decode }
 import error { WebFontError, WebFontReason }
 import sfnt { Format, detect, u16At, u32At, checksum, TAG_HEAD }
-import stylesheet { FontFaceRule, FaceSource, FontDisplay, UnicodeRange, parse }
+import stylesheet { Range, FaceStyle, FontFaceRule, FaceSource, FontDisplay, UnicodeRange, parse }
 import fetch
 import woff2
-import svg_fonts.database { FontDatabase, FaceStyle, Range }
 
 static if Intrinsic.targetOperatingSystem() == "windows" {
   import silk.platform.windows.host_input { WindowsHostInput }
@@ -207,9 +206,6 @@ effect fn checkWoff() -> ()
       "WOFF tables are the original tables",
     )
     run Testing.expect(checksumsHold(Bytes.asSlice(&decoded)), "WOFF output checksums")
-    let mut database = FontDatabase.make()
-    let added = run database.add(move decoded)
-    run Testing.expect(added == 1, "the face database reads the font")
     i = i + 1
   }
 }
@@ -245,9 +241,6 @@ effect fn checkWoff2() -> ()
       "WOFF2 output",
     )
     run Testing.expect(checksumsHold(Bytes.asSlice(&decoded)), "WOFF2 output checksums")
-    let mut database = FontDatabase.make()
-    let added = run database.add(move decoded)
-    run Testing.expect(added == 1, "the face database reads the font")
     i = i + 1
   }
 
@@ -291,9 +284,6 @@ effect fn checkCollection() -> ()
     sameTables(Bytes.asSlice(&bold), font, u32.toUsize(u32At(font, 16)), &skip),
     "second font",
   )
-  let mut database = FontDatabase.make()
-  let added = run database.add(move decoded)
-  run Testing.expect(added == 2, "both faces read")
 }
 
 test effect fn woff2Collections() -> ()

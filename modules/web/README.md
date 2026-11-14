@@ -40,8 +40,10 @@ subsets. URLs are percent-encoded as a browser does, so `family=Roboto|Lobster` 
 
 `FontFaceRule` holds `font-family`, `src` (`url()` with `format()` and `tech()`, and
 `local()`), `font-weight`, `font-stretch` (also spelled `font-width`), `font-style` (with
-oblique angle ranges), `unicode-range` and `font-display`. Weight, width and style are the
-face database's own `Range` and `FaceStyle`, and `None` means `auto`. An invalid descriptor
+oblique angle ranges), `unicode-range` and `font-display`. Weight, width and style use
+`Range` and `FaceStyle`, shaped like font-faces' types of those names, and `None` means `auto`.
+The package depends only on the standard library, so an app can pin it at any lib-fonts
+revision without moving its other lib-fonts pins. An invalid descriptor
 is dropped, as CSS does, and a rule without a family or a source is dropped.
 `rule.loadable()` picks the first `url()` source in a format this package reads.
 
