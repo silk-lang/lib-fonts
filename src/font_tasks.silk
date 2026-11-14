@@ -612,6 +612,7 @@ effect fn check() -> ()
     "modules/outline/silk.toml",
     "modules/raster/silk.toml",
     "modules/faces/silk.toml",
+    "modules/collection/silk.toml",
     "modules/web/silk.toml",
   ]
   let mut at: usize = 0

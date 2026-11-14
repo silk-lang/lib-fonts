@@ -235,6 +235,9 @@ static if Intrinsic.targetArchitecture() != "wasm32" {
         &mut collection,
         &[
           "/System/Library/Fonts/SFNS.ttf",
+          "/System/Library/Fonts/SFNSItalic.ttf",
+          "/System/Library/Fonts/Helvetica.ttc",
+          "/System/Library/Fonts/Menlo.ttc",
           "/System/Library/Fonts/Apple Symbols.ttf",
           "/System/Library/Fonts/Supplemental/Arial.ttf",
           "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
@@ -303,15 +306,17 @@ static if Intrinsic.targetArchitecture() != "wasm32" {
         }
       }
     }
+    // Chromium's defaults per platform. SFNS.ttf names its family "System Font"; CoreText's
+    // ".AppleSystemUIFont" alias names no font file.
     run generic(
       &mut collection,
       Generic.SystemUi,
-      &[".AppleSystemUIFont", "Segoe UI", "Noto Sans", "DejaVu Sans", "Arial"],
+      &["System Font", "Segoe UI", "Noto Sans", "DejaVu Sans", "Arial"],
     )
     run generic(
       &mut collection,
       Generic.SansSerif,
-      &["Arial", "Noto Sans", "DejaVu Sans", "Liberation Sans"],
+      &["Helvetica", "Arial", "Noto Sans", "DejaVu Sans", "Liberation Sans"],
     )
     run generic(
       &mut collection,
@@ -321,7 +326,7 @@ static if Intrinsic.targetArchitecture() != "wasm32" {
     run generic(
       &mut collection,
       Generic.Monospace,
-      &["Courier New", "Menlo", "Consolas", "Noto Mono", "DejaVu Sans Mono"],
+      &["Menlo", "Consolas", "DejaVu Sans Mono", "Noto Mono", "Courier New"],
     )
     run generic(
       &mut collection,
