@@ -29,7 +29,7 @@ static if Intrinsic.targetOperatingSystem() == "darwin" {
     return false
   }
 
-  effect fn expectGeneric(fonts: &FontCollection, generic: Generic, family: &[u8], label: string)
+  effect fn expectGeneric(fonts: &FontCollection, generic: Generic, family: &[u8], label: string<'static>)
     -> ()
     ! AssertionError<'static> | OutOfMemoryError
     ? &mut Allocator {
