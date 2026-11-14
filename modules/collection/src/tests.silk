@@ -1,0 +1,69 @@
+//! System font discovery tests. They read the machine's installed fonts, so they assert only on
+//! macOS, where the faces every install ships are known.
+static if Intrinsic.targetOperatingSystem() == "darwin" {
+  import collection { FontCollection, Family }
+  import system { Options }
+  import system
+  import svg_fonts.database { Generic }
+  import svg_fonts.matching { Request, Selection, Style }
+  import svg_fonts.names
+  import silk.collections.bytes { Bytes }
+  import silk.collections.list { List }
+  import silk.core.effect { Effect }
+  import silk.core.option { Option }
+  import silk.mem.allocator { Allocator, OutOfMemoryError }
+  import silk.platform.native.host_input { NativeHostInput }
+  import silk.system.host_input { HostInput, HostInputError }
+  import silk.system.host_input_native { OsHostInput }
+  import silk.testing.testing { Testing, AssertionError }
+
+  fn hasFamily(fonts: &FontCollection, face: usize, name: &[u8]) -> bool {
+    let families = &fonts.face(face).families
+    let mut i: usize = 0
+    while i < List<Bytes>.length(families) {
+      if names.same(Bytes.asSlice(&List<Bytes>.asSlice(families)[i]), name) {
+        return true
+      }
+      i = i + 1
+    }
+    return false
+  }
+
+  effect fn expectGeneric(
+    fonts: &FontCollection,
+    generic: Generic,
+    family: &[u8],
+    label: string<'static>,
+  ) -> ()
+    ! AssertionError<'static> | OutOfMemoryError
+    ? &mut Allocator {
+    let request = Request { weight: 400.0, width: 100.0, style: Style.Normal }
+    match run fonts.matchFamily(&Family.generic(generic), request) {
+      Option<Selection>.Some { value } => {
+        run Testing.expect(hasFamily(&fonts, value.face, family), label)
+        run Testing.expect(value.weight == 400.0, "a regular request selects weight 400")
+      }
+      Option<Selection>.None => run Testing.expect(false, label)
+    }
+  }
+
+  effect fn resolvesGenerics() -> ()
+    ! AssertionError<'static> | HostInputError | OutOfMemoryError
+    ? &mut Allocator {
+    let snapshot = run unsafe NativeHostInput.environmentSnapshot()
+    let mut inputs = OsHostInput.make(move snapshot)
+    let mut fonts = FontCollection.make()
+    drop run system.load(&mut fonts, Options.defaults())
+      |> Effect.provideMut<HostInput>(&mut inputs)
+    run expectGeneric(&fonts, Generic.SystemUi, b"System Font", "system-ui is SFNS.ttf")
+    run expectGeneric(&fonts, Generic.SansSerif, b"Helvetica", "sans-serif is Helvetica")
+    run expectGeneric(&fonts, Generic.Monospace, b"Menlo", "monospace is Menlo")
+  }
+
+  // Chromium's macOS defaults: system-ui is San Francisco, sans-serif Helvetica, monospace Menlo.
+  test effect fn macGenericFamilies() -> ()
+    ! AssertionError<'static> | HostInputError | OutOfMemoryError {
+    let mut allocator = Allocator.systemAllocatorProvider()
+    run resolvesGenerics() |> Effect.provideMut<Allocator>(&mut allocator)
+  }
+}
