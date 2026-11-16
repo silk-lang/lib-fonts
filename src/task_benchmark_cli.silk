@@ -44,7 +44,7 @@ impl CommandLine for BenchmarkTasks {
       |> Command.option(
         "silk",
         Opt.about("Silk shaping binary")
-          |> Opt.default("build/llvm/x86_64-unknown-linux-gnu/release/font-shape-test-harness"),
+          |> Opt.default("build/x86_64-unknown-linux-gnu/release/font-shape-test-harness"),
       )
       |> Command.option(
         "rust",
@@ -61,7 +61,7 @@ impl CommandLine for BenchmarkTasks {
         "librarySilk",
         Opt.about("Silk benchmark binary")
           |> Opt.long("silk")
-          |> Opt.default("build/llvm/x86_64-unknown-linux-gnu/release/font-parse-bench"),
+          |> Opt.default("build/x86_64-unknown-linux-gnu/release/font-parse-bench"),
       )
       |> Command.option(
         "libraryRust",
@@ -90,7 +90,7 @@ impl CommandLine for BenchmarkTasks {
         "benchmarkSilk",
         Opt.about("Release Silk dumper")
           |> Opt.long("silk-dumper")
-          |> Opt.default("build/llvm/x86_64-unknown-linux-gnu/release/font-parse-test-harness"),
+          |> Opt.default("build/x86_64-unknown-linux-gnu/release/font-parse-test-harness"),
       )
       |> Command.option("rounds", Opt.about("Timing rounds") |> Opt.default("3"))
       |> Command.option(
@@ -110,7 +110,13 @@ impl CommandLine for BenchmarkTasks {
 
 impl TaskSet for BenchmarkTasks {
   effect fn perform(self: BenchmarkTasks) -> ()
-    ! BuildError | TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError
+    ! BuildError
+      | TaskError
+      | ProcessError
+      | FileError
+      | HostInputError
+      | OutOfMemoryError
+      | WriterError
     ? &mut HostInput | &mut Allocator | &mut ChildProcess | &mut FileSystem {
     let task = match move self {
       BenchmarkTasks.BenchShaping {

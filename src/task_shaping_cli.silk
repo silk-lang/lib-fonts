@@ -30,7 +30,7 @@ impl CommandLine for ShapingTasks {
       |> Command.option(
         "silk",
         Opt.about("Silk shaping binary")
-          |> Opt.default("build/llvm/x86_64-unknown-linux-gnu/release/font-shape-test-harness"),
+          |> Opt.default("build/x86_64-unknown-linux-gnu/release/font-shape-test-harness"),
       )
       |> Command.option(
         "rust",
@@ -42,7 +42,7 @@ impl CommandLine for ShapingTasks {
       |> Command.option(
         "binary",
         Opt.about("Native shaping binary")
-          |> Opt.default("build/llvm/x86_64-unknown-linux-gnu/release/font-shape-test-harness"),
+          |> Opt.default("build/x86_64-unknown-linux-gnu/release/font-shape-test-harness"),
       )
       |> Command.variant(
         "CheckShapingMalformed",
@@ -68,7 +68,13 @@ impl CommandLine for ShapingTasks {
 
 impl TaskSet for ShapingTasks {
   effect fn perform(self: ShapingTasks) -> ()
-    ! BuildError | TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError
+    ! BuildError
+      | TaskError
+      | ProcessError
+      | FileError
+      | HostInputError
+      | OutOfMemoryError
+      | WriterError
     ? &mut HostInput | &mut Allocator | &mut ChildProcess | &mut FileSystem {
     let task = match move self {
       ShapingTasks.CompareShaping { silk, rust, filter } => Tasks.CompareShaping {
