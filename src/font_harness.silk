@@ -300,7 +300,7 @@ pub effect fn comparePaths(
       let silk = run String.copy(silk)
       let handle = match move run Effect.result(
         NativeThread.spawn(
-          fn() -> Result<Observation, Errors> {
+          || -> Result<Observation, Errors> {
             let ownedFont = move font
             let ownedReference = move reference
             let ownedSilk = move silk

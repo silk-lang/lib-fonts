@@ -1,3 +1,4 @@
+import silk.build.graph { BuildError }
 import font_tasks { Tasks }
 import font_task_arguments { Seconds }
 import silk.cli.command { Command, CommandLine, Opt }
@@ -67,7 +68,7 @@ impl CommandLine for ShapingTasks {
 
 impl TaskSet for ShapingTasks {
   effect fn perform(self: ShapingTasks) -> ()
-    ! TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError
+    ! BuildError | TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError
     ? &mut HostInput | &mut Allocator | &mut ChildProcess | &mut FileSystem {
     let task = match move self {
       ShapingTasks.CompareShaping { silk, rust, filter } => Tasks.CompareShaping {
