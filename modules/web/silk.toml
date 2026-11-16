@@ -2,6 +2,6 @@
 name = "font-web"
 description = "Web fonts: WOFF and WOFF2 decoding, @font-face stylesheets and fetching them"
 version = "0.1.0"
-silk-version = "0.1.0-dev.74+205aea3f5b2e"
+silk-version = "0.1.0-pipeline.1"
 kind = "library"
 exports = ["lib", "error", "sfnt", "woff", "woff2", "stylesheet", "fetch"]
