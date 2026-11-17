@@ -10,6 +10,7 @@ static if Intrinsic.targetArchitecture() != "wasm32" {
   }
 
   import collection { FontCollection }
+  import svg_fonts.mapped { MappedFont }
   import svg_fonts.database { Generic }
   import silk.collections.bytes { Bytes }
   import silk.collections.list { List }
@@ -39,7 +40,10 @@ static if Intrinsic.targetArchitecture() != "wasm32" {
     pub files: usize,
     pub bytes: usize,
     pub skipped: usize,
-    pub truncated: bool
+    pub truncated: bool,
+    /// Bytes of font files mapped read-only rather than read; they do not count toward
+    /// `Options.maxBytes`, which budgets heap copies.
+    pub mapped: usize
   }
 
   impl Report {
@@ -50,6 +54,7 @@ static if Intrinsic.targetArchitecture() != "wasm32" {
         bytes: 0,
         skipped: 0,
         truncated: false,
+        mapped: 0,
       }
     }
   }
@@ -93,7 +98,7 @@ static if Intrinsic.targetArchitecture() != "wasm32" {
         let values = entries.asSlice()
         let mut i: usize = 0
         while i < values.length {
-          if report.files >= options.maxFiles || report.bytes >= options.maxBytes {
+          if report.files >= options.maxFiles {
             report.truncated = true
             return ()
           }
@@ -127,7 +132,14 @@ static if Intrinsic.targetArchitecture() != "wasm32" {
       }
       i = i + 1
     }
-    if report.files >= options.maxFiles || report.bytes >= options.maxBytes {
+    if report.files >= options.maxFiles {
+      report.truncated = true
+      return ()
+    }
+    if run mapFile(&mut collection, path, &mut report) {
+      return ()
+    }
+    if report.bytes >= options.maxBytes {
       report.truncated = true
       return ()
     }
@@ -176,6 +188,33 @@ static if Intrinsic.targetArchitecture() != "wasm32" {
         drop error
         report.skipped = report.skipped + 1
       }
+    }
+  }
+
+  /// Adds the font file at `path` mapped read-only, as system font files are mapped by the
+  /// platform's own text stacks. False when the platform does not map files or the file cannot
+  /// be mapped; the caller then reads it.
+  effect fn mapFile(collection: &mut FontCollection, path: &Path, report: &mut Report) -> bool
+    ! OutOfMemoryError
+    ? &mut Allocator {
+    let mut terminated = Bytes.make()
+    run Bytes.append(&mut terminated, Path.rawBytes(path))
+    run Bytes.append(&mut terminated, &[0])
+    let opened = MappedFont.open(Bytes.asSlice(&terminated))
+    return match move opened {
+      Option<MappedFont>.Some { value } => {
+        let length = value.byteLength()
+        let count = run collection.addMapped(move value)
+        if count > 0 {
+          report.files = report.files + 1
+          report.mapped = report.mapped + length
+          run report.loaded.append(run String.copy(Path.view(path).unwrapOr("")))
+        } else {
+          report.skipped = report.skipped + 1
+        }
+        true
+      }
+      Option<MappedFont>.None => false
     }
   }
 

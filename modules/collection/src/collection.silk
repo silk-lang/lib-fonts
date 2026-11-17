@@ -4,6 +4,7 @@
 //! Face reading and CSS Fonts 4 matching (#font-style-matching) come from the SVG font
 //! database; this module adds family lists with generic names and the fallback order.
 import svg_fonts.database { FontDatabase, Fonts, Face, Generic }
+import svg_fonts.mapped { MappedFont }
 import svg_fonts.matching { Request, Selection, select }
 import read_fonts.lib { FontRef, ReadError }
 import silk.collections.bytes { Bytes }
@@ -76,6 +77,13 @@ impl FontCollection {
     ! OutOfMemoryError
     ? &mut Allocator {
     return run self.database.add(move data)
+  }
+
+  /// Like [`FontCollection.add`], for a font file mapped read-only.
+  pub effect fn addMapped(self: &mut Self, file: MappedFont) -> usize
+    ! OutOfMemoryError
+    ? &mut Allocator {
+    return run self.database.addMapped(move file)
   }
 
   /// Appends a family to the list a generic family name resolves to.
