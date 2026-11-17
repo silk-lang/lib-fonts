@@ -639,7 +639,7 @@ effect fn buildWasm() -> ()
     ],
   )
   let root = run Task.root()
-  let artifact = run Path.join(&root, "build/llvm/wasm32-unknown-unknown/release/font-shape-wasm")
+  let artifact = run Path.join(&root, "build/wasm32-unknown-unknown/release/font-shape-wasm.wasm")
   let destination = run Path.join(&root, "modules/shape/tools/wasm/js/dist/harfrust.wasm")
   let bytes = run FileSystem.readFile(&artifact)
   run FileSystem.writeFileWithParents(&destination, Bytes.asSlice(&bytes))

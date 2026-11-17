@@ -380,7 +380,7 @@ impl<'a> VarcOutlines<'a> {
     return match move Condition.evaluate(
       &condition,
       coords,
-      fn(index: u32) -> Result<f64, Error> {
+      |index: u32| -> Result<f64, Error> {
         let mut delta = [0.0]
         let result = run Effect.result(VarcOutlines.deltas(self, index, coords, &mut delta))
         return match move result {
