@@ -11448,7 +11448,7 @@ pub fn storeDeltas<'a>(store: Option<ItemVariationStore<'a>>, coords: &'a [F2Dot
     let mut delta = F48Dot16.zero()
     let value = selected
     if present {
-      delta = ItemVariationStore.computeDelta(&value, DeltaSetIndex.fromU32(index), coords)
+      delta = ItemVariationStore<'a>.computeDelta(&value, DeltaSetIndex.fromU32(index), coords)
         |> Option<F48Dot16>.unwrapOr(F48Dot16.zero())
     }
     return Result<f64, Error>.succeed(F48Dot16.toF64(delta))

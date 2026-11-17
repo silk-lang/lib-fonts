@@ -117,8 +117,6 @@ impl TaskSet for Commands {
   }
 }
 
-pub const COMMANDS: string = Task.commands<Commands>()
-
 pub effect fn main() -> i32
   ? &mut HostInput {
   return run Task.main<Commands>()
