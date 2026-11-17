@@ -1,0 +1,79 @@
+//! Fallback tests over the subset fonts in test-support/fonts.
+import collection { FontCollection }
+import fallback { FontMatcher }
+import svg_fonts.matching { Request, Selection, Style }
+
+static if Intrinsic.targetOperatingSystem() == "windows" {
+  import silk.platform.windows.host_input { WindowsHostInput }
+  import silk.system.host_input { HostInput }
+} else {
+  import silk.platform.native.host_input { NativeHostInput }
+}
+
+import silk.system.host_input { HostInputError }
+import silk.system.filesystem { Path, FileSystem, FileError }
+import silk.system.filesystem_native { OsFileSystem }
+import silk.collections.bytes { Bytes }
+import silk.core.effect { Effect }
+import silk.core.option { Option }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.testing.testing { Testing, AssertionError }
+import silk.text.string { String }
+import silk.text.unicode_script { Script }
+
+effect fn workingDirectory() -> Bytes
+  ! HostInputError | OutOfMemoryError
+  ? &mut Allocator {
+  static if Intrinsic.targetOperatingSystem() == "windows" {
+    let mut inputs = run WindowsHostInput.capture()
+    return run HostInput.workingDirectory() |> Effect.provideMut<HostInput>(&mut inputs)
+  } else {
+    return run NativeHostInput.workingDirectory()
+  }
+}
+
+effect fn read(name: string) -> Bytes
+  ! FileError | HostInputError | OutOfMemoryError
+  ? &mut Allocator {
+  let cwd = run workingDirectory()
+  let root = run Path.root()
+  let mut relative = run String.copy("test-support/fonts/")
+  run String.append(&mut relative, name)
+  let path = run Path.resolve(&root, String.view(&relative))
+  let mut files = run OsFileSystem.makeBytes(Bytes.asSlice(&cwd))
+  return run FileSystem.readFile(&path) |> Effect.provideMut<FileSystem>(&mut files)
+}
+
+effect fn faceFor(fonts: &FontCollection, weight: f64, style: Style) -> usize
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let mut matcher = FontMatcher.make(fonts)
+  let none: [Selection; 0] = []
+  let request = Request { weight: weight, width: 100.0, style: style }
+  return match run matcher.select(&none, request, 0x41, Script.common()) {
+    Option<Selection>.Some { value } => value.face
+    Option<Selection>.None => 99
+  }
+}
+
+effect fn fallbackWeights() -> ()
+  ! AssertionError<'static> | FileError | HostInputError | OutOfMemoryError
+  ? &mut Allocator {
+  let mut fonts = FontCollection.make()
+  drop run fonts.add(run read("NotoSans-Regular.subset.ttf"))
+  drop run fonts.add(run read("NotoSans-Bold.subset.ttf"))
+  drop run fonts.add(run read("NotoSans-Italic.subset.ttf"))
+  drop run fonts.add(run read("NotoSans-Light.subset.ttf"))
+  run Testing.expect((run faceFor(&fonts, 400.0, Style.Normal)) == 0, "a regular request takes the regular face")
+  run Testing.expect((run faceFor(&fonts, 700.0, Style.Normal)) == 1, "a bold request takes the bold face")
+  run Testing.expect((run faceFor(&fonts, 300.0, Style.Normal)) == 3, "a light request takes the light face")
+  run Testing.expect((run faceFor(&fonts, 400.0, Style.Italic)) == 2, "an italic request takes the italic face")
+}
+
+// With no family and no fallback configured, the first face that has the character only
+// names the family; the face within it is matched by weight and style.
+test effect fn anyFaceFallbackMatchesWeightAndStyle() -> ()
+  ! AssertionError<'static> | FileError | HostInputError | OutOfMemoryError {
+  let mut allocator = Allocator.systemAllocatorProvider()
+  run fallbackWeights() |> Effect.provideMut<Allocator>(&mut allocator)
+}
