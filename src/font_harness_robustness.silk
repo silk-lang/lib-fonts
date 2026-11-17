@@ -196,7 +196,7 @@ pub effect fn checkRobustness(
       let failures = run String.copy(failures)
       let handle = match move run Effect.result(
         NativeThread.spawn(
-          fn() -> Result<Bytes, Errors> {
+          || -> Result<Bytes, Errors> {
             let ownedBinary = move binary
             let ownedInput = move input
             let ownedFailures = move failures

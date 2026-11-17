@@ -1,3 +1,4 @@
+import silk.build.graph { BuildError }
 import font_tasks { Tasks }
 import silk.cli.command { Command, CommandLine, Opt }
 import silk.cli.task { TaskError, TaskSet }
@@ -32,7 +33,7 @@ impl CommandLine for ShapingGeneratorTasks {
 
 impl TaskSet for ShapingGeneratorTasks {
   effect fn perform(self: ShapingGeneratorTasks) -> ()
-    ! TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError
+    ! BuildError | TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError
     ? &mut HostInput | &mut Allocator | &mut ChildProcess | &mut FileSystem {
     let task = match move self {
       ShapingGeneratorTasks.GenerateShapingUnicode => Tasks.GenerateShapingUnicode

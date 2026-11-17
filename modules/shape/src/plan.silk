@@ -1213,7 +1213,7 @@ impl<'a> OtPlan<'a> {
               &lookups,
               usize.toU16(i),
               List<F2Dot14>.asSlice(&font.coords),
-              fn(index: u32) -> Result<f64, Error> {
+              |index: u32| -> Result<f64, Error> {
                 return delta(&deltaStore, deltaCoords, index)
               },
               &mut indices,
@@ -1453,7 +1453,7 @@ fn selectVariations<'a, 's, F: FontFuncs>(
     if let Option<u32>.Some { value: index } = FeatureVariations<'a>.indexForCoordsWithDelta<Error>(
       &vars,
       List<F2Dot14>.asSlice(&font.coords),
-      fn(index: u32) -> Result<f64, Error> {
+      |index: u32| -> Result<f64, Error> {
         return delta(&deltaStore, deltaCoords, index)
       },
     ) {

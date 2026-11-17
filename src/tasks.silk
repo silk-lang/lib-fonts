@@ -1,3 +1,4 @@
+import silk.build.graph { BuildError }
 import font_tasks { Tasks }
 import task_shaping_cli { ShapingTasks }
 import task_benchmark_cli { BenchmarkTasks }
@@ -72,7 +73,7 @@ impl CommandLine for Commands {
 
 impl TaskSet for Commands {
   effect fn perform(self: Commands) -> ()
-    ! TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError
+    ! BuildError | TaskError | ProcessError | FileError | HostInputError | OutOfMemoryError | WriterError
     ? &mut HostInput | &mut Allocator | &mut ChildProcess | &mut FileSystem {
     let task = match move self {
       Commands.Shaping { shaping } => {

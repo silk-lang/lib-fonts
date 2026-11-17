@@ -248,7 +248,7 @@ pub effect fn checkMalformed(
       let failures = run String.copy(failures)
       let handle = match move run Effect.result(
         NativeThread.spawn(
-          fn() -> Result<Record, Errors> {
+          || -> Result<Record, Errors> {
             let ownedFont = move font
             let ownedConfig = move config
             let ownedReference2 = move reference2
