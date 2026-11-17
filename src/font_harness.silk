@@ -60,7 +60,7 @@ pub effect fn silkBinary(override: string) -> String
     return run String.copy(override)
   }
   let root = run Task.root()
-  let directory = run Path.join(&root, "build/llvm")
+  let directory = run Path.join(&root, "build")
   let entries = run FileSystem.listDirectory(&directory)
   let selectedProfile = run profile()
   let mut found = String.make()
@@ -69,7 +69,14 @@ pub effect fn silkBinary(override: string) -> String
   let mut at: usize = 0
   while at < rows.length {
     if rows[at].kind.code == 1 {
-      let profileDirectory = run Path.join(&rows[at].path, String.view(&selectedProfile))
+      let profileDirectory = run Path.join(
+        &rows[at].path,
+        if String.view(&selectedProfile) == "release" {
+          "release"
+        } else {
+          "dev"
+        },
+      )
       let candidate = run Path.join(&profileDirectory, "font-parse-test-harness")
       if run FileSystem.exists(&candidate) {
         count = count + 1
@@ -300,7 +307,7 @@ pub effect fn comparePaths(
       let silk = run String.copy(silk)
       let handle = match move run Effect.result(
         NativeThread.spawn(
-          fn() -> Result<Observation, Errors> {
+          || -> Result<Observation, Errors> {
             let ownedFont = move font
             let ownedReference = move reference
             let ownedSilk = move silk

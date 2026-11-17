@@ -74,8 +74,8 @@ and expectations and is never modified.
 The internal harness takes a font and text and prints the glyph string:
 
 ```sh
-build/llvm/x86_64-unknown-linux-gnu/release/font-shape-test-harness font.ttf 'office' --features=-liga
-build/llvm/x86_64-unknown-linux-gnu/release/font-shape-test-harness font.ttf --text-file=text.txt --direction=rtl --script=Arab
+build/x86_64-unknown-linux-gnu/release/font-shape-test-harness font.ttf 'office' --features=-liga
+build/x86_64-unknown-linux-gnu/release/font-shape-test-harness font.ttf --text-file=text.txt --direction=rtl --script=Arab
 ```
 
 It accepts the shaping and serialization options the upstream suite uses, including
@@ -89,8 +89,8 @@ need Apple system fonts are excluded. From the repository root:
 ```sh
 silk test --release --manifest-path modules/shape/silk.toml --root src/tests.silk
 silk build --release --manifest-path font-shape-test-harness/silk.toml
-build/llvm/x86_64-unknown-linux-gnu/release/font-shape-test-harness --suite modules/shape/tests/shaping.bin
-build/llvm/x86_64-unknown-linux-gnu/release/font-shape-test-harness --regressions
+build/x86_64-unknown-linux-gnu/release/font-shape-test-harness --suite modules/shape/tests/shaping.bin
+build/x86_64-unknown-linux-gnu/release/font-shape-test-harness --regressions
 silk task check-shaping-trace
 silk task check-shaping-malformed
 ```
