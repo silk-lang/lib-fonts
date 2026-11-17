@@ -328,6 +328,11 @@ static if Intrinsic.targetArchitecture() != "wasm32" {
       Generic.Monospace,
       &["Menlo", "Consolas", "DejaVu Sans Mono", "Noto Mono", "Courier New"],
     )
+    // Safari's ui-* families on macOS; elsewhere they have none and stand in for the generics.
+    run generic(&mut collection, Generic.UiSansSerif, &["System Font"])
+    run generic(&mut collection, Generic.UiSerif, &["New York"])
+    run generic(&mut collection, Generic.UiMonospace, &["SF Mono", ".SF NS Mono"])
+    run generic(&mut collection, Generic.UiRounded, &["SF Pro Rounded", ".SF NS Rounded"])
     run generic(
       &mut collection,
       Generic.Emoji,

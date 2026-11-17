@@ -146,6 +146,21 @@ impl FontCollection {
     return run select(&view, faces.asSlice(), request)
   }
 
+  /// CSS font matching of `request` within the family of face `face` (its first family name),
+  /// or None when the face names no family.
+  pub effect fn matchFaceFamily(self: &Self, face: usize, request: Request) -> Option<Selection>
+    ! OutOfMemoryError
+    ? &mut Allocator {
+    let families = &self.database.face(face).families
+    if families.length() == 0 {
+      return Option<Selection>.None
+    }
+    let mut faces = List<usize>.make()
+    run self.database.family(Bytes.asSlice(&families.asSlice()[0]), &mut faces)
+    let view = Fonts.make(&self.database)
+    return run select(&view, faces.asSlice(), request)
+  }
+
   effect fn matchName(self: &Self, name: &[u8], request: Request, out: &mut List<Selection>) -> ()
     ! OutOfMemoryError
     ? &mut Allocator {

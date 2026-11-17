@@ -120,8 +120,8 @@ impl<'a> FontMatcher<'a> {
   }
 
   /// The face for a cluster that starts with `cp`: the first face of `chain` (the text's
-  /// requested families) that has it, then the fallbacks for `script`, then any face of the
-  /// collection, matched by `request` where a family gives a choice. Returns the primary face
+  /// requested families) that has it, then the fallbacks for `script`, then the family of the
+  /// first face of the collection that has it, each matched by `request` within its family. Returns the primary face
   /// (`chain[0]`) when no face has the character, so it draws as that face's `.notdef`, and
   /// None only when `chain` is empty and no face has it.
   pub effect fn select(
@@ -157,6 +157,12 @@ impl<'a> FontMatcher<'a> {
     index = 0
     while index < faces {
       if run self.supports(index, cp) {
+        // The face of that family `request` matches, so the weight and style still apply.
+        if let Option<Selection>.Some { value } = run self.collection.matchFaceFamily(index, request) {
+          if run self.supports(value.face, cp) {
+            return Option<Selection>.Some { value: value }
+          }
+        }
         return Option<Selection>.Some {
           value: Selection {
             face: index,

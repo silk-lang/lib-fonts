@@ -1,5 +1,7 @@
 //! System font discovery tests. They read the machine's installed fonts, so they assert only on
-//! macOS, where the faces every install ships are known.
+//! macOS, where the faces every install ships are known. Fallback tests run everywhere.
+import fallback_tests as _fallback_tests
+
 static if Intrinsic.targetOperatingSystem() == "darwin" {
   import collection { FontCollection, Family }
   import system { Options }
@@ -58,6 +60,7 @@ static if Intrinsic.targetOperatingSystem() == "darwin" {
     run expectGeneric(&fonts, Generic.SystemUi, b"System Font", "system-ui is SFNS.ttf")
     run expectGeneric(&fonts, Generic.SansSerif, b"Helvetica", "sans-serif is Helvetica")
     run expectGeneric(&fonts, Generic.Monospace, b"Menlo", "monospace is Menlo")
+    run expectGeneric(&fonts, Generic.UiMonospace, b".SF NS Mono", "ui-monospace is SF Mono")
   }
 
   // Chromium's macOS defaults: system-ui is San Francisco, sans-serif Helvetica, monospace Menlo.
