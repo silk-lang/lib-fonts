@@ -9,6 +9,7 @@ import read_fonts.tables.fvar { VariationAxisRecord }
 import read_fonts.tables.name { NameString }
 import font_types.lib { Fixed, Tag, NameId }
 import silk.collections.bytes { Bytes }
+import mapped { MappedFont }
 import silk.collections.list { List }
 import silk.core.option { Option }
 import silk.core.result { Result }
@@ -90,8 +91,21 @@ struct GenericName {
   name: Bytes,
 }
 
+/// A font file's bytes: a copy on the heap, or the file mapped read-only (see [`MappedFont`]).
+union Source {
+  Owned { bytes: Bytes },
+  Mapped { file: MappedFont },
+}
+
+fn sourceBytes(source: &Source) -> &[u8] {
+  return match &source.* {
+    Source.Owned { bytes } => Bytes.asSlice(&bytes)
+    Source.Mapped { file } => file.bytes()
+  }
+}
+
 pub struct FontDatabase {
-  sources: List<Bytes>,
+  sources: List<Source>,
   faces: List<Face>,
   generics: List<GenericName>,
 }
@@ -355,7 +369,7 @@ fn f64Min(a: f64, b: f64) -> f64 {
 impl FontDatabase {
   pub fn make() -> FontDatabase {
     return FontDatabase {
-      sources: List<Bytes>.make(),
+      sources: List<Source>.make(),
       faces: List<Face>.make(),
       generics: List<GenericName>.make(),
     }
@@ -366,14 +380,27 @@ impl FontDatabase {
   pub effect fn add(self: &mut Self, data: Bytes) -> usize
     ! OutOfMemoryError
     ? &mut Allocator {
-    let source = List<Bytes>.length(&self.sources)
+    return run self.addSource(Source.Owned { bytes: move data })
+  }
+
+  /// Like [`FontDatabase.add`], for a font file mapped read-only.
+  pub effect fn addMapped(self: &mut Self, file: MappedFont) -> usize
+    ! OutOfMemoryError
+    ? &mut Allocator {
+    return run self.addSource(Source.Mapped { file: move file })
+  }
+
+  effect fn addSource(self: &mut Self, data: Source) -> usize
+    ! OutOfMemoryError
+    ? &mut Allocator {
+    let source = List<Source>.length(&self.sources)
     let mut found = List<Face>.make()
-    run parseFaces(Bytes.asSlice(&data), source, &mut found)
+    run parseFaces(sourceBytes(&data), source, &mut found)
     let added = List<Face>.length(&found)
     if added == 0 {
       return 0
     }
-    run List<Bytes>.append(&mut self.sources, move data)
+    run List<Source>.append(&mut self.sources, move data)
     while List<Face>.length(&found) > 0 {
       let face = List<Face>.remove(&mut found, 0)
       run List<Face>.append(&mut self.faces, move face)
@@ -403,7 +430,7 @@ impl FontDatabase {
 
   /// The font data holding face `index`.
   pub fn data(self: &Self, index: usize) -> &[u8] {
-    return Bytes.asSlice(&List<Bytes>.asSlice(&self.sources)[self.face(index).source])
+    return sourceBytes(&List<Source>.asSlice(&self.sources)[self.face(index).source])
   }
 
   /// The faces of the family named `name` (case-insensitively), in insertion order.
@@ -476,7 +503,7 @@ impl FontDatabase {
   ) -> bool
     ! OutOfMemoryError
     ? &mut Allocator {
-    let source = List<Bytes>.length(&self.sources)
+    let source = List<Source>.length(&self.sources)
     let mut found = List<Face>.make()
     run parseFaces(Bytes.asSlice(&data), source, &mut found)
     let mut at: usize = 0
@@ -514,7 +541,7 @@ impl FontDatabase {
         }
       }
     }
-    run List<Bytes>.append(&mut self.sources, move data)
+    run List<Source>.append(&mut self.sources, Source.Owned { bytes: move data })
     run List<Face>.append(&mut self.faces, move face)
     return true
   }

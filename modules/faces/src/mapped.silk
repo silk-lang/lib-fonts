@@ -1,0 +1,95 @@
+//! Font files mapped read-only into memory, the way CoreText and fontconfig hold system fonts.
+//!
+//! The pages are the file's own: the system reads them in when a face is used and can drop them
+//! again, and they do not count toward the process's footprint as a copy on the heap does. A
+//! system font directory holds hundreds of megabytes (Apple Color Emoji alone is 180 MB), of which
+//! a page uses a few tables.
+//!
+//! Only on macOS and Linux; elsewhere [`MappedFont.open`] gives None and callers read the file.
+import silk.core.option { Option }
+import silk.core.ownership { Drop }
+import silk.mem.pointer { Pointer }
+import silk.num.i64
+import silk.num.usize
+
+static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
+  // Declared as `silk.platform.native.filesystem` and the SilkJS runtime declare them: two
+  // declarations of one C symbol must agree (SEM0192).
+  unsafe extern "C" fn open(path: ?[*]const u8, flags: i32, ...) -> i32
+  unsafe extern "C" fn close(fd: i32) -> i32
+  unsafe extern "C" fn lseek(fd: i32, offset: i64, whence: i32) -> i64
+  unsafe extern "C" fn mmap(address: ?*mut u8, length: usize, protection: i32, flags: i32, fd: i32, offset: i64) -> ?*mut u8
+  unsafe extern "C" fn munmap(address: *mut u8, length: usize) -> i32
+
+  const SEEK_END: i32 = 2
+  const PROT_READ: i32 = 1
+  const MAP_PRIVATE: i32 = 2
+
+  fn cloexec() -> i32 {
+    static if Intrinsic.targetOperatingSystem() == "darwin" {
+      return 0x1000000
+    } else {
+      return 0x80000
+    }
+  }
+}
+
+/// One whole font file, mapped read-only. Dropping it unmaps the file.
+pub struct MappedFont {
+  base: *mut u8,
+  length: usize,
+}
+
+impl Drop for MappedFont {
+  fn drop(self: &mut MappedFont) -> () {
+    let length = Intrinsic.replace(self.length, 0)
+    if length != 0 {
+      static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
+        let _ignored = unsafe munmap(self.base, length)
+      }
+    }
+  }
+}
+
+impl MappedFont {
+  /// Maps the file at `path`, which must end in a zero byte, or None when it cannot be opened,
+  /// is empty, or this platform does not map files.
+  pub fn open(path: &[u8]) -> Option<MappedFont> {
+    static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
+      if path.length == 0 || path[path.length - 1] != 0 {
+        return Option<MappedFont>.None
+      }
+      let fd = unsafe open(Pointer.fromSlice<u8>(path), cloexec())
+      if fd < 0 {
+        return Option<MappedFont>.None
+      }
+      let end = unsafe lseek(fd, 0, SEEK_END)
+      if end <= 0 {
+        let _closed = unsafe close(fd)
+        return Option<MappedFont>.None
+      }
+      let length = i64.toUsize(end)
+      let mapping = unsafe mmap(Pointer.null<u8>(), length, PROT_READ, MAP_PRIVATE, fd, 0)
+      let _closed = unsafe close(fd)
+      let address = Pointer.address<u8>(mapping)
+      // MAP_FAILED is the all-ones address.
+      if address == 0 || address == usize.MAX {
+        return Option<MappedFont>.None
+      }
+      let base = unsafe Intrinsic.pointerRequalify<?*mut u8, *mut u8>(mapping)
+      return Option<MappedFont>.Some { value: MappedFont { base: base, length: length } }
+    } else {
+      return Option<MappedFont>.None
+    }
+  }
+
+  pub fn byteLength(self: &Self) -> usize {
+    return self.length
+  }
+
+  /// The file's bytes.
+  pub fn bytes(self: &Self) -> &[u8] {
+    let first = unsafe Pointer.assumeMany<u8>(unsafe Intrinsic.pointerRequalify<*mut u8, *const u8>(self.base))
+    unsafe { return Pointer.borrowMany<MappedFont, u8>(self, first, self.length) }
+  }
+}

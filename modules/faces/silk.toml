@@ -4,7 +4,7 @@ description = "Font faces for text: a host-filled face database and CSS Fonts 4 
 version = "0.1.0"
 silk-version = "0.1.0-dev.86+c9d19330761b"
 kind = "library"
-exports = ["database", "matching", "names", "opentype"]
+exports = ["database", "mapped", "matching", "names", "opentype"]
 
 [dependencies]
 read_fonts = { path = "../parse", package = "font-parse" }
