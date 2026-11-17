@@ -11,6 +11,6 @@ read_fonts = { path = "../parse", package = "font-parse" }
 font_types = { path = "../types", package = "font-types" }
 font_outline = { path = "../outline", package = "font-outline" }
 harfrust = { path = "../shape", package = "font-shape" }
-vector = { git = "https://github.com/silk-lang/lib-graphics.git", rev = "3090034b96c928208ee4b4875b06e46987e52125", path = "modules/vector", package = "graphics-vector" }
-codec = { git = "https://github.com/silk-lang/lib-graphics.git", rev = "3090034b96c928208ee4b4875b06e46987e52125", path = "modules/codec", package = "graphics-codec" }
-atlas = { git = "https://github.com/silk-lang/lib-graphics.git", rev = "3090034b96c928208ee4b4875b06e46987e52125", path = "modules/atlas", package = "graphics-atlas" }
+vector = { git = "https://github.com/silk-lang/lib-graphics.git", rev = "2cf97d2d406b76b39d0d1a13e871c88ad190d314", path = "modules/vector", package = "graphics-vector" }
+codec = { git = "https://github.com/silk-lang/lib-graphics.git", rev = "2cf97d2d406b76b39d0d1a13e871c88ad190d314", path = "modules/codec", package = "graphics-codec" }
+atlas = { git = "https://github.com/silk-lang/lib-graphics.git", rev = "2cf97d2d406b76b39d0d1a13e871c88ad190d314", path = "modules/atlas", package = "graphics-atlas" }
