@@ -219,7 +219,7 @@ impl<'a> FeatureVariations<'a> {
     return FeatureVariations<'a>.indexForCoordsWithDelta<Error>(
       self,
       coords,
-      fn(index: u32) -> Result<f64, Error> {
+      |index: u32| -> Result<f64, Error> {
         return Result<f64, Error>.succeed(0.0)
       },
     )
@@ -265,7 +265,7 @@ impl<'a> FeatureVariations<'a> {
       let matches = ConditionSet<'a>.evaluate(
         &set,
         coords,
-        fn(index: u32) -> Result<f64, Error> {
+        |index: u32| -> Result<f64, Error> {
           return match move delta(index) {
             Result<f64, E>.Success { value } => Result<f64, Error>.succeed(value)
             Result<f64, E>.Failure { .. } => Result<f64, Error>.failResult(Error.Malformed)
@@ -317,11 +317,11 @@ pub fn storeDeltas<'a>(store: Option<ItemVariationStore<'a>>, coords: &'a [F2Dot
     }
     _ => {}
   }
-  return fn(index: u32) -> Result<f64, Error> {
+  return |index: u32| -> Result<f64, Error> {
     let mut delta = F48Dot16.zero()
     let value = selected
     if present {
-      delta = ItemVariationStore.computeDelta(&value, DeltaSetIndex.fromU32(index), coords)
+      delta = ItemVariationStore<'a>.computeDelta(&value, DeltaSetIndex.fromU32(index), coords)
         |> Option<F48Dot16>.unwrapOr(F48Dot16.zero())
     }
     return Result<f64, Error>.succeed(F48Dot16.toF64(delta))
