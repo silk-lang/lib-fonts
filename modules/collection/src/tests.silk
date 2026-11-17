@@ -70,3 +70,42 @@ static if Intrinsic.targetOperatingSystem() == "darwin" {
     run resolvesGenerics() |> Effect.provideMut<Allocator>(&mut allocator)
   }
 }
+
+static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
+  import collection { FontCollection as Fonts }
+  import system { Options as Budget, Report }
+  import system as discovery
+  import silk.collections.bytes { Bytes as Buffer }
+  import silk.core.effect { Effect as Run }
+  import silk.mem.allocator { Allocator as Memory, OutOfMemoryError as NoMemory }
+  import silk.platform.native.host_input { NativeHostInput as Host }
+  import silk.system.filesystem { FileSystem, Path, FileError }
+  import silk.system.filesystem_machine { MachineFileSystem }
+  import silk.system.host_input { HostInputError as NoHost }
+  import silk.testing.testing { Testing as Check, AssertionError as Failed }
+
+  effect fn mapsFile() -> ()
+    ! Failed<'static> | FileError | NoHost | NoMemory
+    ? &mut Memory {
+    let mut absolute = run Host.workingDirectory()
+    run Buffer.append(&mut absolute, b"/test-support/fonts/NotoSans-Regular.subset.ttf")
+    let path = run Path.fromBytes(Buffer.asSlice(&absolute))
+    let mut files = run MachineFileSystem.make()
+    let mut fonts = Fonts.make()
+    let mut report = Report.empty()
+    run discovery.file(&mut fonts, &path, &Budget { maxFiles: 8, maxBytes: 0, maxDepth: 1 }, &mut report)
+      |> Run.provideMut<FileSystem>(&mut files)
+    run Check.expect(report.files == 1 && report.bytes == 0 && report.mapped > 0, "the file is mapped")
+    run Check.expect(fonts.faceCount() == 1, "the mapped file adds its face")
+    run Check.expect(fonts.data(0).length == report.mapped, "the face reads the whole mapping")
+    run Check.expect(fonts.font(0).isSome(), "the face parses from the mapping")
+  }
+
+  // System font files are mapped, not copied: a zero heap budget still adds the face, and its
+  // bytes read through the mapping.
+  test effect fn mapsFontFiles() -> ()
+    ! Failed<'static> | FileError | NoHost | NoMemory {
+    let mut allocator = Memory.systemAllocatorProvider()
+    run mapsFile() |> Run.provideMut<Memory>(&mut allocator)
+  }
+}
