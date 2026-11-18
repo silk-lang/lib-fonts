@@ -44,6 +44,15 @@ impl SetDigest {
       && (self.masks[2] & bit(glyph, 6)) != 0
   }
 
+  pub fn mask(self: &Self, index: usize) -> u64 {
+    return self.masks[index]
+  }
+
+  pub fn same(self: &Self, other: &Self) -> bool {
+    return self.masks[0] == other.masks[0] && self.masks[1] == other.masks[1]
+      && self.masks[2] == other.masks[2]
+  }
+
   pub fn mayIntersect(self: &Self, other: &Self) -> bool {
     return (self.masks[0] & other.masks[0]) != 0 && (self.masks[1] & other.masks[1]) != 0
       && (self.masks[2] & other.masks[2]) != 0

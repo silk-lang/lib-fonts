@@ -245,16 +245,22 @@ pub effect fn apply<'a, 's, F: FontFuncs>(
 
   // Without pauses or tracing, a table none of whose lookups may apply to the glyphs does
   // nothing, so it returns before the context is set up.
+  buffer.liveValid = false
   if !tracing && (plan.positioning || paused == 0) && buffer.successful
     && usize.saturatingMultiply(buffer.maxOperations, 64) != 0 {
     let mut any = false
-    let mut i: usize = 0
-    while i < steps.length {
-      if stepMayApply(&steps[i], &buffer.digest, &buffer.*) {
-        any = true
-        break
+    if plan.stepWords != 0 {
+      // A plan with many steps finds the ones that may apply once for a digest.
+      any = liveSteps(plan, &mut buffer)
+    } else {
+      let mut i: usize = 0
+      while i < steps.length {
+        if stepMayApply(&steps[i], &buffer.digest, &buffer.*) {
+          any = true
+          break
+        }
+        i = i + 1
       }
-      i = i + 1
     }
     if !any {
       buffer.digestFresh = !plan.positioning
@@ -334,6 +340,12 @@ pub effect fn apply<'a, 's, F: FontFuncs>(
       let mayApply = stepMayApply(&steps[step], &buffer.digest, &buffer.*)
       if !mayApply && !tracing {
         step = end
+
+        // Without pauses the digest stays as it is until a lookup applies, so a plan with many
+        // steps passes at once the ones up to the next that may apply.
+        if plan.stepWords != 0 && (plan.positioning || paused == 0) {
+          step = nextLive(plan, &mut buffer, end, steps.length)
+        }
         continue
       }
       context.haveSavedInput = false
@@ -565,6 +577,82 @@ fn multipliesOrLigates(subtables: &[LookupSubtable]) -> bool {
 fn stepMayApply(step: &LookupStep, digest: &SetDigest, buffer: &Buffer) -> bool {
   return SetDigest.mayIntersect(&step.digest, digest)
     && ((buffer.flags & 64) != 0 || SetDigest.mayIntersect(&step.second, digest))
+}
+
+/// Finds the steps of an indexed plan `stepMayApply` holds for with the buffer's digest, and
+/// leaves them in the buffer's `liveBits`. Whether there is any.
+fn liveSteps(plan: &OtPlan<'_>, buffer: &mut Buffer) -> bool {
+  let words = plan.stepWords
+  let index = List<u64>.asSlice(&plan.stepIndex)
+  let digest = buffer.digest
+  let mut live: [u64; 8] = [0; 8]
+  let mut halves: usize = 2
+  if (buffer.flags & 64) != 0 {
+    halves = 1
+  }
+  let mut word: usize = 0
+  while word < words {
+    live[word] = u64.MAX
+    word = word + 1
+  }
+  let mut half: usize = 0
+  while half < halves {
+    let mut mask: usize = 0
+    while mask < 3 {
+      let mut found: [u64; 8] = [0; 8]
+      let mut bits = SetDigest.mask(&digest, mask)
+      while bits != 0 {
+        let at = u32.toUsize(u64.trailingZeros(bits))
+        bits = bits & (bits - 1)
+        let slot = ((half * 3 + mask) * 64 + at) * words
+        word = 0
+        while word < words {
+          found[word] = found[word] | index[slot + word]
+          word = word + 1
+        }
+      }
+      word = 0
+      while word < words {
+        live[word] = live[word] & found[word]
+        word = word + 1
+      }
+      mask = mask + 1
+    }
+    half = half + 1
+  }
+  let mut any = false
+  word = 0
+  while word < words {
+    if live[word] != 0 {
+      any = true
+    }
+    word = word + 1
+  }
+  buffer.liveBits = live
+  buffer.liveDigest = digest
+  buffer.liveValid = true
+  return any
+}
+
+/// The first step of an indexed plan from `from` that may apply to the buffer, or `count`.
+@inlineNever
+fn nextLive(plan: &OtPlan<'_>, buffer: &mut Buffer, from: usize, count: usize) -> usize {
+  if !buffer.liveValid || !SetDigest.same(&buffer.liveDigest, &buffer.digest) {
+    drop liveSteps(plan, &mut buffer)
+  }
+  let mut step = from
+  while step < count {
+    let rest = u64.shiftRight(buffer.liveBits[step / 64], usize.toU64(step % 64))
+    if rest != 0 {
+      let found = step + u32.toUsize(u64.trailingZeros(rest))
+      if found < count {
+        return found
+      }
+      return count
+    }
+    step = (step / 64 + 1) * 64
+  }
+  return count
 }
 
 /// The first glyph from `from` that `digest` may hold, or the buffer's length. Kept apart from
