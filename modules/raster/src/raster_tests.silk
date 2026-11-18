@@ -74,6 +74,8 @@ fn keyOf(face: &FontFace<'_>, glyph: u32, size: f32, scale: f32, subpixel: u8) -
     scale: scale,
     subpixel: subpixel,
     color: false,
+    palette: 0,
+    aliased: false,
   }
 }
 
@@ -101,16 +103,16 @@ test effect fn penPositionsRoundToTheNearestQuarterPixel() -> ()
 test effect fn glyphKeysDifferInEveryField() -> ()
   ! AssertionError<'static> {
   let seed = Hash.seed(3)
-  let base = GlyphKey { font: 1, glyph: 2, size: 13.0, scale: 1.0, subpixel: 0, color: false }
+  let base = GlyphKey { font: 1, glyph: 2, size: 13.0, scale: 1.0, subpixel: 0, color: false, palette: 0, aliased: false }
   drop List<GlyphKey>.make()
   drop Allocator.systemAllocatorProvider()
   let keys = [
-    GlyphKey { font: 2, glyph: 2, size: 13.0, scale: 1.0, subpixel: 0, color: false },
-    GlyphKey { font: 1, glyph: 3, size: 13.0, scale: 1.0, subpixel: 0, color: false },
-    GlyphKey { font: 1, glyph: 2, size: 13.5, scale: 1.0, subpixel: 0, color: false },
-    GlyphKey { font: 1, glyph: 2, size: 13.0, scale: 2.0, subpixel: 0, color: false },
-    GlyphKey { font: 1, glyph: 2, size: 13.0, scale: 1.0, subpixel: 1, color: false },
-    GlyphKey { font: 1, glyph: 2, size: 13.0, scale: 1.0, subpixel: 0, color: true },
+    GlyphKey { font: 2, glyph: 2, size: 13.0, scale: 1.0, subpixel: 0, color: false, palette: 0, aliased: false },
+    GlyphKey { font: 1, glyph: 3, size: 13.0, scale: 1.0, subpixel: 0, color: false, palette: 0, aliased: false },
+    GlyphKey { font: 1, glyph: 2, size: 13.5, scale: 1.0, subpixel: 0, color: false, palette: 0, aliased: false },
+    GlyphKey { font: 1, glyph: 2, size: 13.0, scale: 2.0, subpixel: 0, color: false, palette: 0, aliased: false },
+    GlyphKey { font: 1, glyph: 2, size: 13.0, scale: 1.0, subpixel: 1, color: false, palette: 0, aliased: false },
+    GlyphKey { font: 1, glyph: 2, size: 13.0, scale: 1.0, subpixel: 0, color: true, palette: 0, aliased: false },
   ]
   let mut i: usize = 0
   while i < 6 {
@@ -118,7 +120,7 @@ test effect fn glyphKeysDifferInEveryField() -> ()
     run Testing.expect(HashKey.hash(&base, &seed) != HashKey.hash(&keys[i], &seed), "hashes differ")
     i = i + 1
   }
-  let same = GlyphKey { font: 1, glyph: 2, size: 13.0, scale: 1.0, subpixel: 0, color: false }
+  let same = GlyphKey { font: 1, glyph: 2, size: 13.0, scale: 1.0, subpixel: 0, color: false, palette: 0, aliased: false }
   run Testing.expect(
     HashKey.equals(&base, &same) && HashKey.hash(&base, &seed) == HashKey.hash(&same, &seed),
     "equal keys hash alike",
