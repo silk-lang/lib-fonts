@@ -2,11 +2,11 @@
 name = "font-outline"
 description = "Glyph outlines (glyf, gvar, CFF, CFF2) drawn into any path sink or a vector path"
 version = "0.1.0"
-silk-version = "0.1.0-dev.85+45b9e51824ca"
+silk-version = "0.1.0-dev.87+37fa5f8857de"
 kind = "library"
 exports = ["outline", "vector_path"]
 
 [dependencies]
 read_fonts = { path = "../parse", package = "font-parse" }
 font_types = { path = "../types", package = "font-types" }
-vector = { git = "https://github.com/silk-lang/lib-graphics.git", rev = "7c1ecaa699dd71c015369e9c20624034ce5f97e1", path = "modules/vector", package = "graphics-vector" }
+vector = { git = "https://github.com/silk-lang/lib-graphics.git", rev = "7b5b880008afdccec630e8afe3c234a9b670ae79", path = "modules/vector", package = "graphics-vector" }

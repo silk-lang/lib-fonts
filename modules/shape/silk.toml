@@ -2,7 +2,7 @@
 name = "font-shape"
 description = "Text shaping, from a string and a font to positioned glyphs; a port of harfrust"
 version = "0.1.0"
-silk-version = "0.1.0-dev.85+45b9e51824ca"
+silk-version = "0.1.0-dev.87+37fa5f8857de"
 kind = "library"
 exports = ["lib", "unicode", "script", "generated_scripts"]
 
