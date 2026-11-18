@@ -4,7 +4,10 @@
 //! COLR layers are filled by `vector` like outline glyphs, so they get the same subpixel
 //! positioning. Bitmaps are decoded once per key and box-filtered from their strike to the
 //! requested size, with the pen's subpixel offset applied while resampling. COLR version 1 paint
-//! graphs are not drawn yet; such a glyph falls back to a bitmap or its outline.
+//! graphs are drawn by `colr`.
+//!
+//! Colors come from the CPAL palette a [`PaletteChoice`] names, with its overrides (CSS
+//! `font-palette` and `@font-palette-values`).
 import face { FontFace }
 import rasterize { GlyphImage, GlyphRasterizer, Outcome }
 import read_fonts.lib {
@@ -17,7 +20,10 @@ import read_fonts.lib {
   ByteRange
 }
 import read_fonts.tables.colr { Colr, ColorLayer }
-import read_fonts.tables.cpal { Cpal, ColorRecord }
+import read_fonts.tables.cpal { Cpal, ColorRecord, PaletteType }
+import read_fonts.model.metrics.color { ColorSources }
+import read_fonts.model.optional { Maybe }
+import colr { PaletteColors, colrV1 }
 import read_fonts.tables.sbix { Sbix, Strike, GlyphData }
 import read_fonts.tables.cbdt { Cbdt }
 import read_fonts.tables.cblc { Cblc }
@@ -54,9 +60,80 @@ import silk.num.u16
 import silk.num.u32
 import silk.num.usize
 
+/// `PaletteChoice.base`: the first palette marked usable on a light background, else palette 0.
+pub const PALETTE_LIGHT: u16 = 65535
+
+/// `PaletteChoice.base`: the first palette marked usable on a dark background, else palette 0.
+pub const PALETTE_DARK: u16 = 65534
+
+/// One replaced palette entry (`override-colors`), as straight RGBA.
+pub struct PaletteOverride {
+  pub index: u16,
+  pub color: Rgba8,
+}
+
+impl Copy for PaletteOverride {}
+
+/// Which CPAL palette color glyphs draw with, and the entries replaced in it (CSS
+/// `font-palette`). `base` is a palette index, [`PALETTE_LIGHT`] or [`PALETTE_DARK`]; an index
+/// the font does not have means palette 0.
+pub struct PaletteChoice {
+  pub base: u16,
+  pub overrides: List<PaletteOverride>,
+}
+
+impl PaletteChoice {
+  /// The font's default palette, unchanged (`font-palette: normal`).
+  pub fn normal() -> PaletteChoice {
+    return PaletteChoice { base: 0, overrides: List<PaletteOverride>.make() }
+  }
+
+  pub fn same(self: &Self, other: &PaletteChoice) -> bool {
+    if self.base != other.base || self.overrides.length() != other.overrides.length() {
+      return false
+    }
+    let mut i: usize = 0
+    while i < self.overrides.length() {
+      let a = self.overrides.asSlice()[i]
+      let b = other.overrides.asSlice()[i]
+      if a.index != b.index || a.color.r != b.color.r || a.color.g != b.color.g || a.color.b != b.color.b
+        || a.color.a != b.color.a {
+        return false
+      }
+      i = i + 1
+    }
+    return true
+  }
+}
+
+struct Colors<'t, 'a> {
+  tables: &'t ColorTables<'a>,
+  palette: u16,
+  choice: &'t PaletteChoice,
+  foreground: Rgba8,
+}
+
+impl<'t, 'a> PaletteColors for Colors<'t, 'a> {
+  fn color(self: &Self, index: u16) -> Rgba8 {
+    if index == 65535 {
+      return self.foreground
+    }
+    let overrides = self.choice.overrides.asSlice()
+    let mut i = overrides.length
+    while i > 0 {
+      i = i - 1
+      if overrides[i].index == index {
+        return overrides[i].color
+      }
+    }
+    return self.tables.entry(self.palette, index) |> Option<Rgba8>.unwrapOr(self.foreground)
+  }
+}
+
 /// The color tables of one font, read once.
 pub struct ColorTables<'a> {
   colr: Option<Colr<'a>>,
+  sources: Maybe<ColorSources<'a>>,
   cpal: Option<Cpal<'a>>,
   sbix: Option<Sbix<'a>>,
   cblc: Option<Cblc<'a>>,
@@ -76,6 +153,7 @@ impl<'a> ColorTables<'a> {
   pub fn read<P: TableProvider<'a>>(provider: &P) -> ColorTables<'a> {
     return ColorTables<'a> {
       colr: some(TableProvider.colr(provider)),
+      sources: ColorSources.read(provider),
       cpal: some(TableProvider.cpal(provider)),
       sbix: some(TableProvider.sbix(provider)),
       cblc: some(TableProvider.cblc(provider)),
@@ -91,6 +169,44 @@ impl<'a> ColorTables<'a> {
 
   /// Palette 0 entry `index` as straight RGBA, or `None` when the palette has no such entry.
   pub fn paletteColor(self: &Self, index: u16) -> Option<Rgba8> {
+    return self.entry(0, index)
+  }
+
+  /// The number of CPAL palettes, 0 without a CPAL table.
+  pub fn paletteCount(self: &Self) -> u16 {
+    return match self.cpal {
+      Option<Cpal<'a>>.Some { value } => Cpal.numPalettes(&value)
+      _ => 0
+    }
+  }
+
+  /// The palette `base` names (see [`PaletteChoice`]).
+  pub fn paletteFor(self: &Self, base: u16) -> u16 {
+    let count = self.paletteCount()
+    if base != PALETTE_LIGHT && base != PALETTE_DARK {
+      return if base < count { base } else { 0 }
+    }
+    let wanted = if base == PALETTE_LIGHT { PaletteType.usableWithLightBackground() } else { PaletteType.usableWithDarkBackground() }
+    if let Option<Cpal<'a>>.Some { value: cpal } = self.cpal {
+      if let Option<Result<ScalarArray<'a, PaletteType>, ReadError>>.Some {
+        value: Result<ScalarArray<'a, PaletteType>, ReadError>.Success { value: types }
+      } = Cpal.paletteTypesArray(&cpal) {
+        let mut i: u16 = 0
+        while i < count {
+          if let Option<PaletteType>.Some { value: flags } = ScalarArray<'a, PaletteType>.get(&types, u16.toUsize(i)) {
+            if flags.contains(wanted) {
+              return i
+            }
+          }
+          i = i + 1
+        }
+      }
+    }
+    return 0
+  }
+
+  /// Entry `index` of palette `palette` as straight RGBA, or `None` when there is no such entry.
+  pub fn entry(self: &Self, palette: u16, index: u16) -> Option<Rgba8> {
     let cpal = match self.cpal {
       Option<Cpal<'a>>.Some { value } => value
       _ => {
@@ -101,7 +217,7 @@ impl<'a> ColorTables<'a> {
       return Option<Rgba8>.None
     }
     let starts = Cpal.colorRecordIndices(&cpal)
-    let first = match ScalarArray<'a, u16>.get(&starts, 0) {
+    let first = match ScalarArray<'a, u16>.get(&starts, u16.toUsize(palette)) {
       Option<u16>.Some { value } => value
       _ => {
         return Option<Rgba8>.None
@@ -327,12 +443,45 @@ pub effect fn colorGlyph<'a>(
 ) -> Outcome
   ! OutOfMemoryError
   ? &mut Allocator {
+  let normal = PaletteChoice.normal()
+  return run colorGlyphWith(&mut self, face, glyph, pixelsPerEm, subpixelOffset, foreground, &normal, &mut out)
+}
+
+/// [`colorGlyph`] with the palette `palette` chooses. A COLR version 1 paint graph is drawn
+/// first, then version 0 layers, then a bitmap.
+pub effect fn colorGlyphWith<'a>(
+  self: &mut GlyphRasterizer,
+  face: &FontFace<'a>,
+  glyph: u32,
+  pixelsPerEm: f64,
+  subpixelOffset: f64,
+  foreground: Rgba8,
+  palette: &PaletteChoice,
+  out: &mut GlyphImage,
+) -> Outcome
+  ! OutOfMemoryError
+  ? &mut Allocator {
   out.clear()
   out.bytesPerPixel = 4
   if !(pixelsPerEm > 0.0) {
     return Outcome.Missing
   }
   let tables = face.colorTables()
+  let colors = Colors { tables: &tables, palette: tables.paletteFor(palette.base), choice: palette, foreground: foreground }
+  if let Maybe<ColorSources<'a>>.Some { value: sources } = tables.sources {
+    if sources.hasPaint(GlyphId.new(glyph)) {
+      let drawn = run colrV1(&mut self, face, &sources, glyph, pixelsPerEm, subpixelOffset, &colors, &mut out)
+      let ok = match &drawn {
+        Outcome.Drawn => true
+        Outcome.Missing => false
+      }
+      if ok {
+        return Outcome.Drawn
+      }
+      out.clear()
+      out.bytesPerPixel = 4
+    }
+  }
   if let Option<Colr<'a>>.Some { value: colr } = tables.colr {
     if let Option<ByteRange>.Some { value: range } = Colr.v0BaseGlyph(&colr, GlyphId.new(glyph)) {
       return run colrLayers(
@@ -343,7 +492,7 @@ pub effect fn colorGlyph<'a>(
         range.end,
         pixelsPerEm,
         subpixelOffset,
-        foreground,
+        &colors,
         &mut out,
       )
     }
@@ -373,7 +522,7 @@ effect fn colrLayers(
   end: usize,
   pixelsPerEm: f64,
   subpixelOffset: f64,
-  foreground: Rgba8,
+  colors: &Colors<'_, '_>,
   out: &mut GlyphImage,
 ) -> Outcome
   ! OutOfMemoryError
@@ -421,15 +570,10 @@ effect fn colrLayers(
   let h = f64.toU32(height)
   let mut pixmap = run Pixmap.make(w, h)
   let transform = Affine2<f64>.new(1.0, 0.0, 0.0, 1.0, -left, -top)
-  let tables = face.colorTables()
   layer = start
   while layer < end {
     if let Option<ColorLayer>.Some { value } = Colr.v0Layer(colr, layer) {
-      let color = if value.paletteIndex == 65535 {
-        foreground
-      } else {
-        tables.paletteColor(value.paletteIndex) |> Option<Rgba8>.unwrapOr(foreground)
-      }
+      let color = colors.color(value.paletteIndex)
       if run self.outlinePath(
         face,
         GlyphId16.toU32(value.glyphId),

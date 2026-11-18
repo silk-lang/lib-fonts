@@ -2,7 +2,8 @@
 import face { FontFace }
 import key { GlyphKey }
 import cache { GlyphCache, RasterGlyph }
-import fixtures { Textures, readFile, COLR_V0, SBIX, CBDT }
+import fixtures { Textures, readFile, COLR_V0, COLR_V1, SBIX, CBDT }
+import color { PaletteChoice, PaletteOverride, PALETTE_DARK, PALETTE_LIGHT }
 import raster_tests { must, present }
 import atlas.atlas { Atlas, AtlasError, AtlasOptions, Kind }
 import vector.pixmap { Rgba8 }
@@ -23,6 +24,8 @@ fn colorKey(face: &FontFace<'_>, glyph: u32, size: f32, subpixel: u8, color: boo
     scale: 1.0,
     subpixel: subpixel,
     color: color,
+    palette: 0,
+    aliased: false,
   }
 }
 
@@ -103,6 +106,108 @@ test effect fn colrLayersArePaintedWithPaletteColors() -> ()
   ! AssertionError<'static> | AtlasError | OutOfMemoryError | FileError | HostInputError {
   let mut allocator = Allocator.systemAllocatorProvider()
   run colrLayers() |> Effect.provideMut<Allocator>(&mut allocator)
+}
+
+fn paintedKey(face: &FontFace<'_>, glyph: u32, palette: u32) -> GlyphKey {
+  let mut key = colorKey(face, glyph, 100.0, 0, true)
+  key.palette = palette
+  return key
+}
+
+effect fn colrPaintGraphs() -> ()
+  ! AssertionError<'static> | AtlasError | OutOfMemoryError | FileError | HostInputError
+  ? &mut Allocator {
+  let bytes = run readFile(COLR_V1)
+  let face = run must(run FontFace.fromBytes(1, bytes.asSlice(), 0, &[]))
+  let mut atlas = Atlas.make(AtlasOptions.default())
+  let mut cache = GlyphCache.make()
+  let mut textures = Textures.make()
+
+  // 100 px per em: each glyph is a 100 px square from (0, -100) to (100, 0).
+  let solid = run present(run cache.glyph(&mut atlas, &face, paintedKey(&face, 3, 0)))
+  let linear = run present(run cache.glyph(&mut atlas, &face, paintedKey(&face, 4, 0)))
+  let radial = run present(run cache.glyph(&mut atlas, &face, paintedKey(&face, 5, 0)))
+  let sweep = run present(run cache.glyph(&mut atlas, &face, paintedKey(&face, 6, 0)))
+  let composite = run present(run cache.glyph(&mut atlas, &face, paintedKey(&face, 7, 0)))
+  let moved = run present(run cache.glyph(&mut atlas, &face, paintedKey(&face, 8, 0)))
+  run textures.sync(&atlas, &mut cache)
+  run Testing.expect(&solid.kind == &Kind.Polychrome, "a COLR version 1 glyph is polychrome")
+  run Testing.expect(solid.left == 0 && solid.top == -100 && solid.width() == 100 && solid.height() == 100, "clipped to its glyph")
+  run Testing.expect(is(at(&textures, &solid, 50, -50), 255, 0, 0, 255), "solid palette entry 0")
+  let l = at(&textures, &linear, 2, -50)
+  let r = at(&textures, &linear, 97, -50)
+  let m = at(&textures, &linear, 50, -50)
+  run Testing.expect(l.r > 245 && l.b < 10 && r.b > 245 && r.r < 10, "the linear gradient runs red to blue along x")
+  run Testing.expect(m.r > 115 && m.r < 140 && m.b > 115 && m.b < 140, "and is half way in the middle")
+  let center = at(&textures, &radial, 50, -50)
+  let edge = at(&textures, &radial, 50, -97)
+  let corner = at(&textures, &radial, 2, -2)
+  run Testing.expect(center.r > 245 && edge.b > 230 && corner.b > 250, "the radial gradient is red inside, padded blue outside")
+  let start = at(&textures, &sweep, 95, -51)
+  let end = at(&textures, &sweep, 5, -51)
+  let below = at(&textures, &sweep, 50, -10)
+  let up = at(&textures, &sweep, 50, -95)
+  run Testing.expect(start.r > 245 && end.b > 245 && below.b > 250, "the sweep turns counter-clockwise from +x, padded past its end")
+  run Testing.expect(up.r > 115 && up.r < 140, "and is half way straight up")
+  run Testing.expect(is(at(&textures, &composite, 25, -50), 0, 0, 255, 255), "src-in keeps the source over the backdrop")
+  run Testing.expect(is(at(&textures, &composite, 75, -50), 0, 0, 0, 0), "and drops the backdrop elsewhere")
+  run Testing.expect(moved.left == 50 && is(at(&textures, &moved, 75, -50), 0, 255, 0, 255), "a translate moves the paint")
+
+  // Palettes: the second palette by index or as the dark one, and an overridden entry.
+  let mut dark = PaletteChoice.normal()
+  dark.base = PALETTE_DARK
+  let darkHandle = run cache.palette(move dark)
+  let mut second = PaletteChoice.normal()
+  second.base = 1
+  let secondHandle = run cache.palette(move second)
+  let mut light = PaletteChoice.normal()
+  light.base = PALETTE_LIGHT
+  let lightHandle = run cache.palette(move light)
+  let mut again = PaletteChoice.normal()
+  again.base = PALETTE_DARK
+  let againHandle = run cache.palette(move again)
+  run Testing.expect(againHandle == darkHandle && darkHandle != 0 && secondHandle != darkHandle, "a choice has one handle")
+  let mut magenta = PaletteChoice.normal()
+  run magenta.overrides.append(PaletteOverride { index: 0, color: Rgba8.make(255, 0, 255, 255) })
+  let magentaHandle = run cache.palette(move magenta)
+  let yellow = run present(run cache.glyph(&mut atlas, &face, paintedKey(&face, 3, darkHandle)))
+  let indexed = run present(run cache.glyph(&mut atlas, &face, paintedKey(&face, 3, secondHandle)))
+  let lit = run present(run cache.glyph(&mut atlas, &face, paintedKey(&face, 3, lightHandle)))
+  let overridden = run present(run cache.glyph(&mut atlas, &face, paintedKey(&face, 3, magentaHandle)))
+  run textures.sync(&atlas, &mut cache)
+  run Testing.expect(is(at(&textures, &yellow, 50, -50), 255, 255, 0, 255), "the dark palette")
+  run Testing.expect(is(at(&textures, &indexed, 50, -50), 255, 255, 0, 255), "palette 1 by index")
+  run Testing.expect(is(at(&textures, &lit, 50, -50), 255, 0, 0, 255), "the light palette")
+  run Testing.expect(is(at(&textures, &overridden, 50, -50), 255, 0, 255, 255), "an overridden entry")
+
+  // COLR version 0 layers take the palette too.
+  let v0 = run readFile(COLR_V0)
+  let layered = run must(run FontFace.fromBytes(2, v0.asSlice(), 0, &[]))
+  let mut blue = PaletteChoice.normal()
+  run blue.overrides.append(PaletteOverride { index: 0, color: Rgba8.make(0, 0, 255, 255) })
+  let blueHandle = run cache.palette(move blue)
+  let mut key = colorKey(&layered, 1, 100.0, 0, true)
+  key.palette = blueHandle
+  let painted = run present(run cache.glyph(&mut atlas, &layered, key))
+  run textures.sync(&atlas, &mut cache)
+  run Testing.expect(is(at(&textures, &painted, 20, -70), 0, 0, 255, 255), "a version 0 layer takes the override")
+
+  // An aliased outline has no partly covered pixels: the half-pixel edge is in or out.
+  let mut smooth = colorKey(&face, 1, 100.0, 2, false)
+  let soft = run present(run cache.glyph(&mut atlas, &face, smooth))
+  smooth.aliased = true
+  let hard = run present(run cache.glyph(&mut atlas, &face, smooth))
+  run textures.sync(&atlas, &mut cache)
+  let softEdge = textures.alpha(&soft, 0, 50)
+  let hardEdge = textures.alpha(&hard, 0, 50)
+  run Testing.expect(softEdge > 100 && softEdge < 155, "the antialiased edge is half covered")
+  run Testing.expect(hardEdge == 255 || hardEdge == 0, "the aliased edge is not")
+}
+
+test effect fn colrPaintGraphsDrawWithPalettes() -> ()
+  ! AssertionError<'static> | AtlasError | OutOfMemoryError | FileError | HostInputError {
+  let mut allocator = Allocator.systemAllocatorProvider()
+  run colrPaintGraphs() |> Effect.provideMut<Allocator>(&mut allocator)
 }
 
 effect fn bitmapGlyph(path: string) -> ()

@@ -21,6 +21,9 @@ pub const SUBPIXEL_VARIANTS: u8 = 4
 /// [`face.FontFace`]. `size` is the font size in logical pixels per em and `scale` the window's
 /// scale factor, so the glyph is drawn at `size * scale` device pixels per em. `color` asks for
 /// the color rendering (COLR, CBDT, sbix) instead of the outline when the font has one.
+/// `palette` names the CPAL palette color glyphs use, a handle from [`cache.GlyphCache.palette`]
+/// (0 is the font's default palette). `aliased` draws the outline without antialiasing (CSS
+/// `font-smooth: never`).
 pub struct GlyphKey {
   pub font: u32,
   pub glyph: u32,
@@ -28,6 +31,8 @@ pub struct GlyphKey {
   pub scale: f32,
   pub subpixel: u8,
   pub color: bool,
+  pub palette: u32,
+  pub aliased: bool,
 }
 
 impl Copy for GlyphKey {}
@@ -60,6 +65,8 @@ impl Equal for GlyphKey {
       && bits(left.scale) == bits(right.scale)
       && left.subpixel == right.subpixel
       && left.color == right.color
+      && left.palette == right.palette
+      && left.aliased == right.aliased
   }
 }
 
@@ -75,7 +82,10 @@ impl HashKey for GlyphKey {
       hashed,
       u32.toU64(bits(value.size)) * 4294967296 + u32.toU64(bits(value.scale)),
     )
-    let mut flags = u8.toU64(value.subpixel) * 2
+    let mut flags = u32.toU64(value.palette) * 64 + u8.toU64(value.subpixel) * 4
+    if value.aliased {
+      flags = flags + 2
+    }
     if value.color {
       flags = flags + 1
     }

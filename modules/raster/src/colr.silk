@@ -1,0 +1,634 @@
+//! COLR version 1 glyphs into premultiplied RGBA: the paint graph that
+//! `read_fonts.model.metrics.color` flattens into commands, drawn with clip masks, isolated
+//! layers and solid, linear, radial and sweep brushes (OpenType COLR, "Paint graph").
+//!
+//! Commands are in font units with y up. Glyph outlines are drawn at one pixel per unit with y
+//! down, so the paint graph's transforms are conjugated by that flip, and the device transform
+//! scales by pixels per unit and moves the image to its own pixels.
+import face { FontFace }
+import rasterize { GlyphImage, GlyphRasterizer, Outcome }
+import read_fonts.model.metrics.color { ColorSources, ColorPaint, ColorCommand, ColorBrush, ColorStopValue }
+import read_fonts.tables.colr { CompositeMode, Extend }
+import font_types.lib { GlyphId }
+import vector.pixmap { Pixmap, Rgba8, div255, over, pack }
+import vector.strips { Coverage, minU32 }
+import vector.paint { Gradient, Stop, Shader, SPREAD_PAD, SPREAD_REFLECT, SPREAD_REPEAT, RAMP_SIZE }
+import vector.layer { Mask, composite }
+import vector.layer as Layers
+import vector.path { Path }
+import vector.geometry_error { GeometryError }
+import silk.geometry.affine { Affine2 }
+import silk.geometry.rect { Rect }
+import silk.collections.list { List }
+import silk.core.effect { Effect }
+import silk.core.option { Option }
+import silk.core.ownership { Copy }
+import silk.core.result { Result }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.num.f32
+import silk.num.f64
+import silk.num.u8
+import silk.num.u16
+import silk.num.u32
+import silk.num.usize
+
+/// Resolves palette entries for one glyph: CPAL entry `index` with overrides, 0xFFFF the text
+/// color.
+pub interface PaletteColors {
+  fn color(self: &Self, index: u16) -> Rgba8
+}
+
+struct Bounds {
+  x0: f64,
+  y0: f64,
+  x1: f64,
+  y1: f64,
+  /// False for a box that clips nothing yet (no clip pushed).
+  bounded: bool,
+}
+
+impl Copy for Bounds {}
+
+impl Bounds {
+  fn empty() -> Bounds {
+    return Bounds { x0: f64.INFINITY, y0: f64.INFINITY, x1: -f64.INFINITY, y1: -f64.INFINITY, bounded: true }
+  }
+
+  fn unbounded() -> Bounds {
+    return Bounds { x0: -f64.INFINITY, y0: -f64.INFINITY, x1: f64.INFINITY, y1: f64.INFINITY, bounded: false }
+  }
+
+  fn add(self: &mut Self, x: f64, y: f64) -> () {
+    self.x0 = f64.min(self.x0, x)
+    self.y0 = f64.min(self.y0, y)
+    self.x1 = f64.max(self.x1, x)
+    self.y1 = f64.max(self.y1, y)
+  }
+
+  fn intersect(self: Bounds, other: Bounds) -> Bounds {
+    if !self.bounded {
+      return other
+    }
+    if !other.bounded {
+      return self
+    }
+    return Bounds {
+      x0: f64.max(self.x0, other.x0),
+      y0: f64.max(self.y0, other.y0),
+      x1: f64.min(self.x1, other.x1),
+      y1: f64.min(self.y1, other.y1),
+      bounded: true,
+    }
+  }
+
+  fn unionWith(self: Bounds, other: Bounds) -> Bounds {
+    if !(other.x0 < other.x1 && other.y0 < other.y1) {
+      return self
+    }
+    return Bounds {
+      x0: f64.min(self.x0, other.x0),
+      y0: f64.min(self.y0, other.y0),
+      x1: f64.max(self.x1, other.x1),
+      y1: f64.max(self.y1, other.y1),
+      bounded: true,
+    }
+  }
+}
+
+/// The flip between font units (y up) and outline units (y down) applied on both sides of `t`.
+fn flipped(t: Affine2<f32>) -> Affine2<f64> {
+  return Affine2<f64>.new(
+    f32.toF64(t.xx),
+    -f32.toF64(t.yx),
+    -f32.toF64(t.xy),
+    f32.toF64(t.yy),
+    f32.toF64(t.dx),
+    -f32.toF64(t.dy),
+  )
+}
+
+fn mapX(t: &Affine2<f64>, x: f64, y: f64) -> f64 {
+  return t.xx * x + t.xy * y + t.dx
+}
+
+fn mapY(t: &Affine2<f64>, x: f64, y: f64) -> f64 {
+  return t.yx * x + t.yy * y + t.dy
+}
+
+/// The device box of `rect` (font units, y up) under `t` (outline units to device).
+fn boxBounds(t: &Affine2<f64>, rect: Rect<f32>) -> Bounds {
+  let mut b = Bounds.empty()
+  let xs = [f32.toF64(rect.xMin), f32.toF64(rect.xMax)]
+  let ys = [-f32.toF64(rect.yMin), -f32.toF64(rect.yMax)]
+  let mut i: usize = 0
+  while i < 4 {
+    let x = xs[i % 2]
+    let y = ys[i / 2]
+    b.add(mapX(t, x, y), mapY(t, x, y))
+    i = i + 1
+  }
+  return b
+}
+
+fn spreadOf(extend: Extend) -> u8 {
+  return match extend {
+    Extend.Repeat => SPREAD_REPEAT
+    Extend.Reflect => SPREAD_REFLECT
+    _ => SPREAD_PAD
+  }
+}
+
+fn straight(color: Rgba8, alpha: f32) -> Rgba8 {
+  let a = f64.max(0.0, f64.min(1.0, f32.toF64(alpha))) * u8.toF64(color.a)
+  return Rgba8.make(color.r, color.g, color.b, f64.toU8(f64.round(a)))
+}
+
+/// A sweep (conic) gradient around `(cx, cy)` in font units, counter-clockwise from `start`
+/// degrees to `end`, sampled from a ramp tabulated by `vector`.
+struct Sweep {
+  ramp: Gradient,
+  inverse: Affine2<f64>,
+  cx: f64,
+  cy: f64,
+  start: f64,
+  span: f64,
+  spread: u8,
+}
+
+impl Shader for Sweep {
+  fn shade(self: &Self, x: u32, y: u32) -> Rgba8 {
+    let px = u32.toF64(x) + 0.5
+    let py = u32.toF64(y) + 0.5
+    let fx = mapX(&self.inverse, px, py)
+    let fy = -mapY(&self.inverse, px, py)
+    let mut angle = f64.atan2(fy - self.cy, fx - self.cx) * 57.29577951308232
+    if angle < 0.0 {
+      angle = angle + 360.0
+    }
+    let mut t = if self.span == 0.0 {
+      if angle < self.start { 0.0 } else { 1.0 }
+    } else {
+      (angle - self.start) / self.span
+    }
+    if self.spread == SPREAD_REPEAT {
+      t = t - f64.floor(t)
+    } else if self.spread == SPREAD_REFLECT {
+      let period = t - 2.0 * f64.floor(t * 0.5)
+      t = if period > 1.0 { 2.0 - period } else { period }
+    }
+    t = f64.max(0.0, f64.min(1.0, t))
+    let ramp = self.ramp.rampBytes()
+    if ramp.length < RAMP_SIZE * 4 {
+      return Rgba8.make(0, 0, 0, 0)
+    }
+    let i = f64.toUsize(f64.round(t * usize.toF64(RAMP_SIZE - 1))) * 4
+    return Rgba8.make(ramp[i], ramp[i + 1], ramp[i + 2], ramp[i + 3])
+  }
+
+  fn shadeSpan(self: &Self, x: u32, y: u32, count: usize, out: &mut [u32]) -> () {
+    let mut i: usize = 0
+    while i < count {
+      out[i] = pack(self.shade(x + usize.toU32(i), y))
+      i = i + 1
+    }
+  }
+
+  fn isUniform(self: &Self) -> bool {
+    return false
+  }
+}
+
+struct Painter<'r, 'f, 'p, P> {
+  rasterizer: &'r mut GlyphRasterizer,
+  face: &'f FontFace<'f>,
+  colors: &'p P,
+  /// Outline units to device pixels of the image.
+  device: Affine2<f64>,
+  width: u32,
+  height: u32,
+  transforms: List<Affine2<f64>>,
+  masks: List<Mask>,
+  layers: List<Pixmap>,
+  modes: List<CompositeMode>,
+}
+
+/// Draws `glyph`'s COLR version 1 paint into `out` as premultiplied RGBA, or returns `Missing`
+/// when it has none. Palette entries come from `colors`.
+pub effect fn colrV1<P: PaletteColors>(
+  self: &mut GlyphRasterizer,
+  face: &FontFace<'_>,
+  sources: &ColorSources<'_>,
+  glyph: u32,
+  pixelsPerEm: f64,
+  subpixelOffset: f64,
+  colors: &P,
+  out: &mut GlyphImage,
+) -> Outcome
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let found = run sources.paint(GlyphId.new(glyph), face.variationCoords())
+  let paint = match move found {
+    Option<ColorPaint>.Some { value } => move value
+    _ => {
+      return Outcome.Missing
+    }
+  }
+  let k = pixelsPerEm / u16.toF64(face.upem())
+  let unit = Affine2<f64>.new(k, 0.0, 0.0, k, subpixelOffset, 0.0)
+  let bounds = run measure(&mut self, face, &paint, unit)
+  if !bounds.bounded || !(bounds.x0 < bounds.x1 && bounds.y0 < bounds.y1) || !f64.isFinite(bounds.x0)
+    || !f64.isFinite(bounds.y0) || !f64.isFinite(bounds.x1) || !f64.isFinite(bounds.y1) {
+    return Outcome.Drawn
+  }
+  let left = f64.floor(bounds.x0)
+  let top = f64.floor(bounds.y0)
+  let width = f64.ceil(bounds.x1) - left
+  let height = f64.ceil(bounds.y1) - top
+  if width > 4096.0 || height > 4096.0 {
+    return Outcome.Missing
+  }
+  let w = f64.toU32(width)
+  let h = f64.toU32(height)
+  let device = Affine2<f64>.new(1.0, 0.0, 0.0, 1.0, -left, -top) * unit
+  let mut painter = Painter<'_, '_, '_, P> {
+    rasterizer: &mut self,
+    face: face,
+    colors: colors,
+    device: device,
+    width: w,
+    height: h,
+    transforms: List<Affine2<f64>>.make(),
+    masks: List<Mask>.make(),
+    layers: List<Pixmap>.make(),
+    modes: List<CompositeMode>.make(),
+  }
+  run painter.transforms.append(Affine2<f64>.identity())
+  run painter.masks.append(run Mask.make(w, h, 255))
+  run painter.layers.append(run Pixmap.make(w, h))
+  let drawn = run Effect.result(painter.draw(&paint))
+  if let Result<(), OutOfMemoryError | GeometryError>.Failure { error } = move drawn {
+    match move error {
+      OutOfMemoryError problem => {
+        fail move problem
+      }
+      GeometryError _ => {
+        return Outcome.Missing
+      }
+    }
+  }
+  while painter.layers.length() > 1 {
+    run painter.popLayer()
+  }
+  let image = painter.layers.asSlice()[0].data()
+  out.clear()
+  out.bytesPerPixel = 4
+  out.left = f64.toI32(left)
+  out.top = f64.toI32(top)
+  out.width = w
+  out.height = h
+  run out.pixels.appendSlice(image)
+  return Outcome.Drawn
+}
+
+/// The device box the paint draws in: the union of every fill's clip.
+effect fn measure(
+  rasterizer: &mut GlyphRasterizer,
+  face: &FontFace<'_>,
+  paint: &ColorPaint,
+  unit: Affine2<f64>,
+) -> Bounds
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let mut transforms = List<Affine2<f64>>.make()
+  run transforms.append(unit)
+  let mut clips = List<Bounds>.make()
+  run clips.append(Bounds.unbounded())
+  let mut result = Bounds.empty()
+  let mut i: usize = 0
+  while i < paint.commands.length() {
+    let current = transforms.get(transforms.length() - 1)
+    match paint.commands.get(i) {
+      ColorCommand.PushTransform { transform } => run transforms.append(current * flipped(transform))
+      ColorCommand.PopTransform => {
+        if transforms.length() > 1 { drop transforms.pop() }
+      }
+      ColorCommand.PushClipGlyph { glyph } => {
+        let mut b = Bounds.empty()
+        if run rasterizer.outlinePath(face, GlyphId.toU32(glyph), u16.toF64(face.upem()), 0.0, 0.0) {
+          let points = rasterizer.lastPath().pointList()
+          let mut p: usize = 0
+          while p < points.length {
+            b.add(mapX(&current, points[p].x, points[p].y), mapY(&current, points[p].x, points[p].y))
+            p = p + 1
+          }
+        }
+        let next = clips.get(clips.length() - 1).intersect(b)
+        run clips.append(next)
+      }
+      ColorCommand.PushClipBox { box } => {
+        let next = clips.get(clips.length() - 1).intersect(boxBounds(&current, box))
+        run clips.append(next)
+      }
+      ColorCommand.PopClip => {
+        if clips.length() > 1 { drop clips.pop() }
+      }
+      ColorCommand.Fill { .. } => {
+        result = result.unionWith(clips.get(clips.length() - 1))
+      }
+      _ => {}
+    }
+    i = i + 1
+  }
+  return result
+}
+
+impl<'r, 'f, 'p, P: PaletteColors> Painter<'r, 'f, 'p, P> {
+  effect fn draw(self: &mut Self, paint: &ColorPaint) -> ()
+    ! OutOfMemoryError | GeometryError
+    ? &mut Allocator {
+    let mut i: usize = 0
+    while i < paint.commands.length() {
+      let current = self.transforms.get(self.transforms.length() - 1)
+      match paint.commands.get(i) {
+        ColorCommand.PushTransform { transform } => run self.transforms.append(current * flipped(transform))
+        ColorCommand.PopTransform => {
+          if self.transforms.length() > 1 { drop self.transforms.pop() }
+        }
+        ColorCommand.PushClipGlyph { glyph } => {
+          let mut coverage = Coverage.make(self.width, self.height)
+          if run self.rasterizer.outlinePath(self.face, GlyphId.toU32(glyph), u16.toF64(self.face.upem()), 0.0, 0.0) {
+            run self.rasterizer.fillPath(&(self.device * current), &mut coverage)
+          }
+          run self.pushClip(&coverage)
+        }
+        ColorCommand.PushClipBox { box } => {
+          let mut path = Path.make()
+          run path.moveTo(f32.toF64(box.xMin), -f32.toF64(box.yMin))
+          run path.lineTo(f32.toF64(box.xMax), -f32.toF64(box.yMin))
+          run path.lineTo(f32.toF64(box.xMax), -f32.toF64(box.yMax))
+          run path.lineTo(f32.toF64(box.xMin), -f32.toF64(box.yMax))
+          run path.close()
+          let mut coverage = Coverage.make(self.width, self.height)
+          run self.rasterizer.fillOther(&path, &(self.device * current), &mut coverage)
+          run self.pushClip(&coverage)
+        }
+        ColorCommand.PopClip => {
+          if self.masks.length() > 1 { drop self.masks.pop() }
+        }
+        ColorCommand.Fill { brush } => {
+          let device = self.device * current
+          run self.fill(brush, &paint.stops.asSlice(), device)
+        }
+        ColorCommand.PushLayer { mode } => {
+          run self.layers.append(run Pixmap.make(self.width, self.height))
+          run self.modes.append(mode)
+        }
+        ColorCommand.PopLayer => run self.popLayer()
+      }
+      i = i + 1
+    }
+  }
+
+  effect fn pushClip(self: &mut Self, coverage: &Coverage) -> ()
+    ! OutOfMemoryError
+    ? &mut Allocator {
+    let mut mask = run Mask.fromCoverage(coverage)
+    mask.intersect(&self.masks.asSlice()[self.masks.length() - 1])
+    run self.masks.append(move mask)
+  }
+
+  effect fn popLayer(self: &mut Self) -> ()
+    ! OutOfMemoryError
+    ? &mut Allocator {
+    if self.layers.length() < 2 {
+      return
+    }
+    let source = match self.layers.pop() {
+      Option<Pixmap>.Some { value } => move value
+      _ => {
+        return
+      }
+    }
+    let mode = match self.modes.pop() {
+      Option<CompositeMode>.Some { value } => value
+      _ => CompositeMode.SrcOver
+    }
+    let at = self.layers.length() - 1
+    let target = &mut self.layers.asMutSlice()[at]
+    if let Option<u8>.Some { value: blend } = blendOf(mode) {
+      composite(&mut target, &source, blend, 255)
+    } else {
+      porterDuff(&mut target, &source, mode)
+    }
+  }
+
+  effect fn fill(self: &mut Self, brush: ColorBrush, stops: &[ColorStopValue], transform: Affine2<f64>) -> ()
+    ! OutOfMemoryError
+    ? &mut Allocator {
+    let at = self.layers.length() - 1
+    let clip = self.masks.length() - 1
+    match brush {
+      ColorBrush.Solid { palette, alpha } => {
+        let color = straight(self.colors.color(palette), alpha).premultiply()
+        fillMasked(&mut self.layers.asMutSlice()[at], &self.masks.asSlice()[clip], &Solid { color: color })
+      }
+      ColorBrush.Linear { x0, y0, x1, y1, stops: first, count, extend } => {
+        let f = f32.toF64(stops[first].offset)
+        let l = f32.toF64(stops[first + count - 1].offset)
+        if count == 1 || f == l {
+          run self.fill(ColorBrush.Solid { palette: stops[first + count - 1].palette, alpha: stops[first + count - 1].alpha }, stops, transform)
+          return
+        }
+        let ax = f32.toF64(x0)
+        let ay = f32.toF64(y0)
+        let dx = f32.toF64(x1) - ax
+        let dy = f32.toF64(y1) - ay
+        let mut g = Gradient.linear(ax + dx * f, -(ay + dy * f), ax + dx * l, -(ay + dy * l), spreadOf(extend), &transform)
+        run g.setStops(&(run self.ramp(stops, first, count, f, l)).asSlice())
+        fillMasked(&mut self.layers.asMutSlice()[at], &self.masks.asSlice()[clip], &g)
+      }
+      ColorBrush.Radial { x0, y0, r0, x1, y1, r1, stops: first, count, extend } => {
+        let f = f32.toF64(stops[first].offset)
+        let l = f32.toF64(stops[first + count - 1].offset)
+        if count == 1 || f == l {
+          run self.fill(ColorBrush.Solid { palette: stops[first + count - 1].palette, alpha: stops[first + count - 1].alpha }, stops, transform)
+          return
+        }
+        let cx = f32.toF64(x0)
+        let cy = f32.toF64(y0)
+        let cr = f32.toF64(r0)
+        let ex = f32.toF64(x1) - cx
+        let ey = f32.toF64(y1) - cy
+        let er = f32.toF64(r1) - cr
+        let mut g = Gradient.radial(
+          cx + ex * l, -(cy + ey * l), f64.max(0.0, cr + er * l),
+          cx + ex * f, -(cy + ey * f), f64.max(0.0, cr + er * f),
+          spreadOf(extend), &transform,
+        )
+        run g.setStops(&(run self.ramp(stops, first, count, f, l)).asSlice())
+        fillMasked(&mut self.layers.asMutSlice()[at], &self.masks.asSlice()[clip], &g)
+      }
+      ColorBrush.Sweep { cx, cy, start, end, stops: first, count, extend } => {
+        let f = f32.toF64(stops[first].offset)
+        let l = f32.toF64(stops[first + count - 1].offset)
+        if count == 1 || f == l {
+          run self.fill(ColorBrush.Solid { palette: stops[first + count - 1].palette, alpha: stops[first + count - 1].alpha }, stops, transform)
+          return
+        }
+        let inverse = match transform.inverse() {
+          Option<Affine2<f64>>.Some { value } => value
+          _ => {
+            return
+          }
+        }
+        let a = f32.toF64(start)
+        let span = f32.toF64(end) - a
+        let mut ramp = Gradient.linear(0.0, 0.0, 1.0, 0.0, SPREAD_PAD, &Affine2<f64>.identity())
+        run ramp.setStops(&(run self.ramp(stops, first, count, f, l)).asSlice())
+        let sweep = Sweep {
+          ramp: move ramp,
+          inverse: inverse,
+          cx: f32.toF64(cx),
+          cy: f32.toF64(cy),
+          start: a + span * f,
+          span: span * (l - f),
+          spread: spreadOf(extend),
+        }
+        fillMasked(&mut self.layers.asMutSlice()[at], &self.masks.asSlice()[clip], &sweep)
+      }
+    }
+  }
+
+  /// The stops `first .. first + count` as `vector` stops, offsets moved from `f .. l` to `0 .. 1`.
+  effect fn ramp(self: &Self, stops: &[ColorStopValue], first: usize, count: usize, f: f64, l: f64) -> List<Stop>
+    ! OutOfMemoryError
+    ? &mut Allocator {
+    let mut out = List<Stop>.make()
+    let mut i = first
+    while i < first + count {
+      let stop = stops[i]
+      run out.append(Stop {
+        offset: (f32.toF64(stop.offset) - f) / (l - f),
+        color: straight(self.colors.color(stop.palette), stop.alpha),
+      })
+      i = i + 1
+    }
+    return move out
+  }
+}
+
+struct Solid {
+  color: Rgba8,
+}
+
+impl Shader for Solid {
+  fn shade(self: &Self, x: u32, y: u32) -> Rgba8 {
+    return self.color
+  }
+
+  fn shadeSpan(self: &Self, x: u32, y: u32, count: usize, out: &mut [u32]) -> () {
+    let word = pack(self.color)
+    let mut i: usize = 0
+    while i < count {
+      out[i] = word
+      i = i + 1
+    }
+  }
+
+  fn isUniform(self: &Self) -> bool {
+    return true
+  }
+}
+
+
+/// Paints `shader` over `target` wherever `mask` covers it.
+fn fillMasked<S: Shader>(target: &mut Pixmap, mask: &Mask, shader: &S) -> () {
+  let width = minU32(target.width(), mask.width())
+  let height = minU32(target.height(), mask.height())
+  let stride = u32.toUsize(target.width()) * 4
+  let d = target.dataMut()
+  let mut y: u32 = 0
+  while y < height {
+    let mut x: u32 = 0
+    while x < width {
+      let m = u8.toU32(mask.at(x, y))
+      if m != 0 {
+        let c = shader.shade(x, y)
+        let scaled = if m == 255 { c } else {
+          Rgba8 {
+            r: u32.toU8(div255(u8.toU32(c.r) * m)),
+            g: u32.toU8(div255(u8.toU32(c.g) * m)),
+            b: u32.toU8(div255(u8.toU32(c.b) * m)),
+            a: u32.toU8(div255(u8.toU32(c.a) * m)),
+          }
+        }
+        over(&mut d, u32.toUsize(y) * stride + u32.toUsize(x) * 4, scaled)
+      }
+      x = x + 1
+    }
+    y = y + 1
+  }
+}
+
+fn blendOf(mode: CompositeMode) -> Option<u8> {
+  return match mode {
+    CompositeMode.Screen => Option<u8>.some(Layers.BLEND_SCREEN)
+    CompositeMode.Overlay => Option<u8>.some(Layers.BLEND_OVERLAY)
+    CompositeMode.Darken => Option<u8>.some(Layers.BLEND_DARKEN)
+    CompositeMode.Lighten => Option<u8>.some(Layers.BLEND_LIGHTEN)
+    CompositeMode.ColorDodge => Option<u8>.some(Layers.BLEND_COLOR_DODGE)
+    CompositeMode.ColorBurn => Option<u8>.some(Layers.BLEND_COLOR_BURN)
+    CompositeMode.HardLight => Option<u8>.some(Layers.BLEND_HARD_LIGHT)
+    CompositeMode.SoftLight => Option<u8>.some(Layers.BLEND_SOFT_LIGHT)
+    CompositeMode.Difference => Option<u8>.some(Layers.BLEND_DIFFERENCE)
+    CompositeMode.Exclusion => Option<u8>.some(Layers.BLEND_EXCLUSION)
+    CompositeMode.Multiply => Option<u8>.some(Layers.BLEND_MULTIPLY)
+    CompositeMode.HslHue => Option<u8>.some(Layers.BLEND_HUE)
+    CompositeMode.HslSaturation => Option<u8>.some(Layers.BLEND_SATURATION)
+    CompositeMode.HslColor => Option<u8>.some(Layers.BLEND_COLOR)
+    CompositeMode.HslLuminosity => Option<u8>.some(Layers.BLEND_LUMINOSITY)
+    CompositeMode.SrcOver => Option<u8>.some(Layers.BLEND_NORMAL)
+    _ => Option<u8>.None
+  }
+}
+
+/// Porter-Duff `source` onto `target`, both premultiplied, as COLR's composite modes ask:
+/// result = source * fa + target * fb.
+fn porterDuff(target: &mut Pixmap, source: &Pixmap, mode: CompositeMode) -> () {
+  let d = target.dataMut()
+  let s = source.data()
+  let count = (if d.length < s.length { d.length } else { s.length }) / 4
+  let mut i: usize = 0
+  while i < count {
+    let at = i * 4
+    let sa = u8.toU32(s[at + 3])
+    let da = u8.toU32(d[at + 3])
+    // fa and fb out of 255.
+    let full: u32 = 255
+    let none: u32 = 0
+    let f = match mode {
+      CompositeMode.Clear => [none, none]
+      CompositeMode.Src => [full, none]
+      CompositeMode.Dest => [none, full]
+      CompositeMode.DestOver => [full - da, full]
+      CompositeMode.SrcIn => [da, none]
+      CompositeMode.DestIn => [none, sa]
+      CompositeMode.SrcOut => [full - da, none]
+      CompositeMode.DestOut => [none, full - sa]
+      CompositeMode.SrcAtop => [da, full - sa]
+      CompositeMode.DestAtop => [full - da, sa]
+      CompositeMode.Xor => [full - da, full - sa]
+      CompositeMode.Plus => [full, full]
+      _ => [full, full - sa]
+    }
+    let fa: u32 = f[0]
+    let fb: u32 = f[1]
+    let mut c: usize = 0
+    while c < 4 {
+      let value = div255(u8.toU32(s[at + c]) * fa) + div255(u8.toU32(d[at + c]) * fb)
+      d[at + c] = u32.toU8(minU32(value, 255))
+      c = c + 1
+    }
+    i = i + 1
+  }
+}
