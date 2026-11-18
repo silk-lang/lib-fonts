@@ -53,11 +53,17 @@ while i < glyphs.length {
 ```
 
 With `color: true`, `color.colorGlyph` draws the glyph's color rendering into a polychrome tile of
-premultiplied RGBA: COLR version 0 layers in CPAL palette 0 colors (filled by `vector`, so they
+premultiplied RGBA: a COLR version 1 paint graph (`colr`: glyph and box clips, transforms,
+solid, linear, radial and sweep brushes, composite modes), else COLR version 0 layers (filled by `vector`, so they
 get subpixel positioning; foreground layers take the cache's `withForeground` color, black by
 default), else an `sbix` or `CBDT` PNG from the strike nearest the requested size, decoded by
 [graphics-codec](https://github.com/silk-lang/nonstd/tree/7d6c3693a9ad1fec24127985626ab4224f9f1995/graphics/codec) and box-filtered to size with the subpixel offset applied. A
-glyph with none of these gets its outline. COLR version 1 paint graphs are not drawn yet.
+glyph with none of these gets its outline.
+
+Colors come from the CPAL palette `GlyphKey.palette` names: 0 is palette 0, other handles come
+from `GlyphCache.palette(PaletteChoice)`, a palette index or the light or dark palette plus
+overridden entries (CSS `font-palette`). `GlyphKey.aliased` draws the outline without
+antialiasing.
 
 ## Tests
 
@@ -69,8 +75,9 @@ The tests use the Noto subsets in `test-support/fonts`. They check that each til
 direct `vector` fill of the same outline at the same position (within 1/255, from f32 rounding at
 different coordinates), that variants move a stem by a quarter pixel, cache hits, empty glyphs,
 eviction and re-rasterization, a full atlas, the line cache against direct shaping, the gamma
-formula against GPUI's values, color glyphs from the three fonts in `tests/fonts` (written by
-`silk task generate-color-fonts` from the repository root, with no fontTools dependency) at their strike size, scaled up and down and at a
+formula against GPUI's values, color glyphs from the fonts in `tests/fonts` (written by
+`silk task generate-color-fonts` from the repository root, with no fontTools dependency; `ColrV1.ttf`
+by `tests/fonts/generate_colr1.py` with fontTools) at their strike size, scaled up and down and at a
 half-pixel offset, and two text goldens (`tests/golden/text-1x.pgm` and
 `text-2x.pgm`, raw coverage). Each golden run writes its output to `build/font-raster/`; after a
 deliberate change, inspect it and copy it over the golden.

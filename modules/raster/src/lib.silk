@@ -6,5 +6,6 @@ import face
 import rasterize
 import cache
 import color
+import colr
 import gamma
 import lines
