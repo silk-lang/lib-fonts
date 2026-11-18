@@ -15,6 +15,8 @@ import tables.colr {
   Paint,
   PaintWithId,
   PaintColrLayers,
+  PaintSolid,
+  PaintVarSolid,
   PaintLinearGradient,
   PaintVarLinearGradient,
   PaintRadialGradient,
@@ -55,7 +57,8 @@ import tables.colr {
   Extend
 }
 import tables.variations { ItemVariationStore, DeltaSetIndexMap, DeltaSetIndex }
-import font_types.lib { F48Dot16, F2Dot14, FWord, Fixed, GlyphId, GlyphId16, GlyphId24 }
+import font_types.lib { F48Dot16, F2Dot14, FWord, UfWord, Fixed, GlyphId, GlyphId16, GlyphId24 }
+import silk.collections.list { List }
 import silk.geometry.rect { Rect }
 import silk.geometry.affine { Affine2 }
 import array { ComputedArray }
@@ -966,6 +969,351 @@ impl<'a, 'c> ColorInstance<'a, 'c> {
           transform: matrix,
           child: run read(PaintVarSkewAroundCenter.paint(&value))
         }
+      }
+    }
+  }
+}
+
+
+/// One step of drawing a COLR version 1 glyph, in font units with y up, the way the paint graph
+/// reads (OpenType COLR, "Paint graph"): transforms, clips and layers nest and are popped in
+/// reverse order.
+pub union ColorCommand {
+  PushTransform { pub transform: Affine2<f32> },
+  PopTransform,
+  /// Clips to the outline of `glyph` under the current transform.
+  PushClipGlyph { pub glyph: GlyphId },
+  /// Clips to a box (a `ClipBox`) under the current transform.
+  PushClipBox { pub box: Rect<f32> },
+  PopClip,
+  /// Fills the current clip with `brush`.
+  Fill { pub brush: ColorBrush },
+  /// Starts an isolated layer that is composited with `mode` when popped.
+  PushLayer { pub mode: CompositeMode },
+  PopLayer,
+}
+
+impl Copy for ColorCommand {}
+
+/// A paint's colors: palette entry `palette` (0xFFFF is the text color) with `alpha` applied.
+pub struct ColorStopValue {
+  pub offset: f32,
+  pub palette: u16,
+  pub alpha: f32,
+}
+
+impl Copy for ColorStopValue {}
+
+/// What a fill paints. Gradient stops are `ColorPaint.stops[stops .. stops + count]`, sorted.
+pub union ColorBrush {
+  Solid { pub palette: u16, pub alpha: f32 },
+  /// From `(x0, y0)` to `(x1, y1)`, already rotated by the third point as COLR asks.
+  Linear { pub x0: f32, pub y0: f32, pub x1: f32, pub y1: f32, pub stops: usize, pub count: usize, pub extend: Extend },
+  Radial { pub x0: f32, pub y0: f32, pub r0: f32, pub x1: f32, pub y1: f32, pub r1: f32, pub stops: usize, pub count: usize, pub extend: Extend },
+  /// Angles in counter-clockwise degrees.
+  Sweep { pub cx: f32, pub cy: f32, pub start: f32, pub end: f32, pub stops: usize, pub count: usize, pub extend: Extend },
+}
+
+impl Copy for ColorBrush {}
+
+/// A COLR version 1 glyph flattened into commands.
+pub struct ColorPaint {
+  pub commands: List<ColorCommand>,
+  pub stops: List<ColorStopValue>,
+}
+
+impl<'a> ColorSources<'a> {
+  /// Whether `glyph` has a COLR version 1 paint graph.
+  pub fn hasPaint(self: &Self, glyph: GlyphId) -> bool {
+    return Option<PaintWithId<'a>>.isSome(&Colr.v1BaseGlyph(&self.table, glyph))
+  }
+
+  /// The commands that draw `glyph`'s COLR version 1 paint graph at variation `coords`, or
+  /// None when it has none or the graph is malformed, cyclic or too deep.
+  pub effect fn paint(self: &Self, glyph: GlyphId, coords: &[F2Dot14]) -> Option<ColorPaint>
+    ! OutOfMemoryError
+    ? &mut Allocator {
+    let instance = ColorInstance { sources: self.*, coords: coords }
+    let mut out = ColorPaint { commands: List<ColorCommand>.make(), stops: List<ColorStopValue>.make() }
+    let result = run Effect.result(ColorInstance.paintRoot(&instance, glyph, &mut out))
+    return match move result {
+      Result<bool, Error | OutOfMemoryError>.Success { value } => if value {
+        Option<ColorPaint>.some(move out)
+      } else {
+        Option<ColorPaint>.None
+      }
+      Result<bool, Error | OutOfMemoryError>.Failure { error } => match move error {
+        Error _ => Option<ColorPaint>.None
+        OutOfMemoryError problem => {
+          fail move problem
+        }
+      }
+    }
+  }
+}
+
+impl<'a, 'c> ColorInstance<'a, 'c> {
+  effect fn paintRoot(self: &Self, glyph: GlyphId, out: &mut ColorPaint) -> bool
+    ! Error | OutOfMemoryError
+    ? &mut Allocator {
+    let root = match Colr.v1BaseGlyph(&self.sources.table, glyph) {
+      Option<PaintWithId<'a>>.Some { value } => value
+      _ => {
+        return false
+      }
+    }
+    let mut state = ColorWalk.new()
+    run ColorWalk.enter(&mut state, root.id)
+    let boxed = Colr.v1ClipBox(&self.sources.table, glyph)
+    if let Option<ClipBox<'a>>.Some { value } = boxed {
+      run out.commands.append(ColorCommand.PushClipBox { box: ColorInstance.clipBox(self, value, false) })
+    }
+    run ColorInstance.emit(self, root.paint, 0, &mut state, &mut out)
+    if Option<ClipBox<'a>>.isSome(&boxed) {
+      run out.commands.append(ColorCommand.PopClip)
+    }
+    return true
+  }
+
+  effect fn colorStops(self: &Self, line: ColorLine<'a>, out: &mut ColorPaint) -> usize
+    ! Error | OutOfMemoryError
+    ? &mut Allocator {
+    let start = out.stops.length()
+    let records = ColorLine.colorStops(&line)
+    let mut i: usize = 0
+    while i < ComputedArray<'a, (), ColorStop<'a>>.len(&records) {
+      let stop = run read(ComputedArray<'a, (), ColorStop<'a>>.get(&records, i))
+      run ColorInstance.addStop(&mut out, start, ColorStopValue {
+        offset: F2Dot14.toF32(ColorStop.stopOffset(&stop)),
+        palette: ColorStop.paletteIndex(&stop),
+        alpha: F2Dot14.toF32(ColorStop.alpha(&stop)),
+      })
+      i = i + 1
+    }
+    return start
+  }
+
+  effect fn varColorStops(self: &Self, line: VarColorLine<'a>, out: &mut ColorPaint) -> usize
+    ! Error | OutOfMemoryError
+    ? &mut Allocator {
+    let start = out.stops.length()
+    let records = VarColorLine.colorStops(&line)
+    let mut i: usize = 0
+    while i < ComputedArray<'a, (), VarColorStop<'a>>.len(&records) {
+      let stop = run read(ComputedArray<'a, (), VarColorStop<'a>>.get(&records, i))
+      let deltas = ColorInstance.deltas(self, VarColorStop.varIndexBase(&stop), 2)
+      run ColorInstance.addStop(&mut out, start, ColorStopValue {
+        offset: F2Dot14.applyDelta(VarColorStop.stopOffset(&stop), deltas[0]),
+        palette: VarColorStop.paletteIndex(&stop),
+        alpha: F2Dot14.applyDelta(VarColorStop.alpha(&stop), deltas[1]),
+      })
+      i = i + 1
+    }
+    return start
+  }
+
+  /// Inserts `stop` keeping `out.stops[start ..]` sorted by offset, stable for equal offsets.
+  effect fn addStop(out: &mut ColorPaint, start: usize, stop: ColorStopValue) -> ()
+    ! OutOfMemoryError
+    ? &mut Allocator {
+    run out.stops.append(stop)
+    let stops = out.stops.asMutSlice()
+    let mut at = stops.length - 1
+    while at > start && stops[at - 1].offset > stops[at].offset {
+      let previous = stops[at - 1]
+      stops[at - 1] = stops[at]
+      stops[at] = previous
+      at = at - 1
+    }
+  }
+
+  effect fn fill(out: &mut ColorPaint, brush: ColorBrush) -> ()
+    ! OutOfMemoryError
+    ? &mut Allocator {
+    run out.commands.append(ColorCommand.Fill { brush: brush })
+  }
+
+  /// Emits a linear gradient whose direction COLR gives by three points: p0 to p1, rotated so
+  /// it runs perpendicular to the line from p0 to p2.
+  effect fn linear(out: &mut ColorPaint, p: [f32; 6], stops: usize, extend: Extend) -> ()
+    ! OutOfMemoryError
+    ? &mut Allocator {
+    let count = out.stops.length() - stops
+    if count == 0 {
+      return
+    }
+    let nx = p[5] - p[1]
+    let ny = p[0] - p[4]
+    let length = nx * nx + ny * ny
+    let mut x1 = p[2]
+    let mut y1 = p[3]
+    if length != 0.0 {
+      let along = ((p[2] - p[0]) * nx + (p[3] - p[1]) * ny) / length
+      x1 = p[0] + nx * along
+      y1 = p[1] + ny * along
+    }
+    run ColorInstance.fill(&mut out, ColorBrush.Linear {
+      x0: p[0], y0: p[1], x1: x1, y1: y1, stops: stops, count: count, extend: extend,
+    })
+  }
+
+  effect fn emit(self: &Self, paint: Paint<'a>, depth: usize, state: &mut ColorWalk, out: &mut ColorPaint) -> ()
+    ! Error | OutOfMemoryError
+    ? &mut Allocator {
+    if depth >= 64 {
+      fail Error.LimitExceeded
+    }
+    match paint {
+      Paint<'a>.Solid { value } => {
+        run ColorInstance.fill(&mut out, ColorBrush.Solid {
+          palette: PaintSolid.paletteIndex(&value), alpha: F2Dot14.toF32(PaintSolid.alpha(&value)),
+        })
+        return
+      }
+      Paint<'a>.VarSolid { value } => {
+        let deltas = ColorInstance.deltas(self, PaintVarSolid.varIndexBase(&value), 1)
+        run ColorInstance.fill(&mut out, ColorBrush.Solid {
+          palette: PaintVarSolid.paletteIndex(&value),
+          alpha: F2Dot14.applyDelta(PaintVarSolid.alpha(&value), deltas[0]),
+        })
+        return
+      }
+      Paint<'a>.LinearGradient { value } => {
+        let line = run read(PaintLinearGradient.colorLine(&value))
+        let stops = run ColorInstance.colorStops(self, line, &mut out)
+        let zero = F48Dot16.zero()
+        run ColorInstance.linear(&mut out, [
+          FWord.applyDelta(PaintLinearGradient.x0(&value), zero), FWord.applyDelta(PaintLinearGradient.y0(&value), zero),
+          FWord.applyDelta(PaintLinearGradient.x1(&value), zero), FWord.applyDelta(PaintLinearGradient.y1(&value), zero),
+          FWord.applyDelta(PaintLinearGradient.x2(&value), zero), FWord.applyDelta(PaintLinearGradient.y2(&value), zero),
+        ], stops, ColorLine.extend(&line))
+        return
+      }
+      Paint<'a>.VarLinearGradient { value } => {
+        let line = run read(PaintVarLinearGradient.colorLine(&value))
+        let stops = run ColorInstance.varColorStops(self, line, &mut out)
+        let d = ColorInstance.deltas(self, PaintVarLinearGradient.varIndexBase(&value), 6)
+        run ColorInstance.linear(&mut out, [
+          FWord.applyDelta(PaintVarLinearGradient.x0(&value), d[0]), FWord.applyDelta(PaintVarLinearGradient.y0(&value), d[1]),
+          FWord.applyDelta(PaintVarLinearGradient.x1(&value), d[2]), FWord.applyDelta(PaintVarLinearGradient.y1(&value), d[3]),
+          FWord.applyDelta(PaintVarLinearGradient.x2(&value), d[4]), FWord.applyDelta(PaintVarLinearGradient.y2(&value), d[5]),
+        ], stops, VarColorLine.extend(&line))
+        return
+      }
+      Paint<'a>.RadialGradient { value } => {
+        let line = run read(PaintRadialGradient.colorLine(&value))
+        let stops = run ColorInstance.colorStops(self, line, &mut out)
+        let count = out.stops.length() - stops
+        let zero = F48Dot16.zero()
+        if count != 0 {
+          run ColorInstance.fill(&mut out, ColorBrush.Radial {
+            x0: FWord.applyDelta(PaintRadialGradient.x0(&value), zero),
+            y0: FWord.applyDelta(PaintRadialGradient.y0(&value), zero),
+            r0: UfWord.applyDelta(PaintRadialGradient.radius0(&value), zero),
+            x1: FWord.applyDelta(PaintRadialGradient.x1(&value), zero),
+            y1: FWord.applyDelta(PaintRadialGradient.y1(&value), zero),
+            r1: UfWord.applyDelta(PaintRadialGradient.radius1(&value), zero),
+            stops: stops, count: count, extend: ColorLine.extend(&line),
+          })
+        }
+        return
+      }
+      Paint<'a>.VarRadialGradient { value } => {
+        let line = run read(PaintVarRadialGradient.colorLine(&value))
+        let stops = run ColorInstance.varColorStops(self, line, &mut out)
+        let count = out.stops.length() - stops
+        let d = ColorInstance.deltas(self, PaintVarRadialGradient.varIndexBase(&value), 6)
+        if count != 0 {
+          run ColorInstance.fill(&mut out, ColorBrush.Radial {
+            x0: FWord.applyDelta(PaintVarRadialGradient.x0(&value), d[0]),
+            y0: FWord.applyDelta(PaintVarRadialGradient.y0(&value), d[1]),
+            r0: UfWord.applyDelta(PaintVarRadialGradient.radius0(&value), d[2]),
+            x1: FWord.applyDelta(PaintVarRadialGradient.x1(&value), d[3]),
+            y1: FWord.applyDelta(PaintVarRadialGradient.y1(&value), d[4]),
+            r1: UfWord.applyDelta(PaintVarRadialGradient.radius1(&value), d[5]),
+            stops: stops, count: count, extend: VarColorLine.extend(&line),
+          })
+        }
+        return
+      }
+      Paint<'a>.SweepGradient { value } => {
+        let line = run read(PaintSweepGradient.colorLine(&value))
+        let stops = run ColorInstance.colorStops(self, line, &mut out)
+        let count = out.stops.length() - stops
+        let zero = F48Dot16.zero()
+        if count != 0 {
+          // Since OpenType 1.9.1 angles are stored biased by 1.0, in units of 180 degrees.
+          run ColorInstance.fill(&mut out, ColorBrush.Sweep {
+            cx: FWord.applyDelta(PaintSweepGradient.centerX(&value), zero),
+            cy: FWord.applyDelta(PaintSweepGradient.centerY(&value), zero),
+            start: F2Dot14.applyDelta(PaintSweepGradient.startAngle(&value), zero) * 180.0 + 180.0,
+            end: F2Dot14.applyDelta(PaintSweepGradient.endAngle(&value), zero) * 180.0 + 180.0,
+            stops: stops, count: count, extend: ColorLine.extend(&line),
+          })
+        }
+        return
+      }
+      Paint<'a>.VarSweepGradient { value } => {
+        let line = run read(PaintVarSweepGradient.colorLine(&value))
+        let stops = run ColorInstance.varColorStops(self, line, &mut out)
+        let count = out.stops.length() - stops
+        let d = ColorInstance.deltas(self, PaintVarSweepGradient.varIndexBase(&value), 4)
+        if count != 0 {
+          run ColorInstance.fill(&mut out, ColorBrush.Sweep {
+            cx: FWord.applyDelta(PaintVarSweepGradient.centerX(&value), d[0]),
+            cy: FWord.applyDelta(PaintVarSweepGradient.centerY(&value), d[1]),
+            start: F2Dot14.applyDelta(PaintVarSweepGradient.startAngle(&value), d[2]) * 180.0 + 180.0,
+            end: F2Dot14.applyDelta(PaintVarSweepGradient.endAngle(&value), d[3]) * 180.0 + 180.0,
+            stops: stops, count: count, extend: VarColorLine.extend(&line),
+          })
+        }
+        return
+      }
+      _ => {}
+    }
+    let resolved = run ColorInstance.resolve(self, paint, &mut state)
+    match resolved {
+      ResolvedPaint<'a>.Brush { .. } => {}
+      ResolvedPaint<'a>.Layers { start, end } => {
+        let mut i = start
+        while i < end {
+          let layer = run require(Colr.v1Layer(&self.sources.table, i))
+          run ColorWalk.enter(&mut state, layer.id)
+          run ColorInstance.emit(self, layer.paint, depth + 1, &mut state, &mut out)
+          state.depth = state.depth - 1
+          i = i + 1
+        }
+      }
+      ResolvedPaint<'a>.Glyph { glyph, child } => {
+        run out.commands.append(ColorCommand.PushClipGlyph { glyph: glyph })
+        run ColorInstance.emit(self, child, depth + 1, &mut state, &mut out)
+        run out.commands.append(ColorCommand.PopClip)
+      }
+      ResolvedPaint<'a>.ColrGlyph { glyph } => {
+        let root = run require(Colr.v1BaseGlyph(&self.sources.table, glyph))
+        run ColorWalk.enter(&mut state, root.id)
+        let boxed = Colr.v1ClipBox(&self.sources.table, glyph)
+        if let Option<ClipBox<'a>>.Some { value } = boxed {
+          run out.commands.append(ColorCommand.PushClipBox { box: ColorInstance.clipBox(self, value, false) })
+        }
+        run ColorInstance.emit(self, root.paint, depth + 1, &mut state, &mut out)
+        if Option<ClipBox<'a>>.isSome(&boxed) {
+          run out.commands.append(ColorCommand.PopClip)
+        }
+        state.depth = state.depth - 1
+      }
+      ResolvedPaint<'a>.Transform { transform, child } => {
+        run out.commands.append(ColorCommand.PushTransform { transform: transform })
+        run ColorInstance.emit(self, child, depth + 1, &mut state, &mut out)
+        run out.commands.append(ColorCommand.PopTransform)
+      }
+      ResolvedPaint<'a>.Composite { source, backdrop, mode } => {
+        run out.commands.append(ColorCommand.PushLayer { mode: CompositeMode.SrcOver })
+        run ColorInstance.emit(self, backdrop, depth + 1, &mut state, &mut out)
+        run out.commands.append(ColorCommand.PushLayer { mode: mode })
+        run ColorInstance.emit(self, source, depth + 1, &mut state, &mut out)
+        run out.commands.append(ColorCommand.PopLayer)
+        run out.commands.append(ColorCommand.PopLayer)
       }
     }
   }

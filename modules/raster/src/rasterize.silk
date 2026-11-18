@@ -78,6 +78,8 @@ pub struct GlyphRasterizer {
   path: Path,
   rasterizer: Rasterizer,
   dense: List<u8>,
+  /// Outlines drawn without antialiasing: each pixel fully in or out.
+  pub aliased: bool,
 }
 
 /// The outcome of [`GlyphRasterizer.outline`].
@@ -94,6 +96,7 @@ impl GlyphRasterizer {
       path: Path.make(),
       rasterizer: Rasterizer.make(),
       dense: List<u8>.make(),
+      aliased: false,
     }
   }
 
@@ -127,6 +130,13 @@ impl GlyphRasterizer {
     ! OutOfMemoryError | GeometryError
     ? &mut Allocator {
     run self.rasterizer.fill(&self.path, transform, NONZERO, &mut out)
+  }
+
+  /// Replaces `out` with the coverage of `path` under `transform` (nonzero rule).
+  pub effect fn fillOther(self: &mut Self, path: &Path, transform: &Affine, out: &mut Coverage) -> ()
+    ! OutOfMemoryError | GeometryError
+    ? &mut Allocator {
+    run self.rasterizer.fill(path, transform, NONZERO, &mut out)
   }
 
   /// The path [`GlyphRasterizer.outlinePath`] last drew.
@@ -203,6 +213,14 @@ impl GlyphRasterizer {
       }
     }
     run densify(&coverage, &mut self.dense)
+    if self.aliased {
+      let bytes = self.dense.asMutSlice()
+      let mut i: usize = 0
+      while i < bytes.length {
+        bytes[i] = if bytes[i] >= 128 { 255 } else { 0 }
+        i = i + 1
+      }
+    }
     run crop(self.dense.asSlice(), w, h, f64.toI32(left), f64.toI32(top), &mut out)
     return Outcome.Drawn
   }

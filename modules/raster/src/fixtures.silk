@@ -72,6 +72,7 @@ pub const SANS: string = "test-support/fonts/NotoSans-Regular.subset.ttf"
 pub const SERIF: string = "test-support/fonts/NotoSerif-Regular.subset.ttf"
 
 pub const COLR_V0: string = "modules/raster/tests/fonts/ColrV0.ttf"
+pub const COLR_V1: string = "modules/raster/tests/fonts/ColrV1.ttf"
 
 pub const SBIX: string = "modules/raster/tests/fonts/Sbix.ttf"
 
@@ -251,6 +252,8 @@ pub effect fn drawText(
       scale: scale,
       subpixel: pen.subpixel,
       color: false,
+      palette: 0,
+      aliased: false,
     }
     if let Option<RasterGlyph>.Some { value } = run cache.glyph(&mut atlas, face, key) {
       run placed.append(value)
