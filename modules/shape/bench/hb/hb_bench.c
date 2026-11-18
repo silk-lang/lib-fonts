@@ -59,8 +59,9 @@ int main(int argc, char **argv) {
     return 2;
   }
   const char *mode = argv[1];
-  int dump = strncmp(mode, "dump-", 5) == 0;
-  if (dump) mode += 5;
+  int flags = strncmp(mode, "flags-", 6) == 0;
+  int dump = flags || strncmp(mode, "dump-", 5) == 0;
+  if (dump) mode += flags ? 6 : 5;
   int words = strcmp(mode, "words") == 0;
   if (!words && strcmp(mode, "lines") != 0) return 2;
   size_t iterations = argc > 4 ? (size_t)atol(argv[4]) : 20;
@@ -91,7 +92,8 @@ int main(int argc, char **argv) {
         unsigned written = 0;
         at += hb_buffer_serialize_glyphs(buffer, at, total, line, sizeof line, &written, font,
                                          HB_BUFFER_SERIALIZE_FORMAT_TEXT,
-                                         HB_BUFFER_SERIALIZE_FLAG_NO_GLYPH_NAMES);
+                                         HB_BUFFER_SERIALIZE_FLAG_NO_GLYPH_NAMES |
+                                             (flags ? HB_BUFFER_SERIALIZE_FLAG_GLYPH_FLAGS : 0));
         if (!written) break;
         fwrite(line, 1, written, stdout);
       }

@@ -17,6 +17,22 @@ shapes every line of the corpus as one call. Both print the calls, the glyphs, n
 glyph and a checksum of glyph ids, clusters, advances and offsets. `dump-words` and `dump-lines`
 print the glyphs instead, in `hb-shape --no-glyph-names` form.
 
+## Safe breaks
+
+A text layer that takes a line's glyphs from its shaped paragraph relies on the unsafe-to-break
+flag: text cut at a cluster without it must shape to the same glyphs on both sides. `breaks`
+cuts every line at every such cluster, shapes the two sides and compares them with the whole;
+`concat` does the same for text that grows, with the unsafe-to-concat flag. Both exit with 1
+when a cut gives other glyphs. `flags-words` and `flags-lines` dump the glyphs with their
+flags, to compare with HarfBuzz's.
+
+```sh
+$BENCH breaks ~/bench-fonts/Inter-Regular.ttf modules/shape/bench/corpora/latin-prose.txt
+```
+
+A corpus in one font with several scripts (`mixed`) reports wrong cuts: a layer above itemizes
+by script first, and this check shapes each side with the script it guesses.
+
 ## HarfBuzz
 
 `hb/hb_bench.c` is the same program over HarfBuzz. Build it against the release to compare with
