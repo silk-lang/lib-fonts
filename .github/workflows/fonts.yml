@@ -39,7 +39,7 @@ jobs:
           done < silk.toml
           test -n "$version"
           curl --fail --silent --show-error --location --retry 3 \
-            "https://raw.githubusercontent.com/silk-lang/silk/c9d19330761ba982a5a9a63af08375b66ff0591f/install.sh" \
+            "https://raw.githubusercontent.com/silk-lang/silk/37fa5f8857de8a068942029e235778a75fe4adf3/install.sh" \
             -o "$RUNNER_TEMP/install-silk.sh"
           SILK_RELEASE="v$version" sh "$RUNNER_TEMP/install-silk.sh"
           echo "$HOME/.silk/bin" >> "$GITHUB_PATH"
