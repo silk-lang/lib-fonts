@@ -217,7 +217,63 @@ effect fn machine(
   let mut stack: [usize; 64] = [0; 64]
   let mut stackLen: usize = 0
   let mut rangeFlags: u32 = 0
+  // In the start state, most glyphs of ordinary text have a transition that does nothing: it
+  // stays in the start state, advances, has no action and sets no mark or component, and the
+  // glyph is safe to break before. The loop below steps over runs of such glyphs with one
+  // class lookup each (kept by glyph for this pass) instead of the whole transition. It needs
+  // the end-of-text transition of the start state to have no action, which is what makes a
+  // break before such a glyph safe.
+  let uniform = ranges.length == 1 && ranges[0].first == 0
+  let mut skips = !legacy && classCount <= 256 && Buffer.len(&buffer.*) >= 16
+  if skips {
+    let endTransition = View.tail(&entries, offset(0, u16.toUsize(View.u16(&states, 0)), entrySize))
+    skips = View.len(&endTransition) >= entrySize && !actionable(kind, legacy, endTransition)
+  }
+  // By class: 0 not looked at yet, 1 the start state's transition does nothing, 2 it may.
+  let mut idle: [u8; 256] = [0; 256]
+  // The class of a glyph, by the glyph's low bits; a key is the glyph plus one.
+  let mut classKeys: [u64; 64] = [0; 64]
+  let mut classValues: [u16; 64] = [0; 64]
   while index <= Buffer.len(&buffer.*) && (budget.* != 0 || kind == 1) {
+    if skips && state == 0 {
+      let glyphs = List<Glyph>.asSlice(&buffer.glyphs)
+      while index < glyphs.length && (budget.* != 0 || kind == 1) {
+        let mut here = rangeFlags
+        if uniform {
+          here = ranges[0].flags
+        } else {
+          here = aat_map.flags(ranges, glyphs[index].info.cluster)
+        }
+        if (here & mask) != 0 {
+          let glyph = glyphs[index].info.glyphId
+          let slot = u32.toUsize(glyph & 63)
+          let mut class = u16.toUsize(classValues[slot])
+          if classKeys[slot] != u32.toU64(glyph) + 1 {
+            class = Classes.get(&classTable, glyph, 65536)
+            if class >= classCount {
+              class = 1
+            }
+            classKeys[slot] = u32.toU64(glyph) + 1
+            classValues[slot] = usize.toU16(class)
+          }
+          if idle[class] == 0 {
+            idle[class] = startIdle(kind, states, entries, entrySize, class)
+          }
+          if idle[class] != 1 {
+            break
+          }
+        }
+        // What the loop does for such a glyph, or for one outside the subtable's ranges.
+        rangeFlags = here
+        if kind != 1 {
+          budget.* = budget.* - 1
+        }
+        index = index + 1
+      }
+      if budget.* == 0 && kind != 1 {
+        break
+      }
+    }
     if kind != 1 {
       budget.* = budget.* - 1
     }
@@ -440,6 +496,39 @@ effect fn machine(
       }
     }
   }
+}
+
+// Whether the start state's transition for `class` in an extended (morx) state table of
+// `kind` 0, 1 or 2 does nothing but advance: 1 when it stays in the start state, advances,
+// has no action and sets no mark, component or rearrangement end; 2 otherwise, and when the
+// loop in `machine` would stop on it.
+fn startIdle(kind: u32, states: View<'_>, entries: View<'_>, entrySize: usize, class: usize) -> u8 {
+  if offset(0, class, 2) >= View.len(&states) {
+    return 2
+  }
+  let entry = View.tail(&entries, offset(0, u16.toUsize(View.u16(&states, offset(0, class, 2))), entrySize))
+  if View.len(&entry) < entrySize {
+    return 2
+  }
+  let flags = View.u16(&entry, 2)
+  if View.u16(&entry, 0) != 0 || (flags & 0x4000) != 0 {
+    return 2
+  }
+  if kind == 0 {
+    // Mark first, mark last, or a verb.
+    if (flags & 0xa00f) != 0 {
+      return 2
+    }
+  } else if kind == 1 {
+    // Set mark, or a substitution of the marked or the current glyph.
+    if (flags & 0x8000) != 0 || View.u16(&entry, 4) != 65535 || View.u16(&entry, 6) != 65535 {
+      return 2
+    }
+  } else if (flags & 0xa000) != 0 {
+    // Set component, or perform the ligature actions.
+    return 2
+  }
+  return 1
 }
 
 fn rearrange(buffer: &mut Buffer, start: usize, end: usize, verb: usize) -> () {
