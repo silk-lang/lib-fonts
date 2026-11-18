@@ -1,0 +1,9 @@
+[package]
+name = "font-shape-bench"
+version = "0.1.0"
+silk-version = "0.1.0-dev.87+37fa5f8857de"
+
+[dependencies]
+harfrust = { path = "..", package = "font-shape" }
+font_types = { path = "../../types", package = "font-types" }
+read_fonts = { path = "../../parse", package = "font-parse" }

@@ -17,6 +17,7 @@ members = [
   "modules/collection",
   "modules/web",
   "modules/parse/bench",
+  "modules/shape/bench",
   "modules/shape/tools/wasm",
   "font-parse-test-harness",
   "font-shape-test-harness",
