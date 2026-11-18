@@ -247,6 +247,11 @@ pub struct Buffer {
   /// Whether `digest` still covers the glyphs: set when substitution ends, for positioning, which
   /// follows without changing glyphs. Anything else clears it.
   pub digestFresh: bool,
+  /// Scratch of `ot.apply`: the lookup steps of the plan being applied that may match
+  /// `liveDigest`, one bit a step, while `liveValid`.
+  pub liveDigest: SetDigest,
+  pub liveBits: [u64; 8],
+  pub liveValid: bool,
 }
 
 impl Buffer {
@@ -284,6 +289,9 @@ impl Buffer {
       positionStack: List<usize>.make(),
       digest: SetDigest.new(),
       digestFresh: false,
+      liveDigest: SetDigest.new(),
+      liveBits: [0; 8],
+      liveValid: false,
     }
   }
 

@@ -53,6 +53,14 @@ fn word(bytes: &[u8], at: usize) -> u32 {
 
 /// Writes the full case folding of `cp` to `out` and returns its length (1 to 3).
 pub fn fold(cp: u32, out: &mut [u32; 3]) -> usize {
+  // Most names are ASCII, where only A to Z fold.
+  if cp < 0x80 {
+    out[0] = cp
+    if cp >= 0x41 && cp <= 0x5a {
+      out[0] = cp + 0x20
+    }
+    return 1
+  }
   let data = records()
   let mut low: usize = 0
   let mut high = data.length / 12

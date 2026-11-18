@@ -1,0 +1,62 @@
+import view { View }
+import read_fonts.lib { ReadError }
+import read_fonts.tables.aat { TypedLookup }
+import silk.core.result { Result }
+import silk.num.u8
+import silk.num.u16
+import silk.num.u32
+
+pub type Lookup<'a> = Result<TypedLookup<'a, u16>, ReadError>
+
+pub fn read<'a>(data: View<'a>) -> Lookup<'a> {
+  return TypedLookup<'a, u16>.read(data.data)
+}
+
+pub fn value<'a>(lookup: &Lookup<'a>, glyph: u32, missing: u32) -> u32 {
+  if glyph <= 65535 {
+    if let Result<TypedLookup<'a, u16>, ReadError>.Success { value: table } = &lookup.* {
+      if let Result<u16, ReadError>.Success { value: found } = TypedLookup<'a, u16>.value(
+        &table,
+        u32.toU16(glyph),
+      ) {
+        return u16.toU32(found)
+      }
+    }
+  }
+  return missing
+}
+
+pub union Classes<'a> {
+  Legacy { data: View<'a>, first: u32, count: u32 },
+  Extended { lookup: Lookup<'a> },
+}
+
+impl<'a> Classes<'a> {
+  pub fn read(data: View<'a>, legacy: bool) -> Self {
+    if legacy {
+      return Classes<'a>.Legacy {
+        data: data,
+        first: u16.toU32(View.u16(&data, 0)),
+        count: u16.toU32(View.u16(&data, 2)),
+      }
+    }
+    return Classes<'a>.Extended { lookup: read(data) }
+  }
+
+  pub fn get(self: &Self, glyph: u32, missing: u32) -> usize {
+    if glyph == 65535 {
+      return 2
+    }
+    match &self.* {
+      Classes<'a>.Legacy { data, first, count } => {
+        if glyph >= first && glyph - first < count {
+          return u8.toUsize(View.u8(&data, 4 + u32.toUsize(glyph - first)))
+        }
+        return 1
+      }
+      Classes<'a>.Extended { lookup } => {
+        return u32.toUsize(value(&lookup, glyph, missing))
+      }
+    }
+  }
+}

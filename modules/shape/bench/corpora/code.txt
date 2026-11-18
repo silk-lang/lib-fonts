@@ -1,0 +1,80 @@
+fn firstGlyphAt(state: &Shaping, item: Item, cluster: usize) -> usize {
+  let mut low = item.glyphStart
+  let mut high = item.glyphEnd
+  while low < high {
+    let middle = low + (high - low) / 2
+    let at = u32.toUsize(state.raw.get(middle).cluster)
+    if at < cluster { low = middle + 1 } else { high = middle }
+  }
+  return low
+}
+const express = require("express");
+app.get("/api/threads/:id", async (req, res) => {
+  const thread = await db.threads.findOne({ id: req.params.id });
+  if (!thread) return res.status(404).json({ error: "not found" });
+  res.json({ ...thread, messages: thread.messages.filter((m) => m.visible !== false) });
+});
+for (let i = 0; i < items.length; i++) { total += items[i].price * items[i].quantity; }
+SELECT id, title, updated_at FROM threads WHERE project_id = $1 ORDER BY updated_at DESC LIMIT 50;
+$ git log --oneline --graph -n 20 && git status --short | grep -v "^??" || echo "clean"
+0123456789 abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ != => -> <= >= === !== && || ::
+fn firstGlyphAt(state: &Shaping, item: Item, cluster: usize) -> usize {
+  let mut low = item.glyphStart
+  let mut high = item.glyphEnd
+  while low < high {
+    let middle = low + (high - low) / 2
+    let at = u32.toUsize(state.raw.get(middle).cluster)
+    if at < cluster { low = middle + 1 } else { high = middle }
+  }
+  return low
+}
+const express = require("express");
+app.get("/api/threads/:id", async (req, res) => {
+  const thread = await db.threads.findOne({ id: req.params.id });
+  if (!thread) return res.status(404).json({ error: "not found" });
+  res.json({ ...thread, messages: thread.messages.filter((m) => m.visible !== false) });
+});
+for (let i = 0; i < items.length; i++) { total += items[i].price * items[i].quantity; }
+SELECT id, title, updated_at FROM threads WHERE project_id = $1 ORDER BY updated_at DESC LIMIT 50;
+$ git log --oneline --graph -n 20 && git status --short | grep -v "^??" || echo "clean"
+0123456789 abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ != => -> <= >= === !== && || ::
+fn firstGlyphAt(state: &Shaping, item: Item, cluster: usize) -> usize {
+  let mut low = item.glyphStart
+  let mut high = item.glyphEnd
+  while low < high {
+    let middle = low + (high - low) / 2
+    let at = u32.toUsize(state.raw.get(middle).cluster)
+    if at < cluster { low = middle + 1 } else { high = middle }
+  }
+  return low
+}
+const express = require("express");
+app.get("/api/threads/:id", async (req, res) => {
+  const thread = await db.threads.findOne({ id: req.params.id });
+  if (!thread) return res.status(404).json({ error: "not found" });
+  res.json({ ...thread, messages: thread.messages.filter((m) => m.visible !== false) });
+});
+for (let i = 0; i < items.length; i++) { total += items[i].price * items[i].quantity; }
+SELECT id, title, updated_at FROM threads WHERE project_id = $1 ORDER BY updated_at DESC LIMIT 50;
+$ git log --oneline --graph -n 20 && git status --short | grep -v "^??" || echo "clean"
+0123456789 abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ != => -> <= >= === !== && || ::
+fn firstGlyphAt(state: &Shaping, item: Item, cluster: usize) -> usize {
+  let mut low = item.glyphStart
+  let mut high = item.glyphEnd
+  while low < high {
+    let middle = low + (high - low) / 2
+    let at = u32.toUsize(state.raw.get(middle).cluster)
+    if at < cluster { low = middle + 1 } else { high = middle }
+  }
+  return low
+}
+const express = require("express");
+app.get("/api/threads/:id", async (req, res) => {
+  const thread = await db.threads.findOne({ id: req.params.id });
+  if (!thread) return res.status(404).json({ error: "not found" });
+  res.json({ ...thread, messages: thread.messages.filter((m) => m.visible !== false) });
+});
+for (let i = 0; i < items.length; i++) { total += items[i].price * items[i].quantity; }
+SELECT id, title, updated_at FROM threads WHERE project_id = $1 ORDER BY updated_at DESC LIMIT 50;
+$ git log --oneline --graph -n 20 && git status --short | grep -v "^??" || echo "clean"
+0123456789 abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ != => -> <= >= === !== && || ::

@@ -240,6 +240,13 @@ const MAX_CLASS_VALUES: usize = 4194304
 /// The most glyphs one expanded coverage spans; wider coverages are searched instead.
 const MAX_COVERAGE_SPAN: usize = 8192
 
+/// The fewest steps that repay `OtPlan.stepIndex`: asking fewer one by one costs less than
+/// the lookup.
+const MIN_INDEXED_STEPS: usize = 48
+
+/// The most steps `OtPlan.stepIndex` covers: `ot.LiveSteps` holds a bit for each.
+const MAX_INDEXED_STEPS: usize = 512
+
 /// A `ruleSeconds` entry for a rule that no second input value lets the rule loop skip.
 pub const RULE_STOP: u32 = 0x10000
 
@@ -289,6 +296,12 @@ pub struct OtPlan<'a> {
   /// Digests of the lookups of the features Indic consonant positions and reph forms probe:
   /// `blwf`, `vatu`, `pstf`, `pref` and `rphf`, in `PROBE_TAGS` order.
   pub probeDigests: [SetDigest; 5],
+  /// For each bit of each mask of a digest, the steps whose digest has it, as a bit set of
+  /// `stepWords` words, and after those the same for the steps' `second` digests. `ot.apply`
+  /// finds the steps a buffer's digest may intersect from its set bits instead of asking every
+  /// step. Empty unless the plan has `MIN_INDEXED_STEPS` to `MAX_INDEXED_STEPS` steps.
+  pub stepIndex: List<u64>,
+  pub stepWords: usize,
   /// The GDEF glyph class and mark attachment class definitions, found once per plan.
   pub glyphClassDef: View<'a>,
   pub markAttachClassDef: View<'a>,
@@ -868,6 +881,8 @@ impl<'a> OtPlan<'a> {
       glyphClasses: ClassTable { offset: 0, first: 0, start: 0, count: 0 },
       markAttachClasses: ClassTable { offset: 0, first: 0, start: 0, count: 0 },
       probeDigests: [SetDigest.new(); 5],
+      stepIndex: List<u64>.make(),
+      stepWords: 0,
       glyphClassDef: View.empty(),
       markAttachClassDef: View.empty(),
       direction: Direction.LeftToRight,
@@ -876,6 +891,49 @@ impl<'a> OtPlan<'a> {
       expandBases: false,
       chosenScript: 0,
     }
+  }
+
+  effect fn indexSteps(self: &mut Self) -> ()
+    ! OutOfMemoryError
+    ? &mut Allocator {
+    let steps = List<LookupStep>.asSlice(&self.steps)
+    if steps.length < MIN_INDEXED_STEPS || steps.length > MAX_INDEXED_STEPS {
+      return
+    }
+    let words = (steps.length + 63) / 64
+    run List<u64>.reserveExact(&mut self.stepIndex, 384 * words)
+    let mut fill: usize = 0
+    while fill < 384 * words {
+      run List<u64>.append(&mut self.stepIndex, 0)
+      fill = fill + 1
+    }
+    let index = List<u64>.asMutSlice(&mut self.stepIndex)
+    let mut step: usize = 0
+    while step < steps.length {
+      let stepBit = u64.shiftLeft(1, usize.toU64(step % 64))
+      let mut half: usize = 0
+      while half < 2 {
+        let digest = if half == 0 {
+          &steps[step].digest
+        } else {
+          &steps[step].second
+        }
+        let mut mask: usize = 0
+        while mask < 3 {
+          let mut bits = SetDigest.mask(digest, mask)
+          while bits != 0 {
+            let at = u32.toUsize(u64.trailingZeros(bits))
+            bits = bits & (bits - 1)
+            let slot = ((half * 3 + mask) * 64 + at) * words + step / 64
+            index[slot] = index[slot] | stepBit
+          }
+          mask = mask + 1
+        }
+        half = half + 1
+      }
+      step = step + 1
+    }
+    self.stepWords = words
   }
 
   /// Expands the class definitions of every lookup in the table, including those that
@@ -1282,6 +1340,7 @@ impl<'a> OtPlan<'a> {
       k = k + 1
     }
     plan.probeDigests = probes
+    run OtPlan.indexSteps(&mut plan)
     run OtPlan.cacheNestedLookups(&mut plan)
     run OtPlan.addAllClasses(&mut plan)
     let glyphClassDef = View.gdefList(&font.data.gdef, 0)

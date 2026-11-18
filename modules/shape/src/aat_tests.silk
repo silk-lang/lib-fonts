@@ -1,11 +1,14 @@
 import aat_kern
+import aat_lookup { Classes }
 import aat_map { Range }
 import aat_map
 import generated_fixtures as Fixtures
 import language { Language }
 import font { ShaperData, Shaper }
-import font_types.lib { Tag }
-import read_fonts.lib { FontRef, ReadError }
+import font_types.lib { Tag, GlyphId }
+import read_fonts.lib { FontRef, FontData, ReadError }
+import read_fonts.tables.kerx { Subtable0 as Pairs }
+import silk.core.option { Option }
 import silk.core.result { Result }
 import buffer { Buffer, Glyph }
 import direction { Direction }
@@ -16,6 +19,44 @@ import silk.collections.list { List }
 import silk.testing.testing { Testing, AssertionError }
 import silk.mem.allocator { Allocator, OutOfMemoryError }
 import silk.core.effect { Effect }
+
+fn pairValue(bytes: &[u8], left: u32, right: u32) -> Option<i32> {
+  if let Result<Pairs, ReadError>.Success { value: pairs } = Pairs.read(FontData.new(bytes)) {
+    return Pairs.kerning(&pairs, GlyphId.new(left), GlyphId.new(right))
+  }
+  return Option<i32>.None
+}
+
+test effect fn pairSearchPreservesRecordBoundaries() -> ()
+  ! AssertionError<'static> {
+  let pairs = b"\x00\x00\x00\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00\x02\x00\x04\x00\x01\x00\x02\xff\xfb\xff\xff\xff\xff\x80\x00"
+  let partial = b"\x00\x00\x00\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00\x02\x00\x04\x00\x01\x00\x03\x00"
+  run Testing.expect((pairValue(pairs, 1, 2) |> Option<i32>.unwrapOr(0)) == -5, "last duplicate")
+  run Testing.expect(
+    (pairValue(pairs, 65535, 65535) |> Option<i32>.unwrapOr(0)) == -32768,
+    "maximum key, signed adjustment",
+  )
+  run Testing.expect(
+    Option<i32>.isNone(&pairValue(partial, 1, 2)),
+    "partial final record invalidates the array",
+  )
+  run Testing.expect(Option<i32>.isNone(&pairValue(pairs, 65537, 2)), "no truncated glyph keys")
+}
+
+test effect fn preparedAatClassesPreserveMissesAndDeletedGlyphs() -> ()
+  ! AssertionError<'static> {
+  let classic = Classes.read(View.bytes(b"\x00\x10\x00\x02\x05"), true)
+  run Testing.expect(Classes.get(&classic, 16, 65536) == 5, "classic first glyph")
+  run Testing.expect(Classes.get(&classic, 17, 65536) == 0, "classic truncated byte reads zero")
+  run Testing.expect(Classes.get(&classic, 18, 65536) == 1, "outside classic range")
+  let extended = Classes.read(View.bytes(b"\x00\x08\x00\x10\x00\x01\x00\x05"), false)
+  run Testing.expect(Classes.get(&extended, 16, 1) == 5, "extended first glyph")
+  run Testing.expect(Classes.get(&extended, 65552, 65536) == 65536, "no 16-bit wraparound")
+  let invalid = Classes.read(View.bytes(b"\xff\xff"), false)
+  run Testing.expect(Classes.get(&invalid, 16, 65536) == 65536, "morx missing class sentinel")
+  run Testing.expect(Classes.get(&invalid, 16, 1) == 1, "kerx missing class sentinel")
+  run Testing.expect(Classes.get(&invalid, 65535, 1) == 2, "deleted glyph wins even on bad table")
+}
 
 // Two glyph classes drive a push/mark followed by an action. All offsets are
 // table-relative, including the byte-indexed classic state table.
