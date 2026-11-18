@@ -2,7 +2,7 @@
 //! spend work proportional to moved glyphs, and a failed sync retains input.
 import buffer { Buffer, Glyph }
 import view { View, offset }
-import aat { lookup }
+import aat_lookup { Classes }
 import aat_map { Range, flags as rangeFlags }
 import silk.collections.list { List }
 import silk.mem.allocator { Allocator, OutOfMemoryError }
@@ -343,6 +343,7 @@ pub effect fn apply(
     return
   }
   let length = Buffer.len(&buffer.*)
+  let classTable = Classes.read(classes, legacy)
   let mut out = Output {
     input: Intrinsic.replace(buffer.glyphs, List<Glyph>.make()),
     output: List<Glyph>.make(),
@@ -374,17 +375,7 @@ pub effect fn apply(
     let mut class: usize = 0
     if !atEnd {
       let glyph = List<Glyph>.get(&out.input, out.index).info.glyphId
-      class = u32.toUsize(lookup(classes, glyph))
-      if legacy {
-        let first = u16.toU32(View.u16(&classes, 0))
-        class = 1
-        if glyph >= first && glyph - first < u16.toU32(View.u16(&classes, 2)) {
-          class = u8.toUsize(View.u8(&classes, 4 + u32.toUsize(glyph - first)))
-        }
-      }
-      if glyph == 65535 {
-        class = 2
-      }
+      class = Classes.get(&classTable, glyph, 65536)
       if class >= classCount {
         class = 1
       }

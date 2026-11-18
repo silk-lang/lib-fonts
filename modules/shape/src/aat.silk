@@ -10,11 +10,10 @@ import feature { Feature }
 import plan { featureValue }
 import direction { Direction }
 import scale { Scale, add }
-import read_fonts.lib { ReadError }
-import read_fonts.tables.aat { TypedLookup }
+import aat_lookup
+import aat_lookup { Classes }
 import silk.mem.allocator { Allocator, OutOfMemoryError }
 import silk.collections.list { List }
-import silk.core.result { Result }
 import silk.num.u8
 import silk.num.u16
 import silk.num.u32
@@ -23,23 +22,6 @@ import silk.num.i32
 import silk.num.i64
 import silk.num.usize
 import unicode
-
-pub fn lookup<'a>(data: View<'a>, glyph: u32) -> u32 {
-  if glyph > 65535 {
-    return 65536
-  }
-  if let Result<TypedLookup<'a, u16>, ReadError>.Success { value } = TypedLookup<'a, u16>.read(
-    data.data,
-  ) {
-    if let Result<u16, ReadError>.Success { value: found } = TypedLookup<'a, u16>.value(
-      &value,
-      u32.toU16(glyph),
-    ) {
-      return u16.toU32(found)
-    }
-  }
-  return 65536
-}
 
 fn set(buffer: &mut Buffer, index: usize, glyph: u32) -> () {
   if index >= Buffer.len(&buffer.*) {
@@ -139,12 +121,13 @@ pub effect fn substitute<F: FontFuncs>(
         let body = View.range(&subtable, subHeader, subLength)
         let kind = coverage & 7
         if kind == 4 {
+          let lookup = aat_lookup.read(body)
           let mut i: usize = 0
           while i < Buffer.len(&buffer.*) && budget != 0 {
             budget = budget - 1
             let item = List<Glyph>.get(&buffer.glyphs, i)
             if (aat_map.flags(List<Range>.asSlice(&ranges), item.info.cluster) & subFlags) != 0 {
-              let mapped = lookup(body, item.info.glyphId)
+              let mapped = aat_lookup.value(&lookup, item.info.glyphId, 65536)
               if mapped != 65536 {
                 set(&mut buffer, i, mapped)
               }
@@ -224,6 +207,7 @@ effect fn machine(
     entrySize = 6
   }
   let substitutions = View.offset32(&data, extra)
+  let classTable = Classes.read(classes, legacy)
   let mut state: usize = 0
   let mut index: usize = 0
   let mut mark: usize = 0
@@ -252,17 +236,7 @@ effect fn machine(
     let mut class: usize = 0
     if !atEnd {
       let glyph = List<Glyph>.get(&buffer.glyphs, index).info.glyphId
-      class = u32.toUsize(lookup(classes, glyph))
-      if legacy {
-        let first = u16.toU32(View.u16(&classes, 0))
-        class = 1
-        if glyph >= first && glyph - first < u16.toU32(View.u16(&classes, 2)) {
-          class = u8.toUsize(View.u8(&classes, 4 + u32.toUsize(glyph - first)))
-        }
-      }
-      if glyph == 65535 {
-        class = 2
-      }
+      class = Classes.get(&classTable, glyph, 65536)
       if class >= classCount {
         class = 1
       }
@@ -334,7 +308,7 @@ effect fn machine(
         if target < Buffer.len(&buffer.*)
           && ((!legacy && action != 65535) || (legacy && action != 0)) {
           let glyph = List<Glyph>.get(&buffer.glyphs, target).info.glyphId
-          let mut mapped = lookup(View.offset32(&substitutions, u16.toUsize(action) * 4), glyph)
+          let mut mapped: u32 = 65536
           if legacy {
             mapped = u16.toU32(
               View.u16(&data, offset(u16.toUsize(action) * 2, u32.toUsize(glyph), 2)),
@@ -342,6 +316,9 @@ effect fn machine(
             if mapped == 0 {
               mapped = 65536
             }
+          } else {
+            let lookup = aat_lookup.read(View.offset32(&substitutions, u16.toUsize(action) * 4))
+            mapped = aat_lookup.value(&lookup, glyph, 65536)
           }
           if mapped != 65536 {
             set(&mut buffer, target, mapped)

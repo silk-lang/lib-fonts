@@ -135,19 +135,18 @@ pub fn pairKerning<'a>(
   if size == 0 {
     return Option<i32>.None
   }
+  let data = FontData.new(ComputedArray<'a, (), Subtable0Pair<'a>>.itemsBytes(&pairs))
 
   // Match Rust slice::binary_search, including malformed unsorted records.
   while size > 1 {
     let half = size / 2
     let mid = low + half
-    let pair = match move ComputedArray<'a, (), Subtable0Pair<'a>>.get(&pairs, mid) {
-      Result<Subtable0Pair<'a>, ReadError>.Success { value } => value
+    let candidate = match move FontData<'a>.readAt<u32>(&data, mid * 6) {
+      Result<u32, ReadError>.Success { value } => value
       _ => {
         return Option<i32>.None
       }
     }
-    let candidate = u32.shiftLeft(GlyphId16.toU32(Subtable0Pair.left(&pair)), 16)
-      | GlyphId16.toU32(Subtable0Pair.right(&pair))
     if candidate <= key {
       low = mid
     }

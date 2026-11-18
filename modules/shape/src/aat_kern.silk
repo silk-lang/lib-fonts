@@ -10,7 +10,7 @@ import scale { Scale, add, sub }
 import view { View, offset }
 import font_types.lib { GlyphId }
 import read_fonts.lib { FontData, ReadError, TableProvider, ScalarArray, ComputedArray }
-import read_fonts.tables.aat { TypedLookup }
+import aat_lookup { Classes }
 import read_fonts.tables.ankr { Ankr, AnchorPoint }
 import read_fonts.tables.kern {
   Kern,
@@ -440,6 +440,7 @@ pub fn machine(
     return
   }
   let values = View.offset32(&data, 16)
+  let classTable = Classes.read(classes, legacy)
   let actionFlags = View.u32(&data, 16)
   let actions = View.tail(&data, u32.toUsize(actionFlags & 0x00ffffff))
   let actionType = u32.shiftRight(actionFlags, 30)
@@ -456,24 +457,7 @@ pub fn machine(
     let mut class: usize = 0
     if !atEnd {
       let glyph = List<Glyph>.get(&buffer.glyphs, i).info.glyphId
-      class = 1
-      if legacy {
-        let first = u16.toU32(View.u16(&classes, 0))
-        if glyph >= first && glyph - first < u16.toU32(View.u16(&classes, 2)) {
-          class = u8.toUsize(View.u8(&classes, 4 + u32.toUsize(glyph - first)))
-        }
-      } else if glyph <= 65535 {
-        if let Result<TypedLookup<u16>, ReadError>.Success { value } = TypedLookup<u16>.read(
-          classes.data,
-        ) {
-          class = u16.toUsize(
-            TypedLookup<u16>.value(&value, u32.toU16(glyph)) |> Result<u16, ReadError>.unwrapOr(1),
-          )
-        }
-      }
-      if glyph == 65535 {
-        class = 2
-      }
+      class = Classes.get(&classTable, glyph, 1)
       if class >= count {
         class = 1
       }
