@@ -329,7 +329,7 @@ pub effect fn kerx<F: FontFuncs>(
 
 // Whether reading a list of `pairs` pairs once pays for a buffer of `length` glyphs.
 fn worthListing(pairs: usize, length: usize) -> bool {
-  return length >= 16 && pairs <= usize.saturatingMultiply(length, 32)
+  return length >= 48 && pairs <= usize.saturatingMultiply(length, 8)
 }
 
 // The left glyphs of a format 0 pair list (records of six bytes: left, right, value), as a
