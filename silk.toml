@@ -1,7 +1,6 @@
 [package]
 name = "font-maintenance"
 version = "0.1.0"
-silk-version = "0.1.0-dev.87+37fa5f8857de"
 kind = "executable"
 source = "src"
 main = "tasks.silk"
@@ -22,4 +21,4 @@ members = [
   "font-parse-test-harness",
   "font-shape-test-harness",
 ]
-silk-version = "0.1.0-dev.87+37fa5f8857de"
+silk-version = "0.1.0-dev.88+17d1a1b4d501"

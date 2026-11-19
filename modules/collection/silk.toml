@@ -2,7 +2,6 @@
 name = "font-collection"
 description = "An application's fonts and the order to fall back through them per character"
 version = "0.1.0"
-silk-version = "0.1.0-dev.87+37fa5f8857de"
 kind = "library"
 exports = ["lib", "collection", "fallback", "system"]
 
