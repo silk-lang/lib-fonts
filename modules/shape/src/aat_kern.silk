@@ -122,6 +122,10 @@ pub effect fn kern<F: FontFuncs>(
           Buffer.reverse(&mut buffer)
         }
         if Subtable.isStateMachine(&entry) {
+          if backwards {
+            // The machine starts at the text's end: text added there changes where it starts.
+            buffer.leansOnBefore = true
+          }
           let data = match &entry {
             Subtable.Ot { value: subtable } => View.new(
               ScalarArray<u8>.offsetData(&OtSubtable.data(&subtable)),
@@ -249,6 +253,9 @@ pub effect fn kerx<F: FontFuncs>(
         let format = KerxSubtable.coverage(&entry) & 255
         let tuples = KerxSubtable.tupleCount(&entry)
         if format == 1 || format == 4 {
+          if backwards {
+            buffer.leansOnBefore = true
+          }
           machine(
             font.scale,
             &mut buffer,
@@ -386,6 +393,7 @@ fn next(buffer: &Buffer, first: usize, features: &[Feature]) -> usize {
 }
 
 pub fn chain(buffer: &mut Buffer) -> () {
+  buffer.crossChained = true
   let mut i: usize = 0
   while i < Buffer.len(&buffer.*) {
     let mut glyph = List<Glyph>.get(&buffer.glyphs, i)
@@ -510,6 +518,13 @@ pub fn machine(
   let mut i: usize = 0
   let mut mark: usize = 0
   let mut markSet = false
+
+  // The entry flags that write what the machine remembers besides its state: push (and for
+  // kerx reset) for the kerning stack, mark for attachment.
+  let mut memory: u16 = 0x8000
+  if kind == 1 && !legacy {
+    memory = 0xa000
+  }
   let mut budget = buffer.maxOperations
   while i <= Buffer.len(&buffer.*) && budget != 0 {
     budget = budget - 1
@@ -537,12 +552,19 @@ pub fn machine(
     }
     let start = entryAt(states, entries, 0, class, count, legacy)
     let end = entryAt(states, entries, state, 0, count, legacy)
+
+    // HarfBuzz's conditions, with two more that its rule leaves out because they are about
+    // what the machine remembers besides its state. The transitions compared must write the
+    // same things to that memory (push, reset, mark). And the kerning stack must hold no glyph
+    // from before this one: the text after a cut starts with an empty stack, so a later action
+    // would pop other glyphs, and the stack would overflow (which empties it) at another glyph.
     let same = View.u16(&entry, 0) == View.u16(&start, 0)
-      && (flags & 0x4000) == (View.u16(&start, 2) & 0x4000)
+      && (flags & (0x4000 | memory)) == (View.u16(&start, 2) & (0x4000 | memory))
     let safe = !actionable(entry, legacy)
-      && (state == 0 || ((flags & 0x4000) != 0 && nextState == 0)
+      && (state == 0 || ((flags & 0x4000) != 0 && nextState == 0 && (flags & memory) == 0)
         || (!actionable(start, legacy) && same))
       && !actionable(end, legacy)
+      && (depth == 0 || stack[0] >= i)
     if !safe && i > 0 && !atEnd {
       Buffer.unsafeToBreak(&mut buffer, i - 1, i + 1)
     }
@@ -599,7 +621,13 @@ pub fn machine(
         }
       }
     } else if kind == 4 {
+      if !markSet && actionable(entry, false) && !atEnd {
+        // The glyph would attach to one marked in the text before this one, had there been any.
+        buffer.leansOnBefore = true
+      }
       if markSet && actionable(entry, false) && !atEnd && mark < Buffer.len(&buffer.*) {
+        // The glyph is placed by the marked glyph's anchor.
+        Buffer.unsafeToBreak(&mut buffer, mark, i + 1)
         let action = u16.toUsize(View.u16(&entry, 4))
         let mut item = List<Glyph>.get(&buffer.glyphs, i)
         let mut mx: i32 = 0

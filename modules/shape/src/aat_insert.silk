@@ -23,6 +23,9 @@ struct Output {
   operations: i64,
   maximum: usize,
   flags: u32,
+  // Whether a glyph was marked, and whether glyphs were inserted at a mark none had set.
+  markSet: bool,
+  leans: bool,
 }
 
 impl Output {
@@ -227,6 +230,10 @@ effect fn transition(out: &mut Output, glyphs: View<'_>, entry: View<'_>, mark: 
   let markLoc = out.outLength
   let markedIndex = View.u16(&entry, 6)
   if markedIndex != 65535 {
+    if !out.markSet {
+      // The mark would be in the text before this one, had there been any.
+      out.leans = true
+    }
     let count = u16.toUsize(bits & 31)
     out.operations = out.operations - usize.toI64(count)
     if out.operations <= 0 {
@@ -271,6 +278,7 @@ effect fn transition(out: &mut Output, glyphs: View<'_>, entry: View<'_>, mark: 
   }
   if (bits & 0x8000) != 0 {
     mark.* = markLoc
+    out.markSet = true
   }
   let currentIndex = View.u16(&entry, 4)
   if currentIndex != 65535 {
@@ -355,6 +363,8 @@ pub effect fn apply(
     operations: usize.toI64(budget.*),
     maximum: buffer.maxLength,
     flags: buffer.flags,
+    markSet: false,
+    leans: false,
   }
   let mut state: usize = 0
   let mut mark: usize = 0
@@ -419,10 +429,12 @@ pub effect fn apply(
       }
       let first = View.tail(&entries, offset(0, firstIndex, 8))
       let end = View.tail(&entries, offset(0, endIndex, 8))
+      // As in `aat.machine`: the transitions compared must also agree on setting the mark.
       let same = View.u16(&first, 0) == View.u16(&entry, 0)
-        && ((View.u16(&first, 2) & 0x4000) == (bits & 0x4000))
+        && ((View.u16(&first, 2) & 0xc000) == (bits & 0xc000))
       let safe = !actionable(entry)
-        && (state == 0 || ((bits & 0x4000) != 0 && nextState == 0) || (!actionable(first) && same))
+        && (state == 0 || ((bits & 0xc000) == 0x4000 && nextState == 0)
+          || (!actionable(first) && same))
         && !actionable(end)
       if !safe {
         let start = out.outLength - 1
@@ -452,6 +464,9 @@ pub effect fn apply(
     }
   }
   buffer.successful = out.successful
+  if out.leans {
+    buffer.leansOnBefore = true
+  }
   budget.* = 0
   if out.operations > 0 {
     budget.* = i64.toUsize(out.operations)

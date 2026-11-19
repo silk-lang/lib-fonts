@@ -207,6 +207,16 @@ impl Glyph {
 pub struct Buffer {
   pub glyphs: List<Glyph>,
   pub tracing: bool,
+  /// Set by shaping with Apple's tables: a state machine acted on something it remembers (a
+  /// marked glyph, the start of a rearrangement, ligature components) that no glyph of this
+  /// buffer had set, or ran against the order of the text. The same text shaped as the end of a
+  /// longer one may then give other glyphs, even where the longer text is cut at a cluster that
+  /// is not unsafe to break: the flag says what a cut does to the text shaped, and cannot know
+  /// what text added later reaches back for.
+  pub leansOnBefore: bool,
+  /// Set while cross-stream kerning has chained every glyph to the one before it, so that
+  /// `ot.finishOffsets` flags the glyphs that inherit a shift.
+  pub crossChained: bool,
   pub haveAttachments: bool,
   pub havePositions: bool,
   pub successful: bool,
@@ -259,6 +269,8 @@ impl Buffer {
     return Self {
       glyphs: List<Glyph>.make(),
       tracing: true,
+      leansOnBefore: false,
+      crossChained: false,
       haveAttachments: false,
       havePositions: false,
       successful: true,
@@ -334,6 +346,8 @@ impl Buffer {
     self.contentType = ContentType.None
     self.havePositions = false
     self.haveAttachments = false
+    self.leansOnBefore = false
+    self.crossChained = false
     List<Glyph>.clear(&mut self.out)
     self.haveOutput = false
     self.separateOutput = false
@@ -355,6 +369,8 @@ impl Buffer {
 
   pub fn enter(self: &mut Self) -> () {
     self.haveAttachments = false
+    self.leansOnBefore = false
+    self.crossChained = false
     self.maxLength = usize.saturatingMultiply(Buffer.len(&self.*), 256)
     if self.maxLength < 65536 {
       self.maxLength = 65536

@@ -58,6 +58,8 @@ pub effect fn substitute<F: FontFuncs>(
   if !run trace.message(font, &buffer.*, startMessage) {
     return true
   }
+  let glyphCount = Buffer.len(&buffer.*)
+  Buffer.unsafeToConcat(&mut buffer, 0, glyphCount)
   let chains = u32.toUsize(View.u32(&data, 4))
   let mut chainOffset: usize = 8
   let mut chainIndex: usize = 0
@@ -120,6 +122,10 @@ pub effect fn substitute<F: FontFuncs>(
         }
         let body = View.range(&subtable, subHeader, subLength)
         let kind = coverage & 7
+        if reverse && kind != 4 {
+          // The machine starts at the text's end: text added there changes where it starts.
+          buffer.leansOnBefore = true
+        }
         if kind == 4 {
           let lookup = aat_lookup.read(body)
           let mut i: usize = 0
@@ -160,6 +166,18 @@ pub effect fn substitute<F: FontFuncs>(
   let mut i: usize = 0
   while i < Buffer.len(&buffer.*) {
     if List<Glyph>.get(&buffer.glyphs, i).info.glyphId == 65535 {
+      // A deleted glyph whose cluster lives on in a neighbour hands it its flags. Unsafe to
+      // break is said of a cluster, but until `Buffer.propagateFlags` only the glyphs it was
+      // set on hold it, and a ligature component that goes here may be the only one.
+      let slots = List<Glyph>.asMutSlice(&mut buffer.glyphs)
+      let gone = slots[i].info
+      if gone.flags != 0 {
+        if i + 1 < slots.length && slots[i + 1].info.cluster == gone.cluster {
+          slots[i + 1].info.flags = slots[i + 1].info.flags | gone.flags
+        } else if i > 0 && slots[i - 1].info.cluster == gone.cluster {
+          slots[i - 1].info.flags = slots[i - 1].info.flags | gone.flags
+        }
+      }
       Buffer.deleteGlyph(&mut buffer, i)
     } else {
       i = i + 1
@@ -213,7 +231,14 @@ effect fn machine(
   let mut mark: usize = 0
   let mut markSet = false
   let mut start: usize = 0
+  let mut startSet = false
   let mut end: usize = 0
+  // The entry flags that write what the machine remembers besides its state: the range of a
+  // rearrangement, the marked glyph, a ligature component.
+  let mut memory: u16 = 0x8000
+  if kind == 0 {
+    memory = 0xa000
+  }
   let mut stack: [usize; 64] = [0; 64]
   let mut stackLen: usize = 0
   let mut rangeFlags: u32 = 0
@@ -325,10 +350,14 @@ effect fn machine(
       if legacy {
         starts = nextState == u16.toUsize(View.u16(&data, 4))
       }
+      // HarfBuzz's conditions, and one more: the two transitions compared must also write the
+      // same things to the machine's memory. The text after a cut starts with nothing
+      // remembered, so a transition that sets a mark where the start state's does not (or the
+      // other way round) leaves the two sides of the cut remembering different glyphs.
       let same = View.u16(&startTransition, 0) == View.u16(&entry, 0)
-        && ((View.u16(&startTransition, 2) & 0x4000) == (flags & 0x4000))
+        && ((View.u16(&startTransition, 2) & (0x4000 | memory)) == (flags & (0x4000 | memory)))
       let safe = !actionable(kind, legacy, entry)
-        && (state == 0 || ((flags & 0x4000) != 0 && starts)
+        && (state == 0 || ((flags & 0x4000) != 0 && starts && (flags & memory) == 0)
           || (!actionable(kind, legacy, startTransition) && same))
         && (!actionable(kind, legacy, endTransition) || (kind == 1 && !markSet))
       if !safe {
@@ -339,6 +368,7 @@ effect fn machine(
     if kind == 0 {
       if (flags & 0x8000) != 0 {
         start = index
+        startSet = true
       }
       if (flags & 0x2000) != 0 {
         end = index + 1
@@ -346,13 +376,27 @@ effect fn machine(
           end = Buffer.len(&buffer.*)
         }
       }
-      if (flags & 15) != 0 && start < end {
-        let mut through = index + 1
-        if through > Buffer.len(&buffer.*) {
-          through = Buffer.len(&buffer.*)
+      if (flags & 15) != 0 {
+        if !startSet {
+          // The range would start in the text before this one, had there been any.
+          buffer.leansOnBefore = true
         }
-        rearrange(&mut buffer, start, end, through, u16.toUsize(flags & 15))
+        if start < end {
+          let mut through = index + 1
+          if through > Buffer.len(&buffer.*) {
+            through = Buffer.len(&buffer.*)
+          }
+          rearrange(&mut buffer, start, end, through, u16.toUsize(flags & 15))
+          // A verb that does not fit its range moves nothing and merges nothing, but text cut
+          // inside the range has another range.
+          Buffer.unsafeToBreak(&mut buffer, start, through)
+        }
       }
+    }
+    if kind == 1 && atEnd && !markSet && actionable(kind, legacy, entry) {
+      // Nothing is substituted at the end of text unless a glyph was marked: text before
+      // this one could have marked one.
+      buffer.leansOnBefore = true
     }
     if kind == 1 && (!atEnd || markSet) {
       let mut n: usize = 0
@@ -365,8 +409,21 @@ effect fn machine(
         if target == Buffer.len(&buffer.*) && target > 0 {
           target = target - 1
         }
-        if target < Buffer.len(&buffer.*)
-          && ((!legacy && action != 65535) || (legacy && action != 0)) {
+        let acts = (!legacy && action != 65535) || (legacy && action != 0)
+        if acts && (n == 0 || atEnd) {
+          // The marked glyph is looked up whether or not it has a substitute, and at the end
+          // of text any action hangs on a glyph having been marked: text cut between the
+          // marked glyph and this one marks another glyph, or none.
+          if !markSet {
+            buffer.leansOnBefore = true
+          }
+          let mut limit = index + 1
+          if limit > Buffer.len(&buffer.*) {
+            limit = Buffer.len(&buffer.*)
+          }
+          Buffer.unsafeToBreak(&mut buffer, mark, limit)
+        }
+        if target < Buffer.len(&buffer.*) && acts {
           let glyph = List<Glyph>.get(&buffer.glyphs, target).info.glyphId
           let mut mapped: u32 = 65536
           if legacy {
@@ -406,7 +463,16 @@ effect fn machine(
         stack[stackLen % 64] = index
         stackLen = stackLen + 1
       }
-      if ((!legacy && (flags & 0x2000) != 0) || (legacy && (flags & 0x3fff) != 0)) && stackLen > 0 {
+      let performs = (!legacy && (flags & 0x2000) != 0) || (legacy && (flags & 0x3fff) != 0)
+      if performs && stackLen == 0 {
+        // Components of the text before this one could have been waiting.
+        buffer.leansOnBefore = true
+      }
+      if performs && stackLen > 0 {
+        // The lowest component the actions read, and whether they ended by their own last
+        // action instead of running out of components.
+        let mut lowest = index
+        let mut ended = false
         let actions = View.offset32(&data, extra)
         let components = View.offset32(&data, extra + 4)
         let ligatures = View.offset32(&data, extra + 8)
@@ -421,7 +487,11 @@ effect fn machine(
           cursor = cursor - 1
           let at = stack[cursor % 64]
           if at >= Buffer.len(&buffer.*) {
+            ended = true
             break
+          }
+          if at < lowest {
+            lowest = at
           }
           if (!legacy && offset(4, actionIndex, 4) > View.len(&actions))
             || (legacy && actionIndex + 4 > View.len(&data)) {
@@ -467,6 +537,7 @@ effect fn machine(
             }
           }
           if (action & 0x80000000) != 0 {
+            ended = true
             break
           }
           if cursor == 0 {
@@ -476,6 +547,12 @@ effect fn machine(
           if legacy {
             actionIndex = actionIndex + 3
           }
+        }
+        // Every component the actions read decided their result, also one that became no
+        // ligature: text cut after it has fewer components.
+        Buffer.unsafeToBreak(&mut buffer, lowest, index + 1)
+        if !ended && cursor == 0 {
+          buffer.leansOnBefore = true
         }
       }
     }
