@@ -40,6 +40,38 @@ impl<'a> Folded<'a> {
 
 /// True when two UTF-8 family names are equal under Default Caseless Matching.
 pub fn same(a: &[u8], b: &[u8]) -> bool {
+  // Most names are ASCII, where folding is lowering A to Z: compare those bytes directly, and
+  // fold properly only from the first byte that is not ASCII.
+  let mut i: usize = 0
+  while i < a.length && i < b.length {
+    let x = a[i]
+    let y = b[i]
+    if x >= 128 || y >= 128 {
+      return foldedSame(a, b)
+    }
+    let lx = if x >= 65 && x <= 90 { x + 32 } else { x }
+    let ly = if y >= 65 && y <= 90 { y + 32 } else { y }
+    if lx != ly {
+      return false
+    }
+    i = i + 1
+  }
+  if i == a.length && i == b.length {
+    return true
+  }
+  // One is longer: equal only if what is left folds to nothing, which ASCII never does.
+  let rest = if i < a.length { a } else { b }
+  let mut at = i
+  while at < rest.length {
+    if rest[at] >= 128 {
+      return foldedSame(a, b)
+    }
+    at = at + 1
+  }
+  return false
+}
+
+fn foldedSame(a: &[u8], b: &[u8]) -> bool {
   let mut left = Folded.make(a)
   let mut right = Folded.make(b)
   while true {
