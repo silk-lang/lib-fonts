@@ -167,7 +167,10 @@ pub struct ConfiguredShaper<'a, 's, F: FontFuncs> {
   defaultScaled: ScaledGlyphMetrics<'a, 's, 'static, Scale, i32, NoExtents>,
   defaultScale: Scale,
   /// HVAR's region scalars at `coords`, empty at the default location (see `refreshScalars`).
-  hvarScalars: List<Fixed>,
+  pub hvarScalars: List<Fixed>,
+  /// Advances at `coords` by glyph id in font units, or empty (see `prepareAdvances`). A caller
+  /// that shapes at one location many times keeps them and lends them to each shaper.
+  pub hvarAdvances: List<F48Dot16>,
 }
 
 impl<'a, 's, F> ConfiguredShaper<'a, 's, F> {
@@ -184,6 +187,23 @@ impl<'a, 's, F> ConfiguredShaper<'a, 's, F> {
     }
     let written = GlyphMetrics.hvarScalars(&metrics, List<Fixed>.asMutSlice(&mut self.hvarScalars))
     List<Fixed>.truncate(&mut self.hvarScalars, written)
+    List<F48Dot16>.clear(&mut self.hvarAdvances)
+  }
+
+  /// Works out every glyph's advance at `coords` into `hvarAdvances`, once for all later shaping
+  /// at this location. Does nothing at the default location.
+  pub effect fn prepareAdvances(self: &mut Self) -> () ! OutOfMemoryError ? &mut Allocator {
+    List<F48Dot16>.clear(&mut self.hvarAdvances)
+    if List<F2Dot14>.length(&self.coords) == 0 { return () }
+    let located = GlyphMetrics.new(&self.data.font, List<F2Dot14>.asSlice(&self.coords))
+    let metrics = GlyphMetrics.withScalars(&located, List<Fixed>.asSlice(&self.hvarScalars))
+    let count = GlyphMetrics.numGlyphs(&metrics)
+    run List<F48Dot16>.reserve(&mut self.hvarAdvances, u32.toUsize(count))
+    let mut glyph: u32 = 0
+    while glyph < count {
+      run List<F48Dot16>.append(&mut self.hvarAdvances, GlyphMetrics.hAdvanceExact(&metrics, GlyphId.new(glyph)))
+      glyph = glyph + 1
+    }
   }
 
   pub fn new(data: &'s ShaperData<'a>) -> ConfiguredShaper<'a, 's, DefaultFontFuncs> {
@@ -205,6 +225,7 @@ impl<'a, 's, F> ConfiguredShaper<'a, 's, F> {
       ),
       defaultScale: Scale.identity(),
       hvarScalars: List<Fixed>.make(),
+      hvarAdvances: List<F48Dot16>.make(),
     }
   }
 
@@ -622,7 +643,10 @@ fn defaultMetrics<'a, 's, 'c, F: FontFuncs>(
   }
   let located = GlyphMetrics.new(&font.data.font, List<F2Dot14>.asSlice(&font.coords))
   return ScaledGlyphMetrics<'a, 'c, 'static, Scale, i32, NoExtents>.new(
-    GlyphMetrics.withScalars(&located, List<Fixed>.asSlice(&font.hvarScalars)),
+    GlyphMetrics.withAdvances(
+      &GlyphMetrics.withScalars(&located, List<Fixed>.asSlice(&font.hvarScalars)),
+      List<F48Dot16>.asSlice(&font.hvarAdvances),
+    ),
     font.scale,
   )
 }
@@ -797,6 +821,7 @@ impl<'a, 's, F> ConfiguredShaper<'a, 's, F> {
       defaultScaled: self.defaultScaled,
       defaultScale: self.defaultScale,
       hvarScalars: move self.hvarScalars,
+      hvarAdvances: move self.hvarAdvances,
     }
   }
 

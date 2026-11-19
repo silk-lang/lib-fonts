@@ -83,6 +83,8 @@ pub struct GlyphMetrics<'a, 'c> {
   // HVAR's region scalars at `coords` (see `hvarScalars`), or empty: they depend on the location
   // alone, and computing them for every advance was most of a variable face's shaping time.
   scalars: &'c [Fixed],
+  // Advances at `coords` by glyph, worked out before (see `withAdvances`), or empty.
+  advances: &'c [F48Dot16],
 }
 
 impl<'a, 'c> Copy for GlyphMetrics<'a, 'c> {}
@@ -142,6 +144,7 @@ impl<'a, 'c> GlyphMetrics<'a, 'c> {
     return Self {
       coords: coords,
       scalars: &[],
+      advances: &[],
       base: GlyphMetricsBase<'a> {
         colors: ColorSources.read(provider),
         varc: varc,
@@ -178,6 +181,7 @@ impl<'a, 'c> GlyphMetrics<'a, 'c> {
     return Self {
       coords: coords,
       scalars: &[],
+      advances: &[],
       base: GlyphMetricsBase<'a> {
         colors: Maybe<ColorSources<'a>>.None,
         varc: Maybe<VarcOutlines<'a>>.None,
@@ -211,7 +215,7 @@ impl<'a, 'c> GlyphMetrics<'a, 'c> {
   /// Metrics at the default location from `base`, which `new` built for a location with no
   /// non-default coordinate. `location` supplies the lifetime only: its coordinates are unused.
   pub fn fromDefault(base: GlyphMetricsBase<'a>, location: &'c [F2Dot14]) -> Self {
-    return Self { coords: Slice.view<F2Dot14>(location, 0, 0), scalars: &[], base: base }
+    return Self { coords: Slice.view<F2Dot14>(location, 0, 0), scalars: &[], advances: &[], base: base }
   }
 
   /// Writes HVAR's region scalars at this location into `out` and returns how many it wrote: 0
@@ -241,7 +245,13 @@ impl<'a, 'c> GlyphMetrics<'a, 'c> {
 
   /// These metrics with HVAR region scalars that `hvarScalars` wrote for the same location.
   pub fn withScalars(self: &Self, scalars: &'c [Fixed]) -> Self {
-    return Self { coords: self.coords, scalars: scalars, base: self.base }
+    return Self { coords: self.coords, scalars: scalars, advances: self.advances, base: self.base }
+  }
+
+  /// These metrics with the advances `hAdvanceExact` gave for each glyph at the same location,
+  /// indexed by glyph id: a variable face then sums HVAR's deltas once a glyph, not once a use.
+  pub fn withAdvances(self: &Self, advances: &'c [F48Dot16]) -> Self {
+    return Self { coords: self.coords, scalars: self.scalars, advances: advances, base: self.base }
   }
 
   pub fn numGlyphs(self: &Self) -> u32 {
@@ -301,6 +311,10 @@ impl<'a, 'c> GlyphMetrics<'a, 'c> {
     let base = F48Dot16.fromI32(u32.toI32(advance))
     if self.coords.length == 0 {
       return base
+    }
+    let known = u32.toUsize(GlyphId.toU32(glyph))
+    if known < self.advances.length {
+      return self.advances[known]
     }
     return GlyphMetrics.hAdvanceVaried(self, glyph, base)
   }
