@@ -2,6 +2,7 @@ import feature_tests
 import unicode_tests
 import buffer_tests
 import aat_tests
+import break_tests
 import ot_tests
 import plan_tests
 import font_tests

@@ -8,10 +8,20 @@
 # stand in for Apple's system fonts off macOS: one row a font, and with HB_BENCH the number of
 # texts whose glyphs differ from HarfBuzz's. DIR receives the corpora and the dumps.
 #
-#   FONTS=dir BENCH=path/to/font-shape-bench [HB_BENCH=path/to/hb-bench] run.sh [dump DIR | aat DIR]
+# With `breaks DIR [FONT_DIR ...]`, checks the unsafe-to-break flags of every face with Apple's
+# tables: the AAT test fonts, then the font files of each FONT_DIR (see aat-breaks.py). FONTS is
+# not needed for it.
+#
+#   FONTS=dir BENCH=path/to/font-shape-bench [HB_BENCH=path/to/hb-bench] run.sh [dump DIR | aat DIR | breaks DIR [FONT_DIR ...]]
 set -eu
 here=$(dirname "$0")
-: "${FONTS:?the directory fetch-fonts.sh filled}" "${BENCH:?the font-shape-bench binary}"
+: "${BENCH:?the font-shape-bench binary}"
+if [ "${1:-}" = breaks ]; then
+  shift
+  export BENCH
+  exec python3 "$here/aat-breaks.py" "$@"
+fi
+: "${FONTS:?the directory fetch-fonts.sh filled}"
 HB_BENCH=${HB_BENCH:-}
 iterations=${ITERATIONS:-20}
 rows="latin-prose:Inter-Regular.ttf latin-prose:Roboto-Regular.ttf latin-prose:NotoSans-Regular.ttf

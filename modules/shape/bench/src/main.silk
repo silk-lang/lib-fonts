@@ -1,9 +1,13 @@
 //! `font-shape-bench MODE FONT TEXT [ITERATIONS]`: shapes a fixed corpus and prints the time per
 //! call and per glyph, or with `dump-MODE` the shaped glyphs of every call.
 //!
-//! `breaks` and `concat` check, on every line, the promises a text layer relies on to reuse
-//! glyphs: text cut at a cluster that is not unsafe to break shapes to the same glyphs on both
-//! sides, and text that grows keeps its glyphs up to a cluster that is not unsafe to concat.
+//! `breaks`, `slices`, `grow` and `concat` check, on every line, the promises a text layer
+//! relies on to reuse glyphs: text cut at a cluster that is not unsafe to break shapes to the
+//! same glyphs on both sides (`breaks`), a piece between two such clusters shapes to the glyphs
+//! it has in the whole (`slices`), text that grows keeps its glyphs up to such a cluster when
+//! the rest does not lean on them (`grow`), and up to a cluster that is not unsafe to concat
+//! (`concat`). `breaks-words` and `slices-words` take every word as a text instead of every
+//! line. `FONT#N` is face N of a collection.
 //!
 //! `words` shapes every space-separated word on its own (the short runs of UI text), `lines`
 //! every line (paragraphs). Each call does what a text layer does per run: reset the buffer,
@@ -143,8 +147,23 @@ fn sameGlyph(left: Shaped, right: Shaped) -> bool {
     && left.yOffset == right.yOffset
 }
 
+// The script and direction a text is shaped with. A text layer itemizes by script before it
+// shapes, so the parts of a text are shaped with the script and direction of the whole: a part
+// that holds only punctuation would otherwise guess another script than its text has.
+struct Segment {
+  script: u32,
+  direction: Direction,
+}
+
+impl Copy for Segment {}
+
+fn guessed() -> Segment {
+  return Segment { script: 0, direction: Direction.Invalid }
+}
+
 // Shapes `text[start..end)` on its own with buffer flags `flags` and appends its glyphs.
-// Whether the text runs right to left; nothing is appended when shaping fails.
+// `segment` is the script and direction to shape with, guessed from the text when its script
+// is 0, and holds the ones used afterwards; nothing is appended when shaping fails.
 effect fn shapePart<'a, 's>(
   shaper: &Shaper<'a, 's>,
   buffer: &mut Buffer,
@@ -153,6 +172,7 @@ effect fn shapePart<'a, 's>(
   start: usize,
   end: usize,
   flags: u32,
+  segment: &mut Segment,
   out: &mut List<Shaped>,
 ) -> bool
   ! OutOfMemoryError
@@ -160,7 +180,13 @@ effect fn shapePart<'a, 's>(
   Buffer.clear(&mut buffer)
   Buffer.setFlags(&mut buffer, BufferFlags.fromBitsTruncate(flags))
   run Buffer.pushStr(&mut buffer, String.slice(text, start, end - start))
+  if segment.script != 0 {
+    buffer.script = segment.script
+    buffer.direction = segment.direction
+  }
   Buffer.guessSegmentProperties(&mut buffer)
+  segment.script = buffer.script
+  segment.direction = buffer.direction
   let key = ShapePlanKey.new(shaper, &buffer.*, &[])
   let mut index: usize = 0
   while index < List<ShapePlan<'a>>.length(&plans.*) {
@@ -229,6 +255,76 @@ struct Checked {
   wrong: u64,
   // Bytes from the end of the shorter text back to where it was cut, summed.
   back: u64,
+  // Texts checked, and texts left out because the font lacks most of their characters.
+  texts: u64,
+  skipped: u64,
+}
+
+// Whether the font has too few of the text's characters for the check to mean anything: a
+// text layer gives such text to another face.
+fn uncovered(glyphs: &[Shaped]) -> bool {
+  let mut missing: usize = 0
+  let mut i: usize = 0
+  while i < glyphs.length {
+    if glyphs[i].glyph == 0 {
+      missing = missing + 1
+    }
+    i = i + 1
+  }
+  return missing * 2 > glyphs.length
+}
+
+// The clusters of `glyphs` where the text may be cut: every cluster after the first that is
+// not unsafe to break, in rising order.
+effect fn cuts(glyphs: &[Shaped], start: usize, checked: &mut Checked, out: &mut List<usize>) -> ()
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  let mut i: usize = 0
+  while i < glyphs.length {
+    let cluster = glyphs[i].cluster
+    let mut first = u32.toUsize(cluster) != start
+    let mut j: usize = 0
+    while first && j < i {
+      if glyphs[j].cluster == cluster {
+        first = false
+      }
+      j = j + 1
+    }
+    if first {
+      if clear(glyphs, cluster, 1) {
+        checked.safe = checked.safe + 1
+        run List<usize>.append(&mut out, u32.toUsize(cluster))
+      } else {
+        checked.flagged = checked.flagged + 1
+      }
+    }
+    i = i + 1
+  }
+  // Right-to-left text has its clusters falling.
+  let values = List<usize>.asMutSlice(&mut out)
+  let mut n: usize = 1
+  while n < values.length {
+    let value = values[n]
+    let mut at = n
+    while at > 0 && values[at - 1] > value {
+      values[at] = values[at - 1]
+      at = at - 1
+    }
+    values[at] = value
+    n = n + 1
+  }
+}
+
+effect fn report(what: string, at: usize, to: usize, line: string, checked: &mut Checked) -> ()
+  ! OutOfMemoryError | WriterError
+  ? &mut Allocator | &mut Writer {
+  checked.wrong = checked.wrong + 1
+  if checked.wrong <= 5 {
+    run Format.format(
+      "wrong {what} at byte {at} to {to} of: {line}\n",
+      &.{ what: what, at: at, to: to, line: line },
+    )
+  }
 }
 
 // Cuts `text[start..end)` at every cluster that is not unsafe to break, shapes both sides and
@@ -245,41 +341,194 @@ effect fn checkBreaks<'a, 's>(
   ! OutOfMemoryError | WriterError
   ? &mut Allocator | &mut Writer {
   let mut whole = List<Shaped>.make()
-  let rtl = run shapePart(shaper, &mut buffer, &mut plans, text, start, end, 0, &mut whole)
+  let mut segment = guessed()
+  let rtl = run shapePart(shaper, &mut buffer, &mut plans, text, start, end, 0, &mut segment, &mut whole)
   let glyphs = List<Shaped>.asSlice(&whole)
+  if uncovered(glyphs) {
+    checked.skipped = checked.skipped + 1
+    return
+  }
+  checked.texts = checked.texts + 1
+  let mut places = List<usize>.make()
+  run cuts(glyphs, start, &mut checked, &mut places)
   let mut parts = List<Shaped>.make()
   let mut i: usize = 0
-  while i < glyphs.length {
-    let cluster = glyphs[i].cluster
-    if u32.toUsize(cluster) == start || (i > 0 && glyphs[i - 1].cluster == cluster) {
-      i = i + 1
-      continue
-    }
-    if !clear(glyphs, cluster, 1) {
-      checked.flagged = checked.flagged + 1
-      i = i + 1
-      continue
-    }
-    checked.safe = checked.safe + 1
+  while i < List<usize>.length(&places) {
+    let at = List<usize>.get(&places, i)
     List<Shaped>.clear(&mut parts)
-    let at = u32.toUsize(cluster)
     if rtl {
-      drop run shapePart(shaper, &mut buffer, &mut plans, text, at, end, 0, &mut parts)
-      drop run shapePart(shaper, &mut buffer, &mut plans, text, start, at, 0, &mut parts)
+      drop run shapePart(shaper, &mut buffer, &mut plans, text, at, end, 0, &mut segment, &mut parts)
+      drop run shapePart(shaper, &mut buffer, &mut plans, text, start, at, 0, &mut segment, &mut parts)
     } else {
-      drop run shapePart(shaper, &mut buffer, &mut plans, text, start, at, 0, &mut parts)
-      drop run shapePart(shaper, &mut buffer, &mut plans, text, at, end, 0, &mut parts)
+      drop run shapePart(shaper, &mut buffer, &mut plans, text, start, at, 0, &mut segment, &mut parts)
+      drop run shapePart(shaper, &mut buffer, &mut plans, text, at, end, 0, &mut segment, &mut parts)
     }
     if !sameGlyphs(glyphs, List<Shaped>.asSlice(&parts)) {
-      checked.wrong = checked.wrong + 1
-      if checked.wrong <= 5 {
-        run Format.format(
-          "wrong break at byte {at} of: {line}\n",
-          &.{ at: at - start, line: String.slice(text, start, end - start) },
-        )
-      }
+      run report("break", at - start, end - start, String.slice(text, start, end - start), &mut checked)
     }
     i = i + 1
+  }
+}
+
+// What a text layer does with a line of a paragraph: takes `text[a..b)` between two clusters
+// that are not unsafe to break, and expects the glyphs the whole has there. Checks the slices
+// from each such cluster to the next few and to some further on.
+effect fn checkSlices<'a, 's>(
+  shaper: &Shaper<'a, 's>,
+  buffer: &mut Buffer,
+  plans: &mut List<ShapePlan<'a>>,
+  text: string,
+  start: usize,
+  end: usize,
+  checked: &mut Checked,
+) -> ()
+  ! OutOfMemoryError | WriterError
+  ? &mut Allocator | &mut Writer {
+  let mut whole = List<Shaped>.make()
+  let mut segment = guessed()
+  drop run shapePart(shaper, &mut buffer, &mut plans, text, start, end, 0, &mut segment, &mut whole)
+  let glyphs = List<Shaped>.asSlice(&whole)
+  if uncovered(glyphs) {
+    checked.skipped = checked.skipped + 1
+    return
+  }
+  checked.texts = checked.texts + 1
+  let mut places = List<usize>.make()
+  let mut counted = Checked { safe: 0, flagged: 0, wrong: 0, back: 0, texts: 0, skipped: 0 }
+  run cuts(glyphs, start, &mut counted, &mut places)
+  checked.flagged = checked.flagged + counted.flagged
+  let mut part = List<Shaped>.make()
+  let mut kept = List<Shaped>.make()
+  let count = List<usize>.length(&places)
+  let mut i: usize = 0
+  while i < count {
+    let from = List<usize>.get(&places, i)
+    let mut step: usize = 1
+    let mut previous: usize = 1
+    while i + step < count {
+      let to = List<usize>.get(&places, i + step)
+      checked.safe = checked.safe + 1
+      List<Shaped>.clear(&mut part)
+      drop run shapePart(shaper, &mut buffer, &mut plans, text, from, to, 0, &mut segment, &mut part)
+      List<Shaped>.clear(&mut kept)
+      let mut g: usize = 0
+      while g < glyphs.length {
+        if u32.toUsize(glyphs[g].cluster) >= from && u32.toUsize(glyphs[g].cluster) < to {
+          run List<Shaped>.append(&mut kept, glyphs[g])
+        }
+        g = g + 1
+      }
+      if !sameGlyphs(List<Shaped>.asSlice(&kept), List<Shaped>.asSlice(&part)) {
+        run report("slice", from - start, to - start, String.slice(text, start, end - start), &mut checked)
+      }
+      // 1, 2, 3, 5, 8, 13, ... clusters on.
+      let following = step + previous
+      previous = step
+      step = following
+    }
+    i = i + 1
+  }
+}
+
+// What a text layer does with text that grows (a message arriving word by word): it keeps the
+// glyphs of the shorter text up to its last cluster that is not unsafe to break at or before
+// the start of its last word, and shapes the text from there to the new end on its own. That
+// needs more than the flag says: the flag is about cutting the text that was shaped, and the
+// new words may reach back over the cut. So the text from the cut on must not lean on what is
+// before it (`Buffer.leansOnBefore`), or the layer shapes the whole. Grows `text[start..end)`
+// from every word end by one word and to its end, and compares with shaping the longer text.
+// `flagged` counts the times nothing could be kept.
+effect fn checkGrow<'a, 's>(
+  shaper: &Shaper<'a, 's>,
+  buffer: &mut Buffer,
+  plans: &mut List<ShapePlan<'a>>,
+  text: string,
+  start: usize,
+  end: usize,
+  checked: &mut Checked,
+) -> ()
+  ! OutOfMemoryError | WriterError
+  ? &mut Allocator | &mut Writer {
+  let bytes = String.utf8Bytes(text)
+  let mut whole = List<Shaped>.make()
+  let mut segment = guessed()
+  let rtl = run shapePart(shaper, &mut buffer, &mut plans, text, start, end, 0, &mut segment, &mut whole)
+  if rtl || uncovered(List<Shaped>.asSlice(&whole)) {
+    // A text layer keeps nothing of right-to-left text that grows.
+    checked.skipped = checked.skipped + 1
+    return
+  }
+  checked.texts = checked.texts + 1
+  let mut shorter = List<Shaped>.make()
+  let mut longer = List<Shaped>.make()
+  let mut joined = List<Shaped>.make()
+  let mut rest = List<Shaped>.make()
+  let mut lastWord = start
+  let mut stop = start + 1
+  while stop < end {
+    if bytes[stop] != 32 {
+      stop = stop + 1
+      continue
+    }
+    List<Shaped>.clear(&mut shorter)
+    drop run shapePart(shaper, &mut buffer, &mut plans, text, start, stop, 0, &mut segment, &mut shorter)
+    let old = List<Shaped>.asSlice(&shorter)
+    let mut at: u32 = 0
+    let mut found = false
+    let mut i: usize = 0
+    while i < old.length {
+      let cluster = old[i].cluster
+      if u32.toUsize(cluster) > start && u32.toUsize(cluster) <= lastWord && (!found || cluster > at)
+        && clear(old, cluster, 1) {
+        at = cluster
+        found = true
+      }
+      i = i + 1
+    }
+    lastWord = stop + 1
+    if !found {
+      checked.flagged = checked.flagged + 1
+      stop = stop + 1
+      continue
+    }
+    let mut next = stop + 1
+    while next < end && bytes[next] != 32 {
+      next = next + 1
+    }
+    let mut round: usize = 0
+    while round < 2 {
+      let mut target = next
+      if round == 1 {
+        target = end
+      }
+      round = round + 1
+      if round == 2 && next == end {
+        break
+      }
+      List<Shaped>.clear(&mut rest)
+      drop run shapePart(shaper, &mut buffer, &mut plans, text, u32.toUsize(at), target, 0, &mut segment, &mut rest)
+      if buffer.leansOnBefore {
+        checked.flagged = checked.flagged + 1
+        continue
+      }
+      checked.safe = checked.safe + 1
+      checked.back = checked.back + usize.toU64(stop - u32.toUsize(at))
+      List<Shaped>.clear(&mut longer)
+      drop run shapePart(shaper, &mut buffer, &mut plans, text, start, target, 0, &mut segment, &mut longer)
+      List<Shaped>.clear(&mut joined)
+      i = 0
+      while i < old.length {
+        if old[i].cluster < at {
+          run List<Shaped>.append(&mut joined, old[i])
+        }
+        i = i + 1
+      }
+      run List<Shaped>.appendSlice(&mut joined, List<Shaped>.asSlice(&rest))
+      if !sameGlyphs(List<Shaped>.asSlice(&longer), List<Shaped>.asSlice(&joined)) {
+        run report("growth", u32.toUsize(at) - start, target - start, String.slice(text, start, end - start), &mut checked)
+      }
+    }
+    stop = stop + 1
   }
 }
 
@@ -299,9 +548,10 @@ effect fn checkConcat<'a, 's>(
   ? &mut Allocator | &mut Writer {
   let bytes = String.utf8Bytes(text)
   let mut whole = List<Shaped>.make()
-  let rtl = run shapePart(shaper, &mut buffer, &mut plans, text, start, end, 64, &mut whole)
+  let mut segment = guessed()
+  let rtl = run shapePart(shaper, &mut buffer, &mut plans, text, start, end, 64, &mut segment, &mut whole)
   let mut plain = List<Shaped>.make()
-  drop run shapePart(shaper, &mut buffer, &mut plans, text, start, end, 0, &mut plain)
+  drop run shapePart(shaper, &mut buffer, &mut plans, text, start, end, 0, &mut segment, &mut plain)
   if !sameGlyphs(List<Shaped>.asSlice(&whole), List<Shaped>.asSlice(&plain)) {
     checked.wrong = checked.wrong + 1
     run Writer.writeString("the concat flag changed the glyphs\n")
@@ -316,7 +566,7 @@ effect fn checkConcat<'a, 's>(
       continue
     }
     List<Shaped>.clear(&mut shorter)
-    drop run shapePart(shaper, &mut buffer, &mut plans, text, start, stop, 64, &mut shorter)
+    drop run shapePart(shaper, &mut buffer, &mut plans, text, start, stop, 64, &mut segment, &mut shorter)
     let old = List<Shaped>.asSlice(&shorter)
 
     // The last cluster of the shorter text that is clear and whose rest also starts clear,
@@ -349,6 +599,7 @@ effect fn checkConcat<'a, 's>(
         u32.toUsize(candidate),
         end,
         64,
+        &mut segment,
         &mut rest,
       )
       if clear(List<Shaped>.asSlice(&rest), candidate, 2) {
@@ -478,21 +729,32 @@ effect fn process() -> i32
   let values = List<String>.asSlice(&args)
   if values.length < 3 {
     run Writer.writeString(
-      "Usage: font-shape-bench words|lines|dump-MODE|flags-MODE|breaks|concat FONT TEXT [ITERATIONS]\n",
+      "Usage: font-shape-bench words|lines|dump-MODE|flags-MODE|leans-MODE|breaks[-words]|slices[-words]|grow|concat FONT[#FACE] TEXT [ITERATIONS]\n",
     )
     return 2
   }
   let mut mode = String.view(&values[0])
 
-  // `flags-MODE` dumps as `dump-MODE` does, with the glyph flags (unsafe to break).
-  let flagged = String.startsWith(mode, "flags-")
+  // `flags-MODE` dumps as `dump-MODE` does, with the glyph flags (unsafe to break);
+  // `leans-MODE` also says of each text whether it leans on text before it.
+  let leaning = String.startsWith(mode, "leans-")
+  let flagged = leaning || String.startsWith(mode, "flags-")
   let dump = flagged || String.startsWith(mode, "dump-")
   if flagged {
     mode = String.slice(mode, 6, String.byteLength(mode) - 6)
   } else if dump {
     mode = String.slice(mode, 5, String.byteLength(mode) - 5)
   }
-  let check = mode == "breaks" || mode == "concat"
+  // The checks take every line, or with `-words` every word, as a text.
+  let mut byWords = mode == "words"
+  if mode == "breaks-words" {
+    mode = "breaks"
+    byWords = true
+  } else if mode == "slices-words" {
+    mode = "slices"
+    byWords = true
+  }
+  let check = mode == "breaks" || mode == "slices" || mode == "grow" || mode == "concat"
   if mode != "words" && mode != "lines" && !check {
     return 2
   }
@@ -505,30 +767,62 @@ effect fn process() -> i32
   }
   let cwd = run HostInput.workingDirectory()
   let base = run Path.fromBytes(Bytes.asSlice(&cwd))
-  let fontBytes = run read(&base, String.view(&values[1]))
+  // `FONT#N` names face N of a collection.
+  let mut fontName = String.view(&values[1])
+  let mut face: u32 = 0
+  let nameBytes = String.utf8Bytes(fontName)
+  let mut hash = nameBytes.length
+  while hash > 0 && nameBytes[hash - 1] >= 48 && nameBytes[hash - 1] <= 57 {
+    hash = hash - 1
+  }
+  if hash > 0 && hash < nameBytes.length && nameBytes[hash - 1] == 35 {
+    face = usize.toU32(number(String.slice(fontName, hash, nameBytes.length - hash)))
+    fontName = String.slice(fontName, 0, hash - 1)
+  }
+  let fontBytes = run read(&base, fontName)
   let textBytes = run read(&base, String.view(&values[2]))
   let text = String.fromUtf8(Bytes.asSlice(&textBytes)) |> Result<string, InvalidUtf8>.unwrapOr("")
-  let font = match move FontRef.fromIndex(Bytes.asSlice(&fontBytes), 0) {
+  let font = match move FontRef.fromIndex(Bytes.asSlice(&fontBytes), face) {
     Result<FontRef, ReadError>.Success { value } => value
     _ => {
       return 2
     }
   }
   let mut calls = List<Range>.make()
-  run split(text, mode == "words", &mut calls)
+  run split(text, byWords, &mut calls)
   let data = ShaperData.new(&font)
   let shaper = Shaper.new(&data)
   let mut buffer = Buffer.new()
   let mut plans = List<ShapePlan>.make()
   if check {
-    let mut checked = Checked { safe: 0, flagged: 0, wrong: 0, back: 0 }
+    let mut checked = Checked { safe: 0, flagged: 0, wrong: 0, back: 0, texts: 0, skipped: 0 }
     let mut call: usize = 0
     while call < List<Range>.length(&calls) {
       let range = List<Range>.get(&calls, call)
 
       // The check shapes a line once per cluster, so very long lines are left out.
       if range.length <= 4096 {
-        if mode == "breaks" {
+        if mode == "grow" {
+          run checkGrow(
+            &shaper,
+            &mut buffer,
+            &mut plans,
+            text,
+            range.start,
+            range.start + range.length,
+            &mut checked,
+          )
+        } else if mode == "slices" {
+          run checkSlices(
+            &shaper,
+            &mut buffer,
+            &mut plans,
+            text,
+            range.start,
+            range.start + range.length,
+            &mut checked,
+          )
+        } else if mode == "breaks" {
           run checkBreaks(
             &shaper,
             &mut buffer,
@@ -553,12 +847,14 @@ effect fn process() -> i32
       call = call + 1
     }
     run Format.format(
-      "safe {safe} flagged {flagged} wrong {wrong} back {back}\n",
+      "safe {safe} flagged {flagged} wrong {wrong} back {back} texts {texts} skipped {skipped}\n",
       &.{
         safe: checked.safe,
         flagged: checked.flagged,
         wrong: checked.wrong,
         back: checked.back / (checked.safe + 1),
+        texts: checked.texts,
+        skipped: checked.skipped,
       },
     )
     if checked.wrong != 0 {
@@ -582,6 +878,13 @@ effect fn process() -> i32
           how = 20
         }
         let line = run serialize(&shaper, &buffer, how)
+        if leaning {
+          if buffer.leansOnBefore {
+            run Writer.writeString("leans ")
+          } else {
+            run Writer.writeString("stays ")
+          }
+        }
         run Writer.writeString("[")
         run Writer.writeString(String.view(&line))
         run Writer.writeString("]\n")

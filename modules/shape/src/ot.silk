@@ -4535,11 +4535,21 @@ pub effect fn finishOffsets(buffer: &mut Buffer) -> ()
   }
   let horizontal = Direction.isHorizontal(buffer.direction)
   let forward = Direction.isForward(buffer.direction)
+
+  // Cross-stream kerning chains every glyph to the one before it, and no lookup flagged the
+  // pairs: a glyph that takes a shift from its neighbour is unsafe to break from it.
+  let mut inherits: u32 = 0
+  if buffer.crossChained {
+    inherits = 1
+    if (buffer.flags & 64) != 0 {
+      inherits = 3
+    }
+  }
   let glyphs = List<Glyph>.asMutSlice(&mut buffer.glyphs)
   let mut i: usize = 0
   while i < glyphs.length {
     if glyphs[i].attach != 0 {
-      resolveOffset(&mut glyphs, i, horizontal, forward, 0)
+      resolveOffset(&mut glyphs, i, horizontal, forward, inherits, 0)
     }
     i = i + 1
   }
@@ -4558,11 +4568,14 @@ fn advanceSum(glyphs: &mut [Glyph], from: usize, to: usize) -> [i64; 2] {
   return [x, y]
 }
 
+// `inherits`, when not 0, is the flags for the later of two chained glyphs when the earlier
+// hands it a shift.
 fn resolveOffset(
   glyphs: &mut [Glyph],
   at: usize,
   horizontal: bool,
   forward: bool,
+  inherits: u32,
   depth: usize,
 ) -> () {
   if depth >= 100 {
@@ -4578,10 +4591,17 @@ fn resolveOffset(
     return
   }
   let base = i64.toUsize(target)
-  resolveOffset(&mut glyphs, base, horizontal, forward, depth + 1)
+  resolveOffset(&mut glyphs, base, horizontal, forward, inherits, depth + 1)
   let parentX = glyphs[base].position.xOffset
   let parentY = glyphs[base].position.yOffset
   if glyphs[at].attachType == 2 {
+    if inherits != 0 && ((horizontal && parentY != 0) || (!horizontal && parentX != 0)) {
+      if glyphs[at].info.cluster > glyphs[base].info.cluster {
+        glyphs[at].info.flags = glyphs[at].info.flags | inherits
+      } else if glyphs[at].info.cluster < glyphs[base].info.cluster {
+        glyphs[base].info.flags = glyphs[base].info.flags | inherits
+      }
+    }
     if horizontal {
       glyphs[at].position.yOffset = add(glyphs[at].position.yOffset, parentY)
     } else {

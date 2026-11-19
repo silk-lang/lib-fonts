@@ -1,0 +1,165 @@
+//! Cuts at clusters that are not unsafe to break, in fonts shaped with Apple's tables: both
+//! sides, shaped apart, must give the glyphs the whole text has. `bench/aat-breaks.py` checks
+//! the same over every AAT test font and the fonts of a system.
+import test_fonts
+import silk.collections.bytes { Bytes }
+import silk.system.filesystem { FileError }
+import silk.system.host_input { HostInputError }
+import font { ShaperData, ConfiguredShaper, FontFuncs }
+import shape { shapeWithFeatures }
+import buffer { Buffer, Glyph }
+import read_fonts.lib { FontRef, ReadError }
+import silk.collections.list { List }
+import silk.core.result { Result }
+import silk.testing.testing { Testing, AssertionError }
+import silk.mem.allocator { Allocator, OutOfMemoryError }
+import silk.core.effect { Effect }
+import silk.num.u32
+import silk.num.usize
+import silk.text.string { String }
+
+// Shapes `text[start..end)` as the script and direction of `like` (or guessed, when it has
+// none) into `out`, with clusters counted from the start of `text`.
+effect fn part<'a, 's, F: FontFuncs>(
+  font: &ConfiguredShaper<'a, 's, F>,
+  text: string,
+  start: usize,
+  end: usize,
+  like: &Buffer,
+  out: &mut Buffer,
+) -> ()
+  ! OutOfMemoryError
+  ? &mut Allocator {
+  Buffer.clear(&mut out)
+  run Buffer.pushStr(&mut out, String.slice(text, start, end - start))
+  out.script = like.script
+  out.direction = like.direction
+  Buffer.guessSegmentProperties(&mut out)
+  drop run shapeWithFeatures(font, &mut out, &[])
+  let glyphs = List<Glyph>.asMutSlice(&mut out.glyphs)
+  let mut i: usize = 0
+  while i < glyphs.length {
+    glyphs[i].info.cluster = glyphs[i].info.cluster + usize.toU32(start)
+    i = i + 1
+  }
+}
+
+fn same(left: &Glyph, right: &Glyph) -> bool {
+  return left.info.glyphId == right.info.glyphId && left.info.cluster == right.info.cluster
+    && left.position.xAdvance == right.position.xAdvance
+    && left.position.yAdvance == right.position.yAdvance
+    && left.position.xOffset == right.position.xOffset
+    && left.position.yOffset == right.position.yOffset
+}
+
+// Cuts `text` at every cluster that is not unsafe to break and compares the two sides with
+// the whole. Returns how many cuts there were.
+effect fn cuts(bytes: &[u8], text: string) -> usize
+  ! AssertionError<'static> | OutOfMemoryError
+  ? &mut Allocator {
+  let source = match move FontRef.new(bytes) {
+    Result<FontRef, ReadError>.Success { value } => value
+    _ => {
+      run Testing.expect(false, "break fixture")
+      return 0
+    }
+  }
+  let data = ShaperData.new(&source)
+  let font = ShaperData.shaper(&data)
+  let fresh = Buffer.new()
+  let mut whole = Buffer.new()
+  run part(&font, text, 0, String.byteLength(text), &fresh, &mut whole)
+  let mut first = Buffer.new()
+  let mut second = Buffer.new()
+  let glyphs = List<Glyph>.asSlice(&whole.glyphs)
+  let mut made: usize = 0
+  let mut i: usize = 1
+  while i < glyphs.length {
+    let cluster = glyphs[i].info.cluster
+    if cluster == glyphs[i - 1].info.cluster || cluster == 0 || (glyphs[i].info.flags & 1) != 0 {
+      i = i + 1
+      continue
+    }
+    made = made + 1
+    let at = u32.toUsize(cluster)
+    run part(&font, text, 0, at, &whole, &mut first)
+    run part(&font, text, at, String.byteLength(text), &whole, &mut second)
+    let left = List<Glyph>.asSlice(&first.glyphs)
+    let right = List<Glyph>.asSlice(&second.glyphs)
+    let mut equal = left.length + right.length == glyphs.length
+    let mut g: usize = 0
+    while equal && g < glyphs.length {
+      if g < left.length {
+        equal = same(&glyphs[g], &left[g])
+      } else {
+        equal = same(&glyphs[g], &right[g - left.length])
+      }
+      g = g + 1
+    }
+    run Testing.expect(equal, "a cut at a cluster that is not unsafe to break keeps the glyphs")
+    i = i + 1
+  }
+  return made
+}
+
+effect fn cases() -> ()
+  ! AssertionError<'static> | OutOfMemoryError | FileError | HostInputError
+  ? &mut Allocator {
+  // Rearrangement: the verb is chosen by the digit at the end, glyphs after the range it moves.
+  let four = run test_fonts.read("tests/fonts/text-rendering-tests/TestMORXFour.ttf")
+  let source = match move FontRef.new(Bytes.asSlice(&four)) {
+    Result<FontRef, ReadError>.Success { value } => value
+    _ => {
+      run Testing.expect(false, "rearrangement fixture")
+      return
+    }
+  }
+  let data = ShaperData.new(&source)
+  let font = ShaperData.shaper(&data)
+  let fresh = Buffer.new()
+  let mut buffer = Buffer.new()
+  run part(&font, "PQRADXYZ3", 0, 9, &fresh, &mut buffer)
+  let glyphs = List<Glyph>.asSlice(&buffer.glyphs)
+  let clusters: [u32; 9] = [0, 1, 2, 3, 3, 3, 3, 3, 3]
+  let mut matches = glyphs.length == 9
+  let mut i: usize = 0
+  while matches && i < 9 {
+    matches = glyphs[i].info.cluster == clusters[i]
+    i = i + 1
+  }
+  run Testing.expect(
+    matches,
+    "a rearrangement joins the clusters from its range to the glyph that chose the verb, as HarfBuzz does",
+  )
+  run Testing.expect(!buffer.leansOnBefore, "a range marked in the text does not lean on text before it")
+  run part(&font, "DXYZ3", 0, 5, &fresh, &mut buffer)
+  run Testing.expect(
+    buffer.leansOnBefore,
+    "a verb whose range no glyph of the text started leans on the text before it",
+  )
+  drop run cuts(Bytes.asSlice(&four), "PQRADXYZ3")
+  drop run cuts(Bytes.asSlice(&four), "PQRABCDXYZ\u{2493}")
+  let two = run test_fonts.read("tests/fonts/text-rendering-tests/TestMORXTwo.ttf")
+  drop run cuts(Bytes.asSlice(&two), "OOOABXYZCDOOO4")
+  drop run cuts(Bytes.asSlice(&two), "OOOABCDEFGOOO3141")
+  let twelve = run test_fonts.read("tests/fonts/text-rendering-tests/TestMORXTwelve.ttf")
+  drop run cuts(Bytes.asSlice(&twelve), "XABCX1")
+
+  // Ligatures, contextual substitution and insertion keep their safe cuts.
+  let eighteen = run test_fonts.read("tests/fonts/text-rendering-tests/TestMORXEighteen.ttf")
+  let three = run test_fonts.read("tests/fonts/text-rendering-tests/TestMORXThree.ttf")
+  let twentynine = run test_fonts.read("tests/fonts/text-rendering-tests/TestMORXTwentynine.ttf")
+  let ligatures = run cuts(Bytes.asSlice(&eighteen), "ABCDE")
+  let rearranged = run cuts(Bytes.asSlice(&three), "ABXCD3")
+  let inserted = run cuts(Bytes.asSlice(&twentynine), "PQRMMXXMMYYAZZ")
+  run Testing.expect(
+    ligatures + rearranged + inserted > 0,
+    "state machines still leave clusters that are safe to break",
+  )
+}
+
+test effect fn appleCutsAtSafeClustersKeepTheGlyphs() -> ()
+  ! AssertionError<'static> | OutOfMemoryError | FileError | HostInputError {
+  let mut allocator = Allocator.systemAllocatorProvider()
+  run cases() |> Effect.provideMut<Allocator>(&mut allocator)
+}
