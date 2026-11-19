@@ -10,8 +10,12 @@ static if Intrinsic.targetArchitecture() != "wasm32" {
   }
 
   import collection { FontCollection }
+  import index { FontIndex, Stamp }
+  static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
+    import silk.platform.native.file { NativeFile }
+  }
   import svg_fonts.mapped { MappedFont }
-  import svg_fonts.database { Generic }
+  import svg_fonts.database { Generic, Face }
   import silk.collections.bytes { Bytes }
   import silk.collections.list { List }
   import silk.core.effect { Effect }
@@ -43,7 +47,11 @@ static if Intrinsic.targetArchitecture() != "wasm32" {
     pub truncated: bool,
     /// Bytes of font files mapped read-only rather than read; they do not count toward
     /// `Options.maxBytes`, which budgets heap copies.
-    pub mapped: usize
+    pub mapped: usize,
+    /// What earlier runs read from each file (see `index.silk`); `indexed` is false when no index
+    /// is used.
+    pub index: FontIndex,
+    pub indexed: bool,
   }
 
   impl Report {
@@ -55,6 +63,8 @@ static if Intrinsic.targetArchitecture() != "wasm32" {
         skipped: 0,
         truncated: false,
         mapped: 0,
+        index: FontIndex.make(),
+        indexed: false,
       }
     }
   }
@@ -200,11 +210,32 @@ static if Intrinsic.targetArchitecture() != "wasm32" {
     let mut terminated = Bytes.make()
     run Bytes.append(&mut terminated, Path.rawBytes(path))
     run Bytes.append(&mut terminated, &[0])
+    let stamp = if report.indexed { stampOf(Path.rawBytes(path)) } else { Option<Stamp>.None }
     let opened = MappedFont.open(Bytes.asSlice(&terminated))
     return match move opened {
       Option<MappedFont>.Some { value } => {
         let length = value.byteLength()
-        let count = run collection.addMapped(move value)
+        let before = collection.faceCount()
+        let mut cached = Option<List<Face>>.None
+        if let Option<Stamp>.Some { value: current } = stamp {
+          cached = run report.index.faces(Path.rawBytes(path), current)
+        }
+        let count = match move cached {
+          Option<List<Face>>.Some { value: faces } => run collection.database.addMappedFaces(move value, move faces)
+          Option<List<Face>>.None => {
+            let added = run collection.addMapped(move value)
+            if let Option<Stamp>.Some { value: current } = stamp {
+              let mut read = List<Face>.make()
+              let mut i = before
+              while i < collection.faceCount() {
+                run read.append(run copyFace(collection.face(i)))
+                i = i + 1
+              }
+              run report.index.record(Path.rawBytes(path), current, read.asSlice())
+            }
+            added
+          }
+        }
         if count > 0 {
           report.files = report.files + 1
           report.mapped = report.mapped + length
@@ -215,6 +246,75 @@ static if Intrinsic.targetArchitecture() != "wasm32" {
         true
       }
       Option<MappedFont>.None => false
+    }
+  }
+
+  effect fn copyNames(names: &List<Bytes>) -> List<Bytes> ! OutOfMemoryError ? &mut Allocator {
+    let mut out = List<Bytes>.make()
+    let mut i: usize = 0
+    while i < names.length() {
+      let mut copy = Bytes.make()
+      run Bytes.append(&mut copy, names.asSlice()[i].asSlice())
+      run out.append(move copy)
+      i = i + 1
+    }
+    return move out
+  }
+
+  effect fn copyFace(face: &Face) -> Face ! OutOfMemoryError ? &mut Allocator {
+    return Face {
+      source: face.source, index: face.index, families: run copyNames(&face.families), names: run copyNames(&face.names),
+      weight: face.weight, width: face.width, italic: face.italic, oblique: face.oblique, axes: face.axes,
+    }
+  }
+
+  /// The size and modification time of the file at `path`, which tell an index entry is current.
+  fn stampOf(path: &[u8]) -> Option<Stamp> {
+    static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
+      let status = run Effect.result(NativeFile.status(path, true))
+      return match move status {
+        Result.Success { value } => Option<Stamp>.Some { value: Stamp { size: value.size, seconds: value.modified.seconds, nanoseconds: value.modified.nanoseconds } }
+        Result.Failure { error } => {
+          drop error
+          Option<Stamp>.None
+        }
+      }
+    } else {
+      drop path
+      return Option<Stamp>.None
+    }
+  }
+
+  /// Where the font index lives: the user's cache directory. None turns the index off, as
+  /// SILK_FONT_INDEX=0 does.
+  effect fn indexPath() -> Option<String>
+    ! OutOfMemoryError
+    ? &mut HostInput | &mut Allocator {
+    static if Intrinsic.targetOperatingSystem() == "darwin" || Intrinsic.targetOperatingSystem() == "linux" {
+      let off = run Effect.result(HostInput.variableNamed("SILK_FONT_INDEX"))
+      if let Result.Success { value } = move off {
+        if let Option<Bytes>.Some { value: bytes } = move value {
+          if bytes.asSlice().length == 1 && bytes.asSlice()[0] == 48 { return Option<String>.None }
+        }
+      }
+      let home = run Effect.result(HostInput.variableNamed("HOME"))
+      if let Result.Success { value } = move home {
+        if let Option<Bytes>.Some { value: bytes } = move value {
+          let base = String.fromUtf8(bytes.asSlice()).unwrapOr("")
+          if String.byteLength(base) > 0 {
+            let mut path = run String.copy(base)
+            static if Intrinsic.targetOperatingSystem() == "darwin" {
+              run path.append("/Library/Caches/silk-ui/font-index-1")
+            } else {
+              run path.append("/.cache/silk-ui/font-index-1")
+            }
+            return Option<String>.Some { value: move path }
+          }
+        }
+      }
+      return Option<String>.None
+    } else {
+      return Option<String>.None
     }
   }
 
@@ -267,6 +367,17 @@ static if Intrinsic.targetArchitecture() != "wasm32" {
     ? &mut HostInput | &mut Allocator {
     let mut files = run MachineFileSystem.make()
     let mut report = Report.empty()
+    let indexAt = run indexPath()
+    if let Option<String>.Some { value: at } = &indexAt {
+      report.indexed = true
+      let where = run Effect.result(rootPath(String.view(&at)))
+      if let Result.Success { value: path } = move where {
+        let read = run Effect.result(FileSystem.readFile(&path) |> Effect.provideMut<FileSystem>(&mut files))
+        if let Result.Success { value: bytes } = move read {
+          report.index = run FontIndex.decode(bytes.asSlice())
+        }
+      }
+    }
     static if Intrinsic.targetOperatingSystem() == "darwin" {
       // Load the platform's default UI/serif/mono families before large script collections
       // consume a caller's budget. The directory pass still discovers all remaining faces.
@@ -342,6 +453,16 @@ static if Intrinsic.targetArchitecture() != "wasm32" {
             run scan(&mut collection, String.view(&legacy), &options, &mut report)
               |> Effect.provideMut<FileSystem>(&mut files)
           }
+        }
+      }
+    }
+    if let Option<String>.Some { value: at } = &indexAt {
+      if report.index.changed || report.index.hasUnseen() {
+        let encoded = run report.index.encode()
+        let where = run Effect.result(rootPath(String.view(&at)))
+        if let Result.Success { value: path } = move where {
+          let written = run Effect.result(FileSystem.writeFileWithParents(&path, encoded.asSlice()) |> Effect.provideMut<FileSystem>(&mut files))
+          if let Result.Failure { error } = move written { drop error }
         }
       }
     }

@@ -390,6 +390,25 @@ impl FontDatabase {
     return run self.addSource(Source.Mapped { file: move file })
   }
 
+  /// Adds `file` with `faces` read from it before (by a font index), without reading its tables.
+  pub effect fn addMappedFaces(self: &mut Self, file: MappedFont, faces: List<Face>) -> usize
+    ! OutOfMemoryError
+    ? &mut Allocator {
+    let added = List<Face>.length(&faces)
+    if added == 0 {
+      return 0
+    }
+    let source = List<Source>.length(&self.sources)
+    run List<Source>.append(&mut self.sources, Source.Mapped { file: move file })
+    let mut rest = move faces
+    while List<Face>.length(&rest) > 0 {
+      let mut face = List<Face>.remove(&mut rest, 0)
+      face.source = source
+      run List<Face>.append(&mut self.faces, move face)
+    }
+    return added
+  }
+
   effect fn addSource(self: &mut Self, data: Source) -> usize
     ! OutOfMemoryError
     ? &mut Allocator {
