@@ -166,9 +166,26 @@ pub struct ConfiguredShaper<'a, 's, F: FontFuncs> {
   /// instead of copying the metrics, which are a few kilobytes, for every call.
   defaultScaled: ScaledGlyphMetrics<'a, 's, 'static, Scale, i32, NoExtents>,
   defaultScale: Scale,
+  /// HVAR's region scalars at `coords`, empty at the default location (see `refreshScalars`).
+  hvarScalars: List<Fixed>,
 }
 
 impl<'a, 's, F> ConfiguredShaper<'a, 's, F> {
+  // Region scalars depend on the location alone: worked out once here, not for every advance.
+  effect fn refreshScalars(self: &mut Self) -> () ! OutOfMemoryError ? &mut Allocator {
+    List<Fixed>.clear(&mut self.hvarScalars)
+    if List<F2Dot14>.length(&self.coords) == 0 { return () }
+    let metrics = GlyphMetrics.new(&self.data.font, List<F2Dot14>.asSlice(&self.coords))
+    let count = GlyphMetrics.hvarRegionCount(&metrics)
+    let mut i: usize = 0
+    while i < count {
+      run List<Fixed>.append(&mut self.hvarScalars, Fixed.zero())
+      i = i + 1
+    }
+    let written = GlyphMetrics.hvarScalars(&metrics, List<Fixed>.asMutSlice(&mut self.hvarScalars))
+    List<Fixed>.truncate(&mut self.hvarScalars, written)
+  }
+
   pub fn new(data: &'s ShaperData<'a>) -> ConfiguredShaper<'a, 's, DefaultFontFuncs> {
     return Shaper.withFuncs(data, DefaultFontFuncs {})
   }
@@ -187,6 +204,7 @@ impl<'a, 's, F> ConfiguredShaper<'a, 's, F> {
         Scale.identity(),
       ),
       defaultScale: Scale.identity(),
+      hvarScalars: List<Fixed>.make(),
     }
   }
 
@@ -240,6 +258,7 @@ impl<'a, 's, F> ConfiguredShaper<'a, 's, F> {
         List<F2Dot14>.asMutSlice(&mut self.coords),
       )
     }
+    run ConfiguredShaper.refreshScalars(&mut self)
   }
 }
 
@@ -557,6 +576,7 @@ impl<'a, 's, F> ConfiguredShaper<'a, 's, F> {
       run List<F2Dot14>.append(&mut self.coords, coords[i])
       i = i + 1
     }
+    run ConfiguredShaper.refreshScalars(&mut self)
   }
 
   pub fn normalizedCoords(self: &Self) -> &[F2Dot14] {
@@ -600,8 +620,9 @@ fn defaultMetrics<'a, 's, 'c, F: FontFuncs>(
       font.scale,
     )
   }
+  let located = GlyphMetrics.new(&font.data.font, List<F2Dot14>.asSlice(&font.coords))
   return ScaledGlyphMetrics<'a, 'c, 'static, Scale, i32, NoExtents>.new(
-    GlyphMetrics.new(&font.data.font, List<F2Dot14>.asSlice(&font.coords)),
+    GlyphMetrics.withScalars(&located, List<Fixed>.asSlice(&font.hvarScalars)),
     font.scale,
   )
 }
@@ -775,6 +796,7 @@ impl<'a, 's, F> ConfiguredShaper<'a, 's, F> {
       defaultGlyphMetrics: self.defaultGlyphMetrics,
       defaultScaled: self.defaultScaled,
       defaultScale: self.defaultScale,
+      hvarScalars: move self.hvarScalars,
     }
   }
 
