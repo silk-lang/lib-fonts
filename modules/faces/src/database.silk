@@ -10,6 +10,9 @@ import read_fonts.tables.name { NameString }
 import font_types.lib { Fixed, Tag, NameId }
 import silk.collections.bytes { Bytes }
 import mapped { MappedFont }
+import silk.mem.box { Box }
+import silk.collections.slice { Slice }
+import silk.mem.pointer { Pointer }
 import silk.collections.list { List }
 import silk.core.option { Option }
 import silk.core.result { Result }
@@ -91,16 +94,50 @@ struct GenericName {
   name: Bytes,
 }
 
-/// A font file's bytes: a copy on the heap, or the file mapped read-only (see [`MappedFont`]).
+/// A font file's bytes: a copy on the heap, the file mapped read-only (see [`MappedFont`]), or
+/// a file mapped the first time its bytes are read (see [`FontDatabase.addLazyFaces`]).
 union Source {
   Owned { bytes: Bytes },
   Mapped { file: MappedFont },
+  Lazy { file: LazyFile },
+}
+
+/// A font file whose faces are known without reading it (from a font index), mapped when text
+/// first needs it. The mapping, once made, lives as long as the file entry, so the bytes it
+/// lends keep the lifetime of the database that holds it.
+struct LazyFile {
+  /// The path, ending in a zero byte.
+  path: Bytes,
+  /// One slot on the heap, filled through a shared borrow the first time the bytes are read:
+  /// the database is read-only once text layout holds it.
+  slot: Box<LazySlot>,
+}
+
+struct LazySlot {
+  tried: bool,
+  file: Option<MappedFont>,
+}
+
+fn lazyBytes(lazy: &LazyFile) -> &[u8] {
+  let held = lazy.slot.get()
+  if !held[0].tried {
+    // Single-threaded: the database is read by the thread that lays out text.
+    let at = unsafe Intrinsic.pointerRequalify<*const LazySlot, *mut LazySlot>(Pointer.fromRef<LazySlot>(&held[0]))
+    let opened = MappedFont.open(Bytes.asSlice(&lazy.path))
+    unsafe { Pointer.put<LazySlot>(at, LazySlot { tried: true, file: move opened }) }
+  }
+  let slot = &lazy.slot.get()[0]
+  return match &slot.file {
+    Option<MappedFont>.Some { value } => value.bytes()
+    Option<MappedFont>.None => Slice.view<u8>(Bytes.asSlice(&lazy.path), 0, 0)
+  }
 }
 
 fn sourceBytes(source: &Source) -> &[u8] {
   return match &source.* {
     Source.Owned { bytes } => Bytes.asSlice(&bytes)
     Source.Mapped { file } => file.bytes()
+    Source.Lazy { file } => lazyBytes(&file)
   }
 }
 
@@ -400,6 +437,30 @@ impl FontDatabase {
     }
     let source = List<Source>.length(&self.sources)
     run List<Source>.append(&mut self.sources, Source.Mapped { file: move file })
+    let mut rest = move faces
+    while List<Face>.length(&rest) > 0 {
+      let mut face = List<Face>.remove(&mut rest, 0)
+      face.source = source
+      run List<Face>.append(&mut self.faces, move face)
+    }
+    return added
+  }
+
+  /// Adds the font file at `path` with `faces` known from before (a font index), without opening
+  /// it: it is mapped the first time a face's data is read.
+  pub effect fn addLazyFaces(self: &mut Self, path: &[u8], faces: List<Face>) -> usize
+    ! OutOfMemoryError
+    ? &mut Allocator {
+    let added = List<Face>.length(&faces)
+    if added == 0 {
+      return 0
+    }
+    let mut terminated = Bytes.make()
+    run Bytes.append(&mut terminated, path)
+    run Bytes.append(&mut terminated, &[0])
+    let slot = run Box.make(LazySlot { tried: false, file: Option<MappedFont>.None })
+    let source = List<Source>.length(&self.sources)
+    run List<Source>.append(&mut self.sources, Source.Lazy { file: LazyFile { path: move terminated, slot: move slot } })
     let mut rest = move faces
     while List<Face>.length(&rest) > 0 {
       let mut face = List<Face>.remove(&mut rest, 0)

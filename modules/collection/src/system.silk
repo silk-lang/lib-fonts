@@ -26,6 +26,7 @@ static if Intrinsic.targetArchitecture() != "wasm32" {
   import silk.system.filesystem_machine { MachineFileSystem }
   import silk.system.host_input { HostInput }
   import silk.text.string { String }
+  import silk.num.u64
 
   pub struct Options {
     pub maxFiles: usize,
@@ -211,30 +212,34 @@ static if Intrinsic.targetArchitecture() != "wasm32" {
     run Bytes.append(&mut terminated, Path.rawBytes(path))
     run Bytes.append(&mut terminated, &[0])
     let stamp = if report.indexed { stampOf(Path.rawBytes(path)) } else { Option<Stamp>.None }
+    // A file the index knows as it is: its faces without opening it (see addLazyFaces).
+    if let Option<Stamp>.Some { value: current } = stamp {
+      if let Option<List<Face>>.Some { value: faces } = run report.index.faces(Path.rawBytes(path), current) {
+        let count = run collection.database.addLazyFaces(Path.rawBytes(path), move faces)
+        if count > 0 {
+          report.files = report.files + 1
+          report.mapped = report.mapped + u64.toUsize(current.size)
+          run report.loaded.append(run String.copy(Path.view(path).unwrapOr("")))
+        } else {
+          report.skipped = report.skipped + 1
+        }
+        return true
+      }
+    }
     let opened = MappedFont.open(Bytes.asSlice(&terminated))
     return match move opened {
       Option<MappedFont>.Some { value } => {
         let length = value.byteLength()
         let before = collection.faceCount()
-        let mut cached = Option<List<Face>>.None
+        let count = run collection.addMapped(move value)
         if let Option<Stamp>.Some { value: current } = stamp {
-          cached = run report.index.faces(Path.rawBytes(path), current)
-        }
-        let count = match move cached {
-          Option<List<Face>>.Some { value: faces } => run collection.database.addMappedFaces(move value, move faces)
-          Option<List<Face>>.None => {
-            let added = run collection.addMapped(move value)
-            if let Option<Stamp>.Some { value: current } = stamp {
-              let mut read = List<Face>.make()
-              let mut i = before
-              while i < collection.faceCount() {
-                run read.append(run copyFace(collection.face(i)))
-                i = i + 1
-              }
-              run report.index.record(Path.rawBytes(path), current, read.asSlice())
-            }
-            added
+          let mut read = List<Face>.make()
+          let mut i = before
+          while i < collection.faceCount() {
+            run read.append(run copyFace(collection.face(i)))
+            i = i + 1
           }
+          run report.index.record(Path.rawBytes(path), current, read.asSlice())
         }
         if count > 0 {
           report.files = report.files + 1
