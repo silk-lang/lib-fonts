@@ -1,0 +1,332 @@
+//! A cache of what each installed font file holds: its faces' names, weights, widths, styles and
+//! axes, keyed by the file's path, size and modification time.
+//!
+//! Reading a face's names and styles touches several tables of every installed font file, and a
+//! machine holds hundreds: about 30 ms warm and over 200 ms with a cold file cache on macOS,
+//! before an app can lay out its first frame. With the index, discovery still maps every file,
+//! but reads none of its pages until text uses the face. A file whose size or modification time
+//! changed is read again; files no longer found leave the index when it is next written.
+static if Intrinsic.targetArchitecture() != "wasm32" {
+  import svg_fonts.database { Face, Range }
+  import silk.collections.bytes { Bytes }
+  import silk.collections.list { List }
+  import silk.core.option { Option }
+  import silk.core.ownership { Copy }
+  import silk.mem.allocator { Allocator, OutOfMemoryError }
+  import silk.num.f64
+  import silk.num.i64
+  import silk.num.u8
+  import silk.num.u32
+  import silk.num.u64
+  import silk.num.usize
+
+  /// The first bytes of an index file; a different version reads as an empty index.
+  const MAGIC: [u8; 8] = [83, 105, 108, 107, 70, 73, 120, 49]
+
+  /// What makes an indexed entry current: the file's size and modification time.
+  pub struct Stamp {
+    pub size: u64,
+    pub seconds: i64,
+    pub nanoseconds: u32,
+  }
+
+  impl Copy for Stamp {}
+
+  struct Entry {
+    path: Bytes,
+    stamp: Stamp,
+    count: u32,
+    faces: Bytes,
+    seen: bool,
+  }
+
+  pub struct FontIndex {
+    entries: List<Entry>,
+    /// Whether the index differs from the file it was read from.
+    pub changed: bool,
+    /// Files whose faces came from the index, and files read for it.
+    pub hits: usize,
+    pub misses: usize,
+  }
+
+  struct Reader<'b> {
+    bytes: &'b [u8],
+    at: usize,
+    ok: bool,
+  }
+
+  impl<'b> Reader<'b> {
+    fn byte(self: &mut Self) -> u8 {
+      if !self.ok || self.at >= self.bytes.length {
+        self.ok = false
+        return 0
+      }
+      let value = self.bytes[self.at]
+      self.at = self.at + 1
+      return value
+    }
+
+    fn word(self: &mut Self) -> u32 {
+      let mut value: u32 = 0
+      let mut i: u32 = 0
+      while i < 4 {
+        value = value | u32.shiftLeft(u8.toU32(self.byte()), i * 8)
+        i = i + 1
+      }
+      return value
+    }
+
+    fn long(self: &mut Self) -> u64 {
+      let mut value: u64 = 0
+      let mut i: u64 = 0
+      while i < 8 {
+        value = value | u64.shiftLeft(u8.toU64(self.byte()), i * 8)
+        i = i + 1
+      }
+      return value
+    }
+
+    fn slice(self: &mut Self, length: usize) -> &'b [u8] {
+      if !self.ok || length > self.bytes.length - self.at {
+        self.ok = false
+        return Slice.view<u8>(self.bytes, 0, 0)
+      }
+      let view = Slice.view<u8>(self.bytes, self.at, length)
+      self.at = self.at + length
+      return view
+    }
+  }
+
+  import silk.collections.slice { Slice }
+
+  effect fn putWord(out: &mut Bytes, value: u32) -> () ! OutOfMemoryError ? &mut Allocator {
+    let bytes: [u8; 4] = [
+      u32.wrappingToU8(value), u32.wrappingToU8(u32.shiftRight(value, 8)),
+      u32.wrappingToU8(u32.shiftRight(value, 16)), u32.wrappingToU8(u32.shiftRight(value, 24)),
+    ]
+    run Bytes.append(&mut out, &bytes)
+  }
+
+  effect fn putLong(out: &mut Bytes, value: u64) -> () ! OutOfMemoryError ? &mut Allocator {
+    run putWord(&mut out, u64.wrappingToU32(value))
+    run putWord(&mut out, u64.wrappingToU32(u64.shiftRight(value, 32)))
+  }
+
+  effect fn putBytes(out: &mut Bytes, value: &[u8]) -> () ! OutOfMemoryError ? &mut Allocator {
+    run putWord(&mut out, usize.wrappingToU32(value.length))
+    run Bytes.append(&mut out, value)
+  }
+
+  effect fn putRange(out: &mut Bytes, value: Range) -> () ! OutOfMemoryError ? &mut Allocator {
+    run putLong(&mut out, f64.toBits(value.min))
+    run putLong(&mut out, f64.toBits(value.max))
+  }
+
+  effect fn putOptionalRange(out: &mut Bytes, value: &Option<Range>) -> () ! OutOfMemoryError ? &mut Allocator {
+    match value.* {
+      Option<Range>.Some { value: range } => {
+        run Bytes.append(&mut out, &[1])
+        run putRange(&mut out, range)
+      }
+      Option<Range>.None => run Bytes.append(&mut out, &[0])
+    }
+  }
+
+  effect fn putNames(out: &mut Bytes, names: &List<Bytes>) -> () ! OutOfMemoryError ? &mut Allocator {
+    run putWord(&mut out, usize.wrappingToU32(names.length()))
+    let mut i: usize = 0
+    while i < names.length() {
+      run putBytes(&mut out, names.asSlice()[i].asSlice())
+      i = i + 1
+    }
+  }
+
+  fn readRange(reader: &mut Reader<'_>) -> Range {
+    let min = f64.fromBits(reader.long())
+    let max = f64.fromBits(reader.long())
+    return Range { min: min, max: max }
+  }
+
+  fn readOptionalRange(reader: &mut Reader<'_>) -> Option<Range> {
+    if reader.byte() == 0 { return Option<Range>.None }
+    return Option<Range>.Some { value: readRange(&mut reader) }
+  }
+
+  effect fn readNames(reader: &mut Reader<'_>) -> List<Bytes> ! OutOfMemoryError ? &mut Allocator {
+    let count = u32.toUsize(reader.word())
+    let mut names = List<Bytes>.make()
+    let mut i: usize = 0
+    while i < count && reader.ok {
+      let length = u32.toUsize(reader.word())
+      let mut name = Bytes.make()
+      run Bytes.append(&mut name, reader.slice(length))
+      run names.append(move name)
+      i = i + 1
+    }
+    return move names
+  }
+
+  fn sameBytes(a: &[u8], b: &[u8]) -> bool {
+    if a.length != b.length { return false }
+    let mut i: usize = 0
+    while i < a.length {
+      if a[i] != b[i] { return false }
+      i = i + 1
+    }
+    return true
+  }
+
+  effect fn decodeFaces(blob: &[u8], count: u32, faces: &mut List<Face>) -> bool ! OutOfMemoryError ? &mut Allocator {
+    let mut reader = Reader { bytes: blob, at: 0, ok: true }
+    let mut i: u32 = 0
+    while i < count && reader.ok {
+      let faceIndex = reader.word()
+      let families = run readNames(&mut reader)
+      let names = run readNames(&mut reader)
+      let weight = readRange(&mut reader)
+      let width = readRange(&mut reader)
+      let italic = readOptionalRange(&mut reader)
+      let oblique = readOptionalRange(&mut reader)
+      let axes = reader.word()
+      run faces.append(Face {
+        source: 0, index: faceIndex, families: move families, names: move names,
+        weight: weight, width: width, italic: italic, oblique: oblique, axes: axes,
+      })
+      i = i + 1
+    }
+    return reader.ok
+  }
+
+  impl FontIndex {
+    pub fn make() -> FontIndex {
+      return FontIndex { entries: List<Entry>.make(), changed: false, hits: 0, misses: 0 }
+    }
+
+    /// The index an earlier [`FontIndex.encode`] wrote, or an empty one when `bytes` is not one.
+    pub effect fn decode(bytes: &[u8]) -> FontIndex ! OutOfMemoryError ? &mut Allocator {
+      let mut index = FontIndex.make()
+      let mut reader = Reader { bytes: bytes, at: 0, ok: true }
+      if !sameBytes(reader.slice(8), &MAGIC) { return move index }
+      let count = u32.toUsize(reader.word())
+      let mut i: usize = 0
+      while i < count && reader.ok {
+        let pathLength = u32.toUsize(reader.word())
+        let mut path = Bytes.make()
+        run Bytes.append(&mut path, reader.slice(pathLength))
+        let size = reader.long()
+        let seconds = u64.wrappingToI64(reader.long())
+        let nanoseconds = reader.word()
+        let faces = reader.word()
+        let blobLength = u32.toUsize(reader.word())
+        let mut blob = Bytes.make()
+        run Bytes.append(&mut blob, reader.slice(blobLength))
+        if reader.ok {
+          run index.entries.append(Entry {
+            path: move path, stamp: Stamp { size: size, seconds: seconds, nanoseconds: nanoseconds },
+            count: faces, faces: move blob, seen: false,
+          })
+        }
+        i = i + 1
+      }
+      if !reader.ok { return FontIndex.make() }
+      return move index
+    }
+
+    /// The entries this run looked up or recorded, for the next run.
+    pub effect fn encode(self: &Self) -> Bytes ! OutOfMemoryError ? &mut Allocator {
+      let mut out = Bytes.make()
+      run Bytes.append(&mut out, &MAGIC)
+      let mut kept: u32 = 0
+      let mut i: usize = 0
+      while i < self.entries.length() {
+        if self.entries.asSlice()[i].seen { kept = kept + 1 }
+        i = i + 1
+      }
+      run putWord(&mut out, kept)
+      i = 0
+      while i < self.entries.length() {
+        let entry = &self.entries.asSlice()[i]
+        if entry.seen {
+          run putBytes(&mut out, entry.path.asSlice())
+          run putLong(&mut out, entry.stamp.size)
+          run putLong(&mut out, i64.wrappingToU64(entry.stamp.seconds))
+          run putWord(&mut out, entry.stamp.nanoseconds)
+          run putWord(&mut out, entry.count)
+          run putBytes(&mut out, entry.faces.asSlice())
+        }
+        i = i + 1
+      }
+      return move out
+    }
+
+    fn find(self: &Self, path: &[u8]) -> Option<usize> {
+      let mut i: usize = 0
+      while i < self.entries.length() {
+        if sameBytes(self.entries.asSlice()[i].path.asSlice(), path) { return Option<usize>.Some { value: i } }
+        i = i + 1
+      }
+      return Option<usize>.None
+    }
+
+    /// The faces indexed for the file at `path` when `stamp` still describes it; None when the
+    /// file is not indexed or changed since. An empty list is a file with no usable face.
+    pub effect fn faces(self: &mut Self, path: &[u8], stamp: Stamp) -> Option<List<Face>> ! OutOfMemoryError ? &mut Allocator {
+      let at = match self.find(path) {
+        Option<usize>.Some { value } => value
+        Option<usize>.None => { return Option<List<Face>>.None }
+      }
+      let current = self.entries.asSlice()[at].stamp
+      if current.size != stamp.size || current.seconds != stamp.seconds || current.nanoseconds != stamp.nanoseconds {
+        return Option<List<Face>>.None
+      }
+      let count = self.entries.asSlice()[at].count
+      let mut faces = List<Face>.make()
+      let ok = run decodeFaces(self.entries.asSlice()[at].faces.asSlice(), count, &mut faces)
+      if !ok { return Option<List<Face>>.None }
+      let entries = self.entries.asMutSlice()
+      entries[at].seen = true
+      self.hits = self.hits + 1
+      return Option<List<Face>>.Some { value: move faces }
+    }
+
+    /// Records `faces`, read from the file at `path` as `stamp` describes it.
+    pub effect fn record(self: &mut Self, path: &[u8], stamp: Stamp, faces: &[Face]) -> () ! OutOfMemoryError ? &mut Allocator {
+      let mut blob = Bytes.make()
+      let mut i: usize = 0
+      while i < faces.length {
+        let face = &faces[i]
+        run putWord(&mut blob, face.index)
+        run putNames(&mut blob, &face.families)
+        run putNames(&mut blob, &face.names)
+        run putRange(&mut blob, face.weight)
+        run putRange(&mut blob, face.width)
+        run putOptionalRange(&mut blob, &face.italic)
+        run putOptionalRange(&mut blob, &face.oblique)
+        run putWord(&mut blob, face.axes)
+        i = i + 1
+      }
+      let mut copy = Bytes.make()
+      run Bytes.append(&mut copy, path)
+      let entry = Entry { path: move copy, stamp: stamp, count: usize.wrappingToU32(faces.length), faces: move blob, seen: true }
+      match self.find(path) {
+        Option<usize>.Some { value } => {
+          let entries = self.entries.asMutSlice()
+          entries[value] = move entry
+        }
+        Option<usize>.None => run self.entries.append(move entry)
+      }
+      self.changed = true
+      self.misses = self.misses + 1
+    }
+
+    /// Whether entries the last [`FontIndex.decode`] read were not looked up this run.
+    pub fn hasUnseen(self: &Self) -> bool {
+      let mut i: usize = 0
+      while i < self.entries.length() {
+        if !self.entries.asSlice()[i].seen { return true }
+        i = i + 1
+      }
+      return false
+    }
+  }
+}

@@ -24,6 +24,7 @@ import tables.glyf { Glyph }
 import tables.loca { Loca, LocaGlyph }
 import tables.gvar { SelectedGvar }
 import tables.hvar { Hvar }
+import tables.variations { ItemVariationStore, VariationRegionList, VariationRegion }
 import tables.vvar { Vvar }
 import tables.vorg { Vorg }
 import tables.cff { Cff }
@@ -79,6 +80,11 @@ impl<'a> Copy for GlyphMetricsBase<'a> {}
 pub struct GlyphMetrics<'a, 'c> {
   base: GlyphMetricsBase<'a>,
   coords: &'c [F2Dot14],
+  // HVAR's region scalars at `coords` (see `hvarScalars`), or empty: they depend on the location
+  // alone, and computing them for every advance was most of a variable face's shaping time.
+  scalars: &'c [Fixed],
+  // Advances at `coords` by glyph, worked out before (see `withAdvances`), or empty.
+  advances: &'c [F48Dot16],
 }
 
 impl<'a, 'c> Copy for GlyphMetrics<'a, 'c> {}
@@ -137,6 +143,8 @@ impl<'a, 'c> GlyphMetrics<'a, 'c> {
       |> Result<GlyphMetricRecords<'a>, ReadError>.unwrapOr(GlyphMetricRecords.default())
     return Self {
       coords: coords,
+      scalars: &[],
+      advances: &[],
       base: GlyphMetricsBase<'a> {
         colors: ColorSources.read(provider),
         varc: varc,
@@ -172,6 +180,8 @@ impl<'a, 'c> GlyphMetrics<'a, 'c> {
     let global = Metrics.fromCff(font)
     return Self {
       coords: coords,
+      scalars: &[],
+      advances: &[],
       base: GlyphMetricsBase<'a> {
         colors: Maybe<ColorSources<'a>>.None,
         varc: Maybe<VarcOutlines<'a>>.None,
@@ -205,7 +215,43 @@ impl<'a, 'c> GlyphMetrics<'a, 'c> {
   /// Metrics at the default location from `base`, which `new` built for a location with no
   /// non-default coordinate. `location` supplies the lifetime only: its coordinates are unused.
   pub fn fromDefault(base: GlyphMetricsBase<'a>, location: &'c [F2Dot14]) -> Self {
-    return Self { coords: Slice.view<F2Dot14>(location, 0, 0), base: base }
+    return Self { coords: Slice.view<F2Dot14>(location, 0, 0), scalars: &[], advances: &[], base: base }
+  }
+
+  /// Writes HVAR's region scalars at this location into `out` and returns how many it wrote: 0
+  /// without HVAR or at the default location. `out` should hold `hvarRegionCount` of them.
+  pub fn hvarScalars(self: &Self, out: &mut [Fixed]) -> usize {
+    if self.coords.length == 0 { return 0 }
+    if let Maybe<Hvar<'a>>.Some { value } = self.base.hvar {
+      if let Result<ItemVariationStore<'a>, ReadError>.Success { value: store } = Hvar.itemVariationStore(&value) {
+        return ItemVariationStore.computeScalars(&store, self.coords, move out)
+      }
+    }
+    return 0
+  }
+
+  /// How many region scalars `hvarScalars` writes.
+  pub fn hvarRegionCount(self: &Self) -> usize {
+    if self.coords.length == 0 { return 0 }
+    if let Maybe<Hvar<'a>>.Some { value } = self.base.hvar {
+      if let Result<ItemVariationStore<'a>, ReadError>.Success { value: store } = Hvar.itemVariationStore(&value) {
+        if let Result<VariationRegionList<'a>, ReadError>.Success { value: list } = ItemVariationStore.variationRegionList(&store) {
+          return ComputedArray<'a, u16, VariationRegion<'a>>.len(&VariationRegionList.variationRegions(&list))
+        }
+      }
+    }
+    return 0
+  }
+
+  /// These metrics with HVAR region scalars that `hvarScalars` wrote for the same location.
+  pub fn withScalars(self: &Self, scalars: &'c [Fixed]) -> Self {
+    return Self { coords: self.coords, scalars: scalars, advances: self.advances, base: self.base }
+  }
+
+  /// These metrics with the advances `hAdvanceExact` gave for each glyph at the same location,
+  /// indexed by glyph id: a variable face then sums HVAR's deltas once a glyph, not once a use.
+  pub fn withAdvances(self: &Self, advances: &'c [F48Dot16]) -> Self {
+    return Self { coords: self.coords, scalars: self.scalars, advances: advances, base: self.base }
   }
 
   pub fn numGlyphs(self: &Self) -> u32 {
@@ -266,6 +312,10 @@ impl<'a, 'c> GlyphMetrics<'a, 'c> {
     if self.coords.length == 0 {
       return base
     }
+    let known = u32.toUsize(GlyphId.toU32(glyph))
+    if known < self.advances.length {
+      return self.advances[known]
+    }
     return GlyphMetrics.hAdvanceVaried(self, glyph, base)
   }
 
@@ -280,7 +330,7 @@ impl<'a, 'c> GlyphMetrics<'a, 'c> {
   fn hAdvanceVaried(self: &Self, glyph: GlyphId, base: F48Dot16) -> F48Dot16 {
     let mut delta = F48Dot16.zero()
     if let Maybe<Hvar<'a>>.Some { value } = self.base.hvar {
-      delta = Hvar.advanceDelta(&value, glyph, self.coords)
+      delta = Hvar.advanceDeltaWithScalars(&value, glyph, self.coords, self.scalars)
         |> Option<F48Dot16>.unwrapOr(F48Dot16.zero())
     } else if let Option<[Vector2<Fixed>; 4]>.Some { value } = GlyphMetrics.phantomDeltas(
       self,
