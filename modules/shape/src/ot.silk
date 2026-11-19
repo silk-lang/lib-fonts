@@ -28,7 +28,7 @@ import complex
 import preprocess
 import scale { Scale, add, sub, clamp }
 import direction { Direction }
-import font_types.lib { F2Dot14, F48Dot16 }
+import font_types.lib { F2Dot14, F48Dot16, Fixed }
 import read_fonts.lib { ReadError, FontData }
 import read_fonts.tables.variations { ItemVariationStore, DeltaSetIndex }
 import silk.mem.allocator { Allocator, OutOfMemoryError }
@@ -91,6 +91,8 @@ struct Context<'a, 's> {
   markAttachClasses: Classes<'a, 's>,
   /// GDEF's variation store, read once; None without variation coordinates, as in harfrust.
   varStore: Option<ItemVariationStore<'a>>,
+  /// `varStore`'s region scalars at `coords` when the shaper worked them out, or empty.
+  varScalars: &'s [Fixed],
   /// Whether variation coordinates are set; without them every device delta is zero.
   variable: bool,
 }
@@ -305,6 +307,7 @@ pub effect fn apply<'a, 's, F: FontFuncs>(
     glyphClasses: gdefClasses(plan, plan.glyphClassDef, plan.glyphClasses),
     markAttachClasses: gdefClasses(plan, plan.markAttachClassDef, plan.markAttachClasses),
     varStore: readVarStore(font.data.gdef, List<F2Dot14>.length(&font.coords)),
+    varScalars: List<Fixed>.asSlice(&font.gdefScalars),
     variable: List<F2Dot14>.length(&font.coords) != 0,
   }
   let mut step: usize = 0
@@ -774,6 +777,7 @@ pub effect fn wouldSubstitute<F: FontFuncs>(
     glyphClasses: gdefClasses(plan, plan.glyphClassDef, plan.glyphClasses),
     markAttachClasses: gdefClasses(plan, plan.markAttachClassDef, plan.markAttachClasses),
     varStore: readVarStore(font.data.gdef, List<F2Dot14>.length(&font.coords)),
+    varScalars: List<Fixed>.asSlice(&font.gdefScalars),
     variable: List<F2Dot14>.length(&font.coords) != 0,
   }
 
@@ -3599,7 +3603,7 @@ effect fn contextual<F: FontFuncs>(
   return no()
 }
 
-fn readVarStore<'a>(gdef: View<'a>, coordCount: usize) -> Option<ItemVariationStore<'a>> {
+pub fn readVarStore<'a>(gdef: View<'a>, coordCount: usize) -> Option<ItemVariationStore<'a>> {
   if coordCount == 0 {
     return Option<ItemVariationStore<'a>>.None
   }
@@ -3617,10 +3621,11 @@ fn deviceDelta(context: &Context<'_, '_>, device: View<'_>) -> f32 {
   }
   if let Option<ItemVariationStore>.Some { value: store } = &context.varStore {
     let index = DeltaSetIndex { outer: View.u16(&device, 0), inner: View.u16(&device, 2) }
-    if let Option<F48Dot16>.Some { value } = ItemVariationStore.computeDelta(
+    if let Option<F48Dot16>.Some { value } = ItemVariationStore.computeDeltaWithScalars(
       &store,
       index,
       context.coords,
+      context.varScalars,
     ) {
       return F48Dot16.toF32(value)
     }
