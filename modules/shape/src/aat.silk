@@ -347,7 +347,11 @@ effect fn machine(
         }
       }
       if (flags & 15) != 0 && start < end {
-        rearrange(&mut buffer, start, end, u16.toUsize(flags & 15))
+        let mut through = index + 1
+        if through > Buffer.len(&buffer.*) {
+          through = Buffer.len(&buffer.*)
+        }
+        rearrange(&mut buffer, start, end, through, u16.toUsize(flags & 15))
       }
     }
     if kind == 1 && (!atEnd || markSet) {
@@ -531,7 +535,9 @@ fn startIdle(kind: u32, states: View<'_>, entries: View<'_>, entrySize: usize, c
   return 1
 }
 
-fn rearrange(buffer: &mut Buffer, start: usize, end: usize, verb: usize) -> () {
+// Applies `verb` to glyphs `start..end`. The glyphs up to `through`, one past the glyph the
+// machine is at, join their cluster: the machine read them before it chose the verb.
+fn rearrange(buffer: &mut Buffer, start: usize, end: usize, through: usize, verb: usize) -> () {
   let map: [u8; 16] = [0, 16, 1, 17, 32, 48, 2, 3, 18, 19, 33, 49, 34, 50, 35, 51]
   let left = u8.toUsize(map[verb] / 16)
   let right = u8.toUsize(map[verb] & 15)
@@ -546,6 +552,7 @@ fn rearrange(buffer: &mut Buffer, start: usize, end: usize, verb: usize) -> () {
   if end - start < l + r || end - start > 64 {
     return
   }
+  Buffer.mergeClusters(&mut buffer, start, through)
   Buffer.mergeClusters(&mut buffer, start, end)
   reverseRange(&mut buffer.glyphs, start, start + l)
   reverseRange(&mut buffer.glyphs, start + l, end)
