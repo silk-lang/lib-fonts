@@ -176,6 +176,14 @@ pub effect fn normalize<F: FontFuncs>(
       if before == List<Glyph>.length(&output) {
         run List<Glyph>.append(&mut output, item)
       }
+      if List<Glyph>.length(&output) > before + 1 {
+        // A character the font lacks became several glyphs. HarfBuzz reorders and recomposes
+        // them only when some other cluster of the buffer has a mark, so the same word has
+        // other glyphs next to a combining mark than alone (U+1EC7 without a glyph: e with dot
+        // below and circumflex alone, e-circumflex with dot below in such a buffer), and a
+        // text cut away from the mark changes. Here they always are.
+        allSimple = false
+      }
       i = i + 1
     }
     if materialized {
