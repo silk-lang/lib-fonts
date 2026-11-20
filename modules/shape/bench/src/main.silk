@@ -47,7 +47,7 @@ import silk.system.filesystem_machine { MachineFileSystem }
 import silk.system.host_input { HostInput, HostInputError }
 import silk.system.monotonic_clock { MonotonicClock }
 import silk.system.monotonic_clock_native { OsMonotonicClock }
-import silk.system.system_clock { Instant, SystemClock }
+import silk.time.mark { Mark }
 import silk.text.format { Format }
 import silk.text.string { String, InvalidUtf8 }
 
@@ -66,8 +66,8 @@ struct Totals {
   calls: u64,
 }
 
-fn nanos(at: &Instant) -> i64 {
-  return SystemClock.seconds(at) * 1000000000 + SystemClock.nanoseconds(at)
+fn nanos(at: &Mark) -> i64 {
+  return at.*.seconds() * 1000000000 + u32.toI64(at.*.subsecondNanoseconds())
 }
 
 fn bits(value: i32) -> u64 {
