@@ -1,3 +1,4 @@
+import silk.num.u32
 import silk.cli.task { Task, TaskError }
 import silk.collections.bytes { Bytes }
 import silk.collections.slice { Slice }
@@ -18,8 +19,6 @@ import silk.system.monotonic_clock_native { OsMonotonicClock }
 static if Intrinsic.targetOperatingSystem() != "windows" {
   import silk.system.subprocess { Subprocess, SubprocessError, SpawnOptions, Stdio, ExitStatus }
 }
-
-import silk.system.system_clock { SystemClock }
 import silk.text.format { Format }
 import silk.text.string { String }
 import silk.num.f64
@@ -179,8 +178,8 @@ static if Intrinsic.targetOperatingSystem() != "windows" {
   pub effect fn now() -> f64 {
     let mut clock = OsMonotonicClock.make()
     let instant = run MonotonicClock.now() |> Effect.provideMut<MonotonicClock>(&mut clock)
-    return i64.toF64(SystemClock.seconds(&instant))
-      + i64.toF64(SystemClock.nanoseconds(&instant)) / 1000000000.0
+    return i64.toF64(instant.seconds())
+      + i64.toF64(u32.toI64(instant.subsecondNanoseconds())) / 1000000000.0
   }
 
   effect fn waitBriefly() -> () {
